@@ -23,6 +23,17 @@ describe('tokensOfKind', () => {
   it('tracking chỉ lấy tracking-*, không lấy font-*', () => {
     expect(tokensOfKind(T, 'tracking').map((t) => t.name)).toEqual(['tracking-tight']);
   });
+
+  it('token mặc định của Quilder (`core`) không bày — chỉ token của dự án', () => {
+    const mixed = [
+      { name: 'step-4', value: 'clamp(2.4rem, 1.6rem + 3.4vw, 4.8rem)', category: 'typeScale', core: true },
+      { name: 'mm-hero-title', value: '4rem', category: 'typeScale' },
+      { name: 'color-bg', value: '#ffffff', category: 'color', core: true },
+      { name: 'brand-500', value: '#7c5cff', category: 'color', core: false },
+    ];
+    expect(tokensOfKind(mixed, 'typeScale').map((t) => t.name)).toEqual(['mm-hero-title']);
+    expect(tokensOfKind(mixed, 'color').map((t) => t.name)).toEqual(['brand-500']);
+  });
 });
 
 describe('shortTokenValue', () => {

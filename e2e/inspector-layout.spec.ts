@@ -1,4 +1,4 @@
-import { expect, test, type Locator, type Page } from '@playwright/test';
+import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 
 /**
  * Tổ chức bảng thuộc tính theo quy ước Webflow/Framer.
@@ -20,15 +20,37 @@ const NODE = 'ab000002';
 
 let pending: { pageId: string; ops: unknown[] } | null = null;
 
+/**
+ * Token màu CỦA DỰ ÁN cho một test. Bộ chọn không bày token mặc định của Quilder
+ * (22/10/2026), nên test nào cần dòng token phải tự tạo. Xoá sau mỗi test.
+ */
+const madeTokens: string[] = [];
+
 test.afterEach(async ({ request }) => {
   const job = pending;
   pending = null;
-  if (!job) return;
-  const res = await request.post('/api/ops', {
-    data: { pageId: job.pageId, label: 'e2e inspector-layout — hoàn tác', ops: job.ops },
-  });
-  if (!res.ok()) console.error(`[dọn] THẤT BẠI ${res.status()}: ${await res.text()}`);
+  if (job) {
+    const res = await request.post('/api/ops', {
+      data: { pageId: job.pageId, label: 'e2e inspector-layout — hoàn tác', ops: job.ops },
+    });
+    if (!res.ok()) console.error(`[dọn] THẤT BẠI ${res.status()}: ${await res.text()}`);
+  }
+  // SAU khi hoàn tác: token còn được bản nháp dùng thì API từ chối xoá (409).
+  for (const id of madeTokens.splice(0)) {
+    const res = await request.delete(`/api/design-tokens/${id}`);
+    if (!res.ok()) console.error(`[dọn token] THẤT BẠI ${res.status()}: ${await res.text()}`);
+  }
 });
+
+async function projectColorTokens(request: APIRequestContext, names: string[]) {
+  for (const [i, name] of names.entries()) {
+    const res = await request.post('/api/design-tokens', {
+      data: { name, value: `#${(0x224466 + i * 0x111111).toString(16).slice(-6)}` },
+    });
+    expect(res.ok(), await res.text()).toBe(true);
+    madeTokens.push((await res.json()).token.id);
+  }
+}
 
 /**
  * Chọn đơn vị / từ khoá / token qua `TokenPicker` (từ 21/10/2026 — trước đó là `<select>`).
@@ -628,20 +650,20 @@ test('ô độ dài: gõ số rồi chọn đơn vị, và bộ chọn có cả 
   }).toPass({ timeout: 8_000 });
 
   /*
-   * 3. Bộ chọn phải chứa cả ba nhóm: chip đơn vị, chip từ khoá, và dòng token.
-   *
-   * `width` có từ khoá `auto`/`full` trong schema, và token `space` lấy từ bảng Token. Thiếu
+   * 3. Bộ chọn có chip đơn vị và chip từ khoá (`width` có `auto`/`full` trong schema). Thiếu
    * một nhóm nào cũng nghĩa là có một dạng giá trị hợp lệ mà giao diện không đặt được —
    * và người dùng sẽ phải xuống ô CSS tuỳ chỉnh, mất validate lẫn dấu override.
    *
-   * Từ 21/10/2026 bộ chọn là popover (`TokenPicker`), không còn là `<select>` có optgroup.
+   * Token MẶC ĐỊNH của Quilder (`space-*`, `gutter`…) KHÔNG bày từ 22/10/2026 — người dùng
+   * không hiểu chúng ("chả hiểu gì"). Chỉ token của dự án được bày; site e2e trung tính
+   * không có token độ dài nào của dự án, nên ở đây không có dòng token nào là đúng.
    */
   await unit.click();
   const picker = page.locator('[data-token-picker]');
   await expect(picker.locator('[data-pick="px"]')).toBeVisible();
   await expect(picker.locator('[data-pick="kw:auto"]')).toBeVisible();
-  await expect(picker.locator('[data-token-row]').first()).toBeVisible();
-  // Chỉ token ĐÚNG LOẠI: ô kích thước không bao giờ liệt kê màu hay thời lượng.
+  expect(await picker.locator('[data-token-row^="space-"], [data-token-row="gutter"]').count()).toBe(0);
+  // Và không token khác loại: ô kích thước không bao giờ liệt kê màu hay thời lượng.
   expect(await picker.locator('[data-token-row^="color-"], [data-token-row^="dur-"]').count()).toBe(0);
   await page.keyboard.press('Escape');
 
@@ -804,6 +826,12 @@ test('ô màu: danh sách token có ô màu thật, chọn là ghi token', async
     ops: [{ op: 'setStyle', nodeId: NODE, target: 'lg', patch: { fill: { color: null } } }],
   };
 
+  // Bộ chọn chỉ bày token màu CỦA DỰ ÁN (22/10/2026) — tạo hai cái cho test này.
+  await projectColorTokens(request, ['e2e-mau-a', 'e2e-mau-b']);
+  await page.reload();
+  await selectHeading(page);
+  await openSection(page, 'Nền & viền');
+
   await page.locator('[aria-label^="Chọn token màu cho background"]').click();
   const picker = page.locator('[data-token-picker]');
   const rows = picker.locator('[data-token-row]');
@@ -815,8 +843,9 @@ test('ô màu: danh sách token có ô màu thật, chọn là ghi token', async
   );
   expect(swatches.length).toBeGreaterThan(0);
   expect(swatches.filter((s) => !s)).toEqual([]);
-  // Không có token khác loại lọt vào (space, dur…).
+  // Không có token khác loại lọt vào (space, dur…), và không token màu MẶC ĐỊNH (`color-*`).
   expect(await picker.locator('[data-token-row^="space-"], [data-token-row^="dur-"]').count()).toBe(0);
+  expect(await picker.locator('[data-token-row^="color-"]').count()).toBe(0);
 
   const name = await rows.first().getAttribute('data-token-row');
   await rows.first().click();

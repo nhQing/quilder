@@ -6,6 +6,14 @@
  * Trước đây `tokenCategory` vắng nghĩa là "mọi token": ô `inline-size` liệt kê đủ 469
  * token, gồm cả `dur-*`, `ease-*` và màu — danh sách vô nghĩa, và là nguồn chính của lời
  * phàn nàn "quá nhiều thông tin". Ô nào muốn token thì phải nói loại nào.
+ *
+ * ## Vì sao token MẶC ĐỊNH không bày (22/10/2026)
+ *
+ * Token khai trong `src/styles/tokens.css` lõi (`step-4`, `space-m`, `color-bg`…) đi kèm
+ * mọi bản cài Quilder, không phải thứ người dùng tạo ra. Bày chúng trong bộ chọn là bắt
+ * người ta chọn giữa những cái tên họ không hiểu ("chả hiểu gì" — user). Bộ chọn chỉ bày
+ * token của DỰ ÁN; token mặc định vẫn nằm trong CSS nên node đang mang nó render như cũ,
+ * và `TokenPicker` vẫn hiện dòng của token ĐANG chọn dù nó bị lọc ở đây.
  */
 
 import type { TokenOption } from './queries';
@@ -24,9 +32,10 @@ const NAME_PREFIX: Record<string, { category: string; prefix: string }> = {
 
 export function tokensOfKind(tokens: readonly TokenOption[], kind: TokenKind | undefined): TokenOption[] {
   if (!kind) return [];
+  const own = tokens.filter((t) => !t.core);
   const narrow = NAME_PREFIX[kind];
-  if (narrow) return tokens.filter((t) => t.category === narrow.category && t.name.startsWith(narrow.prefix));
-  return tokens.filter((t) => t.category === kind);
+  if (narrow) return own.filter((t) => t.category === narrow.category && t.name.startsWith(narrow.prefix));
+  return own.filter((t) => t.category === kind);
 }
 
 /**

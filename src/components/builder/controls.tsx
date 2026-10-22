@@ -54,6 +54,8 @@ export interface TokenOption {
   name: string;
   value: string;
   category: string;
+  /** Token mặc định của Quilder — xem `tokensOfKind`. */
+  core?: boolean;
 }
 
 type Group = keyof StyleProps;

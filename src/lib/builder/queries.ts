@@ -11,8 +11,12 @@ import 'server-only';
  * Cũng KHÔNG bọc `unstable_cache`: builder phải thấy ngay thứ vừa lưu.
  */
 
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
 import { rollbackWindowIds } from '@/lib/builder/rollback-window';
 import { prisma } from '@/lib/db';
+import { rootTokens, TOKENS_CSS } from '@/lib/design/token-source';
 import { migrateDoc, migratePresetTree } from '@/lib/doc/migrate';
 import { CURRENT_SCHEMA_VERSION, type Doc } from '@/lib/doc/types';
 import { shareImageWarning } from '@/lib/render/share-meta';
@@ -369,6 +373,15 @@ export interface TokenOption {
   name: string;
   value: string;
   category: string;
+  /** Khai trong `src/styles/tokens.css` lõi — token mặc định của Quilder, không bày trong bộ chọn. */
+  core?: boolean;
+}
+
+let coreNames: Set<string> | null = null;
+
+/** Tên token khai trong `tokens.css` lõi. File là code, chỉ đổi khi deploy — đọc một lần. */
+function coreTokenNames(): Set<string> {
+  return (coreNames ??= new Set(rootTokens(readFileSync(join(process.cwd(), TOKENS_CSS), 'utf8')).keys()));
 }
 
 /**
@@ -388,7 +401,8 @@ export async function listTokens(): Promise<TokenOption[]> {
     orderBy: [{ category: 'asc' }, { name: 'asc' }],
     select: { name: true, value: true, category: true },
   });
-  return rows;
+  const core = coreTokenNames();
+  return rows.map((r) => (core.has(r.name) ? { ...r, core: true } : r));
 }
 
 export interface ReleaseTimelineEntry extends ReleaseSummary {
