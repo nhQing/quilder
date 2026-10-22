@@ -42,12 +42,20 @@ export function parseAssetHosts(raw) {
 }
 
 /**
+ * Chuỗi host thô theo thứ tự nguồn ở docblock đầu file. `next.config` và `pnpm release`
+ * cùng gọi hàm này — hai bản luật riêng từng lệch nhau: release đòi ASSET_HOSTS trong khi
+ * `.env` chỉ có S3_PUBLIC_BASE_URL, mà `next build` tại máy thì vẫn chạy.
+ */
+export function rawAssetHosts(env) {
+  return env.ASSET_HOSTS?.trim() || env.S3_PUBLIC_BASE_URL?.trim() || '';
+}
+
+/**
  * Danh sách cuối cùng cho `remotePatterns`. `production` = đang `next build` bản thật:
  * rỗng thì ném, kèm hướng dẫn đặt biến.
  */
 export function assetRemotePatterns(env, { production }) {
-  const raw = env.ASSET_HOSTS?.trim() || env.S3_PUBLIC_BASE_URL?.trim() || '';
-  const patterns = parseAssetHosts(raw);
+  const patterns = parseAssetHosts(rawAssetHosts(env));
   if (production && patterns.length === 0) {
     throw new Error(
       [

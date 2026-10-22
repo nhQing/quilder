@@ -1,6 +1,19 @@
 import { describe, expect, it } from 'vitest';
 
-import { assetRemotePatterns, parseAssetHosts } from './asset-hosts.mjs';
+import { assetRemotePatterns, parseAssetHosts, rawAssetHosts } from './asset-hosts.mjs';
+
+/*
+ * 22/10/2026: `pnpm release` dừng với "Thiếu ASSET_HOSTS" dù `.env` có S3_PUBLIC_BASE_URL —
+ * `release.mjs` tự đọc ASSET_HOSTS mà không có nhánh dự phòng như `next.config`. Hai nơi
+ * dùng chung `rawAssetHosts` để luật chỉ có một bản.
+ */
+describe('rawAssetHosts', () => {
+  it('ASSET_HOSTS thắng, trống thì lấy S3_PUBLIC_BASE_URL', () => {
+    expect(rawAssetHosts({ ASSET_HOSTS: 'a.vn', S3_PUBLIC_BASE_URL: 'https://b.vn' })).toBe('a.vn');
+    expect(rawAssetHosts({ ASSET_HOSTS: '  ', S3_PUBLIC_BASE_URL: ' https://b.vn/public ' })).toBe('https://b.vn/public');
+    expect(rawAssetHosts({})).toBe('');
+  });
+});
 
 describe('parseAssetHosts', () => {
   it('nhận URL, host trần (coi là https), cổng và path', () => {

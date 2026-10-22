@@ -54,7 +54,7 @@
 import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { ciVerdict } from './ci-gate.mjs';
-import { parseAssetHosts } from './asset-hosts.mjs';
+import { parseAssetHosts, rawAssetHosts } from './asset-hosts.mjs';
 
 /**
  * Registry BẮT BUỘC (`RELEASE_REGISTRY`, biến môi trường hoặc `.env`): mỗi công ty dùng Quilder
@@ -138,15 +138,20 @@ function readProject() {
 
 /**
  * Host kho ảnh cho `--build-arg ASSET_HOSTS` — thông số LÚC BUILD (xem
- * scripts/asset-hosts.mjs). Đọc biến môi trường trước, rồi dòng `ASSET_HOSTS=` của
- * `.env`. Thiếu thì dừng TRƯỚC khi build: một image không có host này hiện mọi ảnh 400.
+ * scripts/asset-hosts.mjs). Cùng luật với `next.config` (`rawAssetHosts`): ASSET_HOSTS,
+ * trống thì host của S3_PUBLIC_BASE_URL — mỗi biến đọc từ môi trường trước, rồi `.env`.
+ * Thiếu cả hai thì dừng TRƯỚC khi build: một image không có host này hiện mọi ảnh 400.
  */
 function readAssetHosts() {
-  const raw = readEnv('ASSET_HOSTS');
+  const raw = rawAssetHosts({
+    ASSET_HOSTS: readEnv('ASSET_HOSTS'),
+    S3_PUBLIC_BASE_URL: readEnv('S3_PUBLIC_BASE_URL'),
+  });
   if (!raw) {
     fail(
       'Thiếu ASSET_HOSTS — host kho ảnh (CDN/S3 public), bị đóng vào bản build.\n' +
-        '  Đặt trong .env:   ASSET_HOSTS="https://cdn.ten-mien.vn"   (nhiều host cách nhau dấu phẩy)',
+        '  Đặt trong .env:   ASSET_HOSTS="https://cdn.ten-mien.vn"   (nhiều host cách nhau dấu phẩy)\n' +
+        '  hoặc S3_PUBLIC_BASE_URL — ASSET_HOSTS trống thì lấy host của nó.',
     );
   }
   try {
