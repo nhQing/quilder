@@ -114,8 +114,18 @@ export function ContentPanel({
    */
   translations: Record<string, DraftTranslation[]>;
 }) {
+  const locale = useEditor((s) => s.locale);
   // `extractUnits` đi cả cây, nên nhớ theo doc — không tính lại mỗi lần gõ một ký tự.
-  const units = useMemo(() => unitsForNode(doc, components, nodeId), [doc, components, nodeId]);
+  const all = useMemo(() => unitsForNode(doc, components, nodeId), [doc, components, nodeId]);
+  /*
+   * Ảnh/video CỦA CHÍNH node đang chọn: ở bản gốc, Inspector đã có `NodeAssetPicker` ngay
+   * dưới khối này cho đúng trường đó — bày thêm ở đây là hai ô chọn cùng một ảnh (ảnh user
+   * gửi 22/10/2026). Ở chế độ bản dịch thì `NodeAssetPicker` ẩn và ô ở đây là ô ghi bản
+   * dịch, nên giữ. Ảnh của node CON trong instance không có `NodeAssetPicker`, cũng giữ.
+   */
+  const units = locale
+    ? all
+    : all.filter((u) => !(u.nodeId === nodeId && fieldValueKind(u.field) === 'asset'));
 
   if (!units.length) return null;
 

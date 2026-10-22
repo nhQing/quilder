@@ -51,6 +51,40 @@ async function selectFirstText(page: Page): Promise<string> {
   return key!.trim();
 }
 
+/*
+ * Node ảnh ở chế độ bản gốc (22/10/2026, ảnh user gửi): khối Nội dung vẽ một ô chọn ảnh cho
+ * `assetId`, ngay dưới đó Inspector vẽ `NodeAssetPicker` cho CÙNG trường — hai ô chọn cùng
+ * một ảnh. Bản gốc chỉ được có một ô: `NodeAssetPicker`. (Ở chế độ bản dịch thì ngược lại:
+ * `NodeAssetPicker` ẩn, ô của khối Nội dung ghi vào bản dịch.)
+ */
+test('node ảnh: bản gốc chỉ có MỘT ô chọn ảnh, khối Nội dung không lặp lại', async ({ page, request }) => {
+  const tool = async (name: string, input: unknown) => {
+    const res = await request.post('/api/ai/tool', { data: { tool: name, input } });
+    expect(res.ok(), `tool ${name}: ${await res.text()}`).toBe(true);
+    return (await res.json()).result;
+  };
+  const { pages } = await tool('list_pages', {});
+  const pageId = (pages as { id: string; path: string }[]).find((p) => p.path === `/${PAGE_SLUG}`)!.id;
+  const { rootId } = await tool('get_page_outline', { pageId });
+
+  const node = {
+    id: 'e2eanh', parentId: rootId, type: 'Image', name: 'Ảnh e2e',
+    children: [], effects: [], style: { base: {} }, alt: 'Ảnh e2e', assetId: null, fit: { base: 'cover' },
+  };
+  const res = await request.post('/api/ops', {
+    data: { pageId, label: 'e2e content-panel — chèn ảnh', ops: [{ op: 'insertNode', parentId: rootId, index: 0, node }] },
+  });
+  expect(res.ok(), await res.text()).toBe(true);
+  pending = { pageId, ops: [{ op: 'removeNode', nodeId: 'e2eanh' }] };
+
+  await page.goto(`/builder/${pageId}?node=e2eanh`);
+  const panel = page.locator('[data-content-panel]');
+  // `alt` vẫn ở khối Nội dung — chỉ ô ẢNH bị trùng.
+  await expect(panel.locator('code', { hasText: 'e2eanh:alt' })).toBeVisible();
+  await expect(panel.locator('code', { hasText: 'e2eanh:assetId' })).toHaveCount(0);
+  await expect(page.getByText('Node ảnh chưa gắn ảnh nào.')).toHaveCount(1);
+});
+
 test('khoá hiện ra đúng dạng nodeId:field — cùng khoá bảng Văn bản dùng', async ({ page }) => {
   await openEditor(page);
   const key = await selectFirstText(page);
