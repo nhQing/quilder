@@ -167,6 +167,12 @@ describe('formatLen', () => {
     expect(formatLen({ calc: {} })).toBe('calc(…)');
   });
 
+  it('không ném với giá trị không phải độ dài (cờ `border.hidden` đi qua LayerMap)', () => {
+    // 22/10/2026: bấm "ẩn" nét viền → `LayerMap` gọi formatLen(true) → `'v' in true` ném.
+    expect(formatLen(true)).toBe('');
+    expect(formatLen(false)).toBe('');
+  });
+
   it('vòng tròn parse → format giữ nguyên', () => {
     for (const input of ['16px', '1.5rem', '50%', 'space-l']) {
       const parsed = parseLen(input, { tokens });

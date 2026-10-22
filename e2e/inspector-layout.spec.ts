@@ -512,6 +512,41 @@ test('bản đồ lớp đếm đúng, và gỡ được override của lớp kh
   pending = null;
 });
 
+/*
+ * 22/10/2026 (lỗi user báo): bấm "ẩn" nét viền ghi `border.hidden = true`; `LayerMap` liệt kê
+ * giá trị đó qua `formatLen`, và `'v' in true` ném — cả Inspector sập. Cờ boolean là một
+ * override thật của lớp, nên nó phải hiện trong bản đồ lớp và gỡ được như mọi ô khác.
+ */
+test('ẩn nét viền: bản đồ lớp liệt kê được cờ boolean, không sập', async ({ page, request }) => {
+  const pageId = await openEditor(page);
+  const res = await request.post('/api/ops', {
+    data: {
+      pageId,
+      label: 'e2e ẩn nét viền — đặt viền',
+      ops: [{ op: 'setStyle', nodeId: NODE, target: 'lg', patch: { border: { width: { v: 2, u: 'px' } } } }],
+    },
+  });
+  expect(res.ok(), await res.text()).toBe(true);
+  pending = {
+    pageId,
+    ops: [{ op: 'setStyle', nodeId: NODE, target: 'lg', patch: { border: { width: null, hidden: null } } }],
+  };
+
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+
+  await page.reload();
+  await selectHeading(page);
+  await openSection(page, 'Nền & viền');
+
+  await page.getByRole('button', { name: 'Ẩn tạm nét viền' }).click();
+  await expect(page.getByRole('button', { name: 'Hiện lại nét viền' })).toBeVisible();
+
+  await page.locator('[data-layer-chip="lg"]').click();
+  await expect(page.locator('[data-layer-map-remove="lg:border.hidden"]')).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
 /**
  * "Thêm khi cần" — 27 ô đúng-nhưng-hiếm không bày sẵn.
  *

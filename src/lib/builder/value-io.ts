@@ -131,6 +131,8 @@ export function formatLen(value: unknown): string {
   if (value === null || value === undefined) return '';
   if (typeof value === 'string') return value;
   if (typeof value === 'number') return String(value);
+  // Cờ boolean (`border.hidden`) cũng đi qua đây từ `LayerMap`; `'v' in true` thì ném.
+  if (typeof value !== 'object') return '';
 
   const v = value as Record<string, unknown>;
   if (typeof v.$token === 'string') return v.$token;
