@@ -64,3 +64,6 @@ _to_delete/
 # Chỉ gói mẫu được commit. Xem projects/example/README.md.
 projects/*
 !projects/example/
+
+# Bộ nhớ của agent Claude Code — ghi chú cục bộ, có thể nhắc dự án riêng; không bao giờ lên repo.
+.claude/agent-memory/
