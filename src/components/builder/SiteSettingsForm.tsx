@@ -318,7 +318,8 @@ export function SiteSettingsForm({
                 }
                 checked={useSiteIcon}
                 onChange={setUseSiteIcon}
-                className="shrink-0 text-small whitespace-nowrap text-shell-muted"
+                size="sm"
+                className="shrink-0 text-mini whitespace-nowrap text-shell-muted"
               />
             </div>
             {useSiteIcon ? (

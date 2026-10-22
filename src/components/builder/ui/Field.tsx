@@ -248,17 +248,21 @@ export function Switch({
   checked,
   onChange,
   disabled,
+  size = 'md',
   className,
 }: {
   label: React.ReactNode;
   checked: boolean;
   onChange: (next: boolean) => void;
   disabled?: boolean;
+  /** `sm` cho công tắc phụ đứng cạnh một nhãn `text-mini` — cỡ `md` nặng hơn cả nhãn. */
+  size?: 'sm' | 'md';
   className?: string;
 }) {
   const id = useId();
+  const sm = size === 'sm';
   return (
-    <span className={cn('inline-flex items-center gap-2.5 text-ui', className)}>
+    <span className={cn('inline-flex items-center text-ui', sm ? 'gap-2' : 'gap-2.5', className)}>
       <button
         type="button"
         role="switch"
@@ -267,7 +271,10 @@ export function Switch({
         disabled={disabled}
         onClick={() => onChange(!checked)}
         className={cn(
-          'relative h-6 w-10 shrink-0 rounded-full border-[1.8px] transition-colors disabled:cursor-not-allowed disabled:opacity-40',
+          // Núm căn dọc bằng flex: viền 1.8px làm lòng công tắc lẻ (16.4/20.4px), `top`
+          // cố định để lệch lên trên thấy rõ ở cỡ `sm`.
+          'flex shrink-0 items-center rounded-full border-[1.8px] px-0.5 transition-colors disabled:cursor-not-allowed disabled:opacity-40',
+          sm ? 'h-5 w-8' : 'h-6 w-10',
           focusRing,
           checked ? 'border-shell-accent bg-shell-accent' : 'border-shell-line-strong bg-shell-raised',
         )}
@@ -275,8 +282,11 @@ export function Switch({
         <span
           aria-hidden
           className={cn(
-            'absolute top-0.5 left-0.5 size-4 rounded-full transition-transform',
-            checked ? 'translate-x-4 bg-shell-on-accent' : 'bg-shell-line-strong',
+            'rounded-full transition-transform',
+            sm ? 'size-3' : 'size-4',
+            checked
+              ? cn(sm ? 'translate-x-3' : 'translate-x-4', 'bg-shell-on-accent')
+              : 'bg-shell-line-strong',
           )}
         />
       </button>
