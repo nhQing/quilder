@@ -1,0 +1,79 @@
+/* Animated gradients -------------------------------------------------------
+   Pure CSS. Used behind the CTA and as the hero's WebGL-free fallback.
+   -------------------------------------------------------------------------- */
+
+@property --gradient-angle {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: false;
+}
+
+.cta__gradient {
+  position: absolute;
+  inset: -40%;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.55;
+  background: conic-gradient(
+    from var(--gradient-angle),
+    var(--color-accent),
+    var(--color-accent-violet),
+    var(--color-accent-cool),
+    var(--color-accent-warm),
+    var(--color-accent)
+  );
+  filter: blur(90px);
+  animation: gradient-spin 22s linear infinite;
+}
+
+@keyframes gradient-spin {
+  to {
+    --gradient-angle: 360deg;
+  }
+}
+
+/* @property is unsupported — rotate the whole layer instead. */
+@supports not (background: conic-gradient(from var(--gradient-angle), red, blue)) {
+  .cta__gradient {
+    animation: gradient-rotate 22s linear infinite;
+  }
+}
+
+@keyframes gradient-rotate {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Mesh gradient — four offset radial blobs drifting out of phase. */
+.mesh {
+  position: relative;
+  isolation: isolate;
+}
+
+.mesh::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background:
+    radial-gradient(38% 44% at 20% 25%, var(--color-accent) 0%, transparent 60%),
+    radial-gradient(34% 40% at 80% 20%, var(--color-accent-violet) 0%, transparent 62%),
+    radial-gradient(42% 46% at 72% 78%, var(--color-accent-cool) 0%, transparent 60%),
+    radial-gradient(36% 42% at 24% 82%, var(--color-accent-warm) 0%, transparent 62%);
+  filter: blur(60px);
+  opacity: 0.4;
+  animation: mesh-drift 18s var(--ease-in-out) infinite alternate;
+}
+
+@keyframes mesh-drift {
+  from { transform: scale(1) translate3d(0, 0, 0); }
+  to { transform: scale(1.15) translate3d(2%, -3%, 0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cta__gradient,
+  .mesh::before {
+    animation: none;
+  }
+}

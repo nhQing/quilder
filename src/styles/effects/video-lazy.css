@@ -1,0 +1,33 @@
+/* Video lazy --------------------------------------------------------------
+   Effect `video-lazy` ghi `data-video-lazy-ready` khi đã chạy, và
+   `data-playing="true"` SAU KHI play() resolve. Trước đó video trong suốt: ảnh
+   tĩnh nằm dưới nó là thứ duy nhất người xem thấy — nên video lỗi/bị chặn/chưa
+   tải xong không bao giờ để lộ một khung đen.
+
+   Thời lượng và easing qua biến để một trang chỉnh được mà không đụng file này.
+   -------------------------------------------------------------------------- */
+
+[data-fx~='video-lazy'] {
+  --video-lazy-dur: 0.9s;
+  --video-lazy-ease: linear;
+}
+
+/* Chỉ "lên đạn" khi effect đã chạy: không JS (hoặc reduced motion, effect bị gate
+   chặn) thì <video> giữ opacity 1 và tự vẽ `poster` của nó — ẩn vô điều kiện thì
+   poster của chính thẻ video biến mất cùng nó. Khi đã lên đạn, ảnh tĩnh phải nằm
+   DƯỚI video (một node Image anh em, hoặc nền của khung cha) để lộ ra lúc
+   opacity 0. */
+[data-fx~='video-lazy'][data-video-lazy-ready] {
+  opacity: 0;
+  transition: opacity var(--video-lazy-dur) var(--video-lazy-ease);
+}
+
+[data-fx~='video-lazy'][data-video-lazy-ready][data-playing='true'] {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-fx~='video-lazy'][data-video-lazy-ready] {
+    transition: none;
+  }
+}

@@ -1,0 +1,11 @@
+/* CSS của gói mẫu. Nối SAU site.css của lõi (src/lib/render/static-css.ts).
+   PHẢI nằm trong layer — `@import './x.css' layer(base);` hoặc khối `@layer base { … }`:
+   CSS ngoài layer thắng cả style của từng trang (`@layer doc`). Chỉ dùng biến token. */
+@layer base {
+  .example-hello {
+    padding: var(--space-m);
+    border-radius: var(--radius-m);
+    background: var(--color-glass);
+    font-family: var(--font-display);
+  }
+}

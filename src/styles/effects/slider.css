@@ -1,0 +1,155 @@
+/* Slider ------------------------------------------------------------------
+
+   CSS CẤU TRÚC của Swiper, chép tay từ `node_modules/swiper/swiper.css`
+   (14.2.0) cộng `modules/free-mode.css` và `modules/a11y.css`.
+
+   ## Vì sao chép chứ không `import 'swiper/css'`
+
+   Hai lý do, cả hai đã đo chứ không phải phỏng đoán — ghi đầy đủ ở đầu
+   `src/lib/motion/effects/slider.ts`, tóm lại:
+
+   1. `scripts/sync-effects.ts` chạy bằng `tsx` trong Node và import từng module
+      effect để đọc manifest. Node không đọc được `.css` (ERR_UNKNOWN_FILE_
+      EXTENSION), nên một dòng `import 'swiper/css'` trong `slider.ts` làm
+      `pnpm effects:sync` chết cho CẢ registry.
+   2. CSS của release được niêm phong bởi `compileStaticCss`, hàm đó đọc các
+      dòng `@import` của `site.css` TỪ ĐĨA. CSS trong `node_modules` không vào
+      được bó niêm phong, nên nâng Swiper là đổi hình một release đã publish.
+
+   ## Cái giá
+
+   Đây là một bản chép tay và nó SẼ trôi khi Swiper nâng major. Chốt chặn:
+   `slider-model.test.ts` ghim major của `swiper` trong `package.json`. Nâng
+   major thì test đỏ, và người nâng phải mở lại `node_modules/swiper/swiper.css`
+   đối chiếu.
+
+   ## Ba chỗ CỐ Ý khác bản gốc
+
+   - **Bỏ `.swiper-slide { width: 100%; height: 100% }`.** Mặc định của effect là
+     `slidesPerView: 'auto'`, và ở chế độ ấy Swiper KHÔNG ghi bề rộng slide —
+     `updateSlides()` chỉ ghi `style.width` khi `slidesPerView` là một con số. Giữ
+     `width: 100%` thì mọi slide rộng bằng cả viewport và `'auto'` mất nghĩa.
+   - **Bỏ toàn bộ `navigation.css` và phần lớn `pagination.css`.** Chúng vẽ mũi
+     tên bằng icon font và bullet theo màu xanh mặc định của Swiper. Mũi tên và
+     hàng chấm ở đây là node THẬT trong cây, style qua Inspector — CSS của Swiper
+     sẽ đè lên và người dùng không hiểu vì sao. Chỉ giữ trạng thái bất hoạt và
+     kích thước bullet tối thiểu, vì không có chúng thì hàng chấm là mấy span
+     rỗng 0×0 px — vô hình, tức hỏng im lặng.
+   - **Bỏ `:root { --swiper-theme-color }`, 3D, cube/flip/cards, lazy preloader,
+     cssMode.** Effect không bật `effect:` nào ngoài 'slide' và không dùng
+     `cssMode`, nên những khối ấy là byte chết trên mọi trang.
+
+   Nằm trong `@layer base` (xem `site.css`), nên style của doc (`@layer doc`) đè
+   được lên mọi rule dưới đây. Đó là thứ tự đúng — nhưng nó cũng là lý do
+   `aiDescription` của effect nói thẳng: đừng đặt `layout.display` trên track và
+   đừng đặt `flex.shrink` trên slide.
+   -------------------------------------------------------------------------- */
+
+.swiper {
+  position: relative;
+  z-index: 1;
+  display: block;
+  margin-inline: auto;
+  overflow: hidden;
+  list-style: none;
+  padding: 0;
+}
+
+.swiper-wrapper {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  inline-size: 100%;
+  block-size: 100%;
+  box-sizing: content-box;
+  transform: translate3d(0, 0, 0);
+  transition-property: transform;
+  /* Swiper đọc biến này; `slider.ts` đặt nó thành `linear` cho dải chạy liên
+     tục. Không có nó thì mỗi quãng trôi có một nhịp chậm–nhanh–chậm. */
+  transition-timing-function: var(--swiper-wrapper-transition-timing-function, initial);
+}
+
+.swiper-vertical > .swiper-wrapper {
+  flex-direction: column;
+}
+
+/* `touch-action` là thứ nhường trục còn lại cho trang: một dải ngang phải vẫn
+   cho phép cuộn dọc bằng ngón tay, nếu không người dùng bị kẹt khi ngón tay rơi
+   vào dải. */
+.swiper-horizontal {
+  touch-action: pan-y;
+}
+
+.swiper-vertical {
+  touch-action: pan-x;
+}
+
+.swiper-slide {
+  position: relative;
+  /* Bề rộng đến từ nội dung (`slidesPerView: 'auto'`) hoặc từ inline style mà
+     Swiper ghi (`slidesPerView` là số). Không khai ở đây — xem ghi chú đầu file. */
+  flex-shrink: 0;
+  transition-property: transform;
+}
+
+.swiper-slide-invisible-blank {
+  visibility: hidden;
+}
+
+.swiper-backface-hidden .swiper-slide {
+  transform: translateZ(0);
+  backface-visibility: hidden;
+}
+
+/* free-mode: bỏ snap. Timing function đi qua cùng một biến với rule trên, nếu
+   không thì `ease-out` ở đây thắng và dải chạy liên tục lại có nhịp thở. */
+.swiper-free-mode > .swiper-wrapper {
+  margin-inline: auto;
+  transition-timing-function: var(--swiper-wrapper-transition-timing-function, ease-out);
+}
+
+/* Vùng thông báo của module a11y — Swiper tự chèn, phải tồn tại và phải vô
+   hình. Screen reader vẫn đọc được vì nó không bị `display: none`. */
+.swiper .swiper-notification {
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline-start: 0;
+  z-index: -1000;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Mũi tên ở hai đầu của một dải không `loop`.
+
+   `aria-disabled` do module a11y của Swiper ghi ra, và nó là phần quan trọng
+   hơn — nút vẫn giữ chỗ trong thứ tự tab, đúng lý lẽ `carousel.ts` đã viết.
+   Phần dưới đây chỉ là biểu hiện thị giác mặc định, để một dải gắn xong là
+   dùng được ngay mà không phải style gì. `@layer base` nên Inspector đè được. */
+.swiper-button-disabled {
+  opacity: 0.35;
+  cursor: auto;
+  pointer-events: none;
+}
+
+/* Hàng chấm. Tối thiểu, theo token của site, KHÔNG theo màu mặc định của
+   Swiper. `currentColor` để node cha đổi màu là hàng chấm đổi theo. */
+.swiper-pagination {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.swiper-pagination-bullet {
+  inline-size: 0.5rem;
+  block-size: 0.5rem;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.3;
+  cursor: pointer;
+}
+
+.swiper-pagination-bullet-active {
+  opacity: 1;
+}

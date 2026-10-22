@@ -1,0 +1,150 @@
+# Hai nhóm service trong cùng một file, tách bằng `profiles`.
+#
+#   docker compose up -d                   → CHỈ postgres + minio (nền cho `pnpm dev`)
+#   docker compose --profile app up -d      → thêm app đã build, chạy như production
+#
+# Vì sao không tách thành hai file: postgres và minio phải là CÙNG một instance ở cả
+# hai chế độ. Hai file compose là hai project, hai network, hai volume — và cái bẫy
+# của nó là bản Docker chạy trên một DB rỗng trong khi mọi dữ liệu nằm ở bản dev.
+
+# Tên project GHIM (21/10/2026), không để Compose lấy theo tên thư mục.
+#
+# Volume mang tiền tố tên project (`quilder_builder-pgdata`). Đổi tên thư mục repo mà không
+# có dòng này thì `pnpm db:up` tạo volume MỚI trống trơn — trông như mất sạch dữ liệu dev,
+# trong khi volume cũ vẫn nằm đó.
+#
+# Máy đã có dữ liệu dưới tên khác: đặt `COMPOSE_PROJECT_NAME` (và `POSTGRES_DB` nếu DB cũ
+# tên khác) trong `.env` — Compose ưu tiên biến đó hơn dòng này, và tên container theo cùng
+# biến. Xem scripts/compose-name.mjs.
+name: quilder
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: ${COMPOSE_PROJECT_NAME:-quilder}-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: builder
+      POSTGRES_PASSWORD: builder
+      POSTGRES_DB: ${POSTGRES_DB:-quilder}
+    ports:
+      - '5433:5432'
+    volumes:
+      - builder-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U builder -d "$${POSTGRES_DB}"']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # Kho asset cho DEV và TEST. Production dùng AWS S3 thật — khác biệt duy nhất là
+  # S3_ENDPOINT và S3_PUBLIC_BASE_URL, vì MinIO nói đúng giao thức S3 nên CÙNG một
+  # đường code chạy ở cả hai nơi.
+  #
+  # Bucket phải đặt quyền "anonymous set download" (CHỈ ĐỌC), KHÔNG phải
+  # "anonymous set public" — cái sau mở cả quyền GHI, và đó là lỗi cấu hình S3 phổ
+  # biến nhất: nó không có triệu chứng nào cho tới khi có người lợi dụng.
+  #
+  # Image của Chainguard, KHÔNG phải `minio/minio`: Docker Hub từ chối kéo image đó từ
+  # cuối 2025 ("pull access denied"). Máy đã có bản cũ trong cache không thấy lỗi, máy
+  # mới thì không dựng được — xem cùng ghi chú ở `docker-compose.e2e.yml`. Entrypoint
+  # là `minio` và có sẵn `mc`, nên `command`, healthcheck và `mc` của docker-stack.mjs
+  # giữ nguyên.
+  minio:
+    image: cgr.dev/chainguard/minio:latest
+    # Chạy bằng root, như `minio/minio` vẫn chạy. Bản Chainguard mặc định là uid 65532,
+    # và volume do image CŨ tạo ra thuộc root, quyền 0755 — trên đó nó chết ngay:
+    #
+    #   Error: unable to rename (/data/.minio.sys/tmp -> …) file access denied
+    #   FATAL Unable to initialize backend: Unable to write to the backend
+    #
+    # (đo 08/10/2026 trên bản sao volume của máy dev). Volume MỚI thì không sao vì
+    # `/data` trong image là 0777. Root chạy được cả hai, không bắt ai chown tay.
+    user: '0:0'
+    container_name: ${COMPOSE_PROJECT_NAME:-quilder}-s3
+    restart: unless-stopped
+    command: server /data --console-address ':9001'
+    environment:
+      MINIO_ROOT_USER: builder
+      MINIO_ROOT_PASSWORD: builderbuilder
+    ports:
+      - '9000:9000'
+      - '9001:9001'
+    volumes:
+      - builder-s3:/data
+    healthcheck:
+      test: ['CMD', 'mc', 'ready', 'local']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # ── App đã build, chạy đúng như production ────────────────────────────────
+  #
+  # Chỉ lên khi có `--profile app`, nên `pnpm db:up` vẫn chỉ dựng nền cho dev.
+  #
+  # Cổng 3002 chứ không phải 3000 hay 3001, và đây không phải chuyện thẩm mỹ: trên
+  # máy dev 3000 hay là một dự án Next khác và 3001 là dev server của chính repo
+  # này. Trỏ e2e vào cổng của dự án khác đã từng xảy ra và mất hàng giờ để nhận ra —
+  # xem HANDOFF §3.24.
+  app:
+    profiles: ['app']
+    image: quilder:local
+    build:
+      context: .
+      # `target` để trống = stage cuối (runner). Ghi tường minh để người đọc thấy
+      # rằng có nhiều stage và đây là stage nào.
+      target: runner
+    container_name: ${COMPOSE_PROJECT_NAME:-quilder}-app
+    restart: unless-stopped
+    env_file:
+      # Thứ tự có ý nghĩa: file sau ghi đè file trước.
+      #
+      # `.env` là cấu hình của người dùng, dùng chung với `pnpm dev`. `.env.docker`
+      # chỉ chứa những biến phải KHÁC khi chạy trong container — và lý do chúng phải
+      # khác là "localhost" trong container là chính container đó, không phải máy
+      # thật. `scripts/docker-stack.mjs` sinh file đó từ `.env`.
+      - .env
+      - .env.docker
+    ports:
+      - '3002:3000'
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    healthcheck:
+      # `/api/health` không tồn tại; dùng TRANG LOGIN vì nó là route duy nhất trả 200
+      # mà không cần session và không cần release nào.
+      #
+      # Đường dẫn là `/builder/login`, KHÔNG phải `/login`: route nằm trong route group
+      # `(builder)`, và group trong ngoặc không xuất hiện trong URL — nhưng đoạn
+      # `builder` thì có, vì nó là một thư mục thật. `/login` trả 404, và một
+      # healthcheck trỏ vào 404 sẽ báo container chết trong khi app hoàn toàn sống.
+      test: ['CMD', 'wget', '--spider', '-q', 'http://127.0.0.1:3000/builder/login']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 20s
+
+  # ── Migration: một lần, có chủ đích ───────────────────────────────────────
+  #
+  # Stage `migrate` của Dockerfile, chạy rồi thoát. KHÔNG gộp vào entrypoint của app:
+  # nhiều replica cùng migrate lúc start là một race condition thật (xem entrypoint.sh).
+  #
+  #   docker compose --profile migrate run --rm migrate
+  migrate:
+    profiles: ['migrate']
+    image: quilder:migrate
+    build:
+      context: .
+      target: migrate
+    env_file:
+      - .env
+      - .env.docker
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  builder-pgdata:
+  builder-s3:

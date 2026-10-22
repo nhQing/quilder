@@ -1,0 +1,66 @@
+node_modules/
+.next/
+.next-e2e/
+out/
+build/
+dist/
+*.tsbuildinfo
+next-env.d.ts
+
+.env
+.env.local
+.env.*.local
+
+.DS_Store
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+coverage/
+test-results/
+
+# Thùng chờ xoá. `device_bash` của phiên Claude KHÔNG xoá được file (rm bị chặn),
+# nên thứ cần xoá được MOVE vào đây rồi người dùng xoá cả thư mục. Nó có thể
+# chứa một `.next` cũ — và `.next/types/**/*.ts` khớp `include` của tsconfig, nên
+# nó cũng bị loại ở `tsconfig.json#exclude`.
+_to_delete/
+playwright-report/
+
+# Output của html-to-doc — sinh lại được, và nó là dữ liệu chứ không phải code
+scripts/migrate/out/
+/test-results/
+e2e/.auth/
+
+# Sinh bởi scripts/docker-stack.mjs — biến đổi hostname cho container
+.env.docker
+
+# Thư mục nháp của subagent-driven-development (ledger, brief, review package).
+# Nội dung là bản ghi tạm của một lần chạy kế hoạch — lịch sử git là bản ghi thật.
+.superpowers/
+
+# Thùng chờ xoá. `device_bash` của phiên Claude không xoá được file (rm bị chặn),
+# nên thứ cần bỏ được MOVE vào đây rồi người dùng xoá cả thư mục. Nó có thể chứa
+# một `.next` cũ, và `.next/types/**/*.ts` khớp `include` của tsconfig — nên thư
+# mục này cũng bị loại ở `tsconfig.json#exclude`, không chỉ ở đây.
+_to_delete/
+
+# Tag đã push gần nhất, sinh bởi scripts/release.mjs. Là trạng thái CỦA MÁY này
+# (bạn push tag nào lần cuối), không phải trạng thái của dự án — hai người cùng
+# release sẽ có hai giá trị khác nhau và cả hai đều đúng.
+.release.json
+
+# Ảnh chụp màn hình dán vào repo root khi hỏi/trả lời trong phiên làm việc.
+# Không phải tài sản của dự án, nhưng `pnpm release` cảnh báo "cây làm việc còn
+# thay đổi chưa commit" khi thấy chúng — và cảnh báo đó phải có nghĩa.
+/image*.png
+
+# Kiểu sinh từ /api/public/v1/types — chạy `pnpm api:types`, không commit
+/generated/
+
+# Stack e2e dùng một lần (scripts/e2e-stack.mjs)
+.e2e-cache/
+
+# Gói dự án Quilder: mỗi gói là một repo git RIÊNG, không bao giờ vào repo lõi.
+# Chỉ gói mẫu được commit. Xem projects/example/README.md.
+projects/*
+!projects/example/

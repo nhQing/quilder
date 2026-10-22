@@ -1,0 +1,38 @@
+/**
+ * Mực của thanh điều hướng khi nó nằm trên nền tối.
+ *
+ * ## Vì sao cần một tệp CSS, trong khi effect đã có `style.states`
+ *
+ * `nav-invert` ghi `data-inverted="true"` lên node mang effect — thanh nav. Còn
+ * `style.states` chỉ nhận state của effect gắn trên CHÍNH node đó, nên nó tô
+ * được thanh nav mà KHÔNG tô được chữ trong các node con: node Text không mang
+ * effect nào, và `color` không nằm trong `aiCssAllowlist` nên `customCss` do AI
+ * ghi cũng không với tới. Logo và chevron thì đảo được bằng `filter` (có trong
+ * allowlist); riêng chữ thì không có đường nào ở tầng nội dung.
+ *
+ * Nên luật nằm ở đây, và nó là luật CHUNG chứ không phải luật của trang chủ:
+ * bất kỳ node nào tự khai vai `nav-ink` sẽ đảo mực cùng thanh nav. Cách dùng:
+ *
+ *     apply_ops → setProps { nodeId: "<node Text>", part: "nav-ink" }
+ *
+ * Cùng hình dạng hợp đồng với `nav-dark` mà `markerSelector` của effect dùng để
+ * nhận ra một bề mặt tối: một vai trong `part`, `~=` để node giữ được nhiều vai.
+ *
+ * Chuyển màu khai trên chính `[data-part~="nav-ink"]` chứ không trên trạng thái
+ * đảo, để mực dịu cả lúc vào lẫn lúc ra. Thanh nav cắt qua mép trên của một
+ * panel tối trong đúng một khung hình; thiếu dòng này thì cả thanh giật màu.
+ */
+
+[data-part~='nav-ink'] {
+  transition: color 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+[data-inverted='true'] [data-part~='nav-ink'] {
+  color: #ffffff;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-part~='nav-ink'] {
+    transition: none;
+  }
+}

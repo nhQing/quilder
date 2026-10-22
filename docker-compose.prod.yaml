@@ -1,0 +1,131 @@
+# Compose cho SERVER. Khác `docker-compose.yml` (máy dev) ở bốn điểm, và cả bốn
+# đều có lý do:
+#
+#  1. KHÔNG `build:` — image kéo từ registry, đã build và đã push bằng
+#     `pnpm release`. Server không cần mã nguồn, không cần Node, không cần pnpm.
+#  2. KHÔNG MinIO — production dùng S3/CDN thật. Cùng một đường code chạy ở cả hai
+#     nơi; khác biệt duy nhất là `S3_ENDPOINT` (rỗng = AWS) và `S3_PUBLIC_BASE_URL`.
+#  3. Postgres KHÔNG publish cổng ra ngoài. Trên máy dev, `5433:5432` là để
+#     `pnpm dev` nối vào được. Trên server, mở cổng DB ra Internet là mở một cổng
+#     DB ra Internet — app nói chuyện với nó qua network nội bộ của compose.
+#  4. App bind vào `127.0.0.1`. Nginx/Caddy phía trước lo TLS và tên miền; app tự
+#     nó không nói HTTPS.
+#
+#   docker compose -f docker-compose.prod.yaml --profile migrate run --rm migrate
+#   docker compose -f docker-compose.prod.yaml up -d
+#
+# Compose tự đọc `.env` cùng thư mục cho `${...}` bên dưới.
+#
+# Mọi biến bắt buộc viết dạng `${VAR:?...}`. Không phải để cho đẹp: một
+# `POSTGRES_PASSWORD` rỗng làm container Postgres TỪ CHỐI khởi tạo và thoát ngay,
+# rồi app không nối được DB và tự khởi động lại vô hạn — log đầy
+# "Can't reach database server at postgres:5432" mà không dòng nào nói nguyên nhân
+# thật. Với `:?`, compose dừng ngay tại chỗ và gọi tên biến còn thiếu.
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: ${COMPOSE_PROJECT_NAME:-quilder}-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?chưa đặt trong .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?chưa đặt trong .env — Postgres sẽ TỪ CHỐI khởi tạo nếu rỗng}
+      POSTGRES_DB: ${POSTGRES_DB:?chưa đặt trong .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  app:
+    image: ${REGISTRY:?chưa đặt trong .env}/quilder:${TAG:?chưa đặt trong .env}
+    container_name: ${COMPOSE_PROJECT_NAME:-quilder}-app
+    restart: unless-stopped
+    env_file: [.env]
+    environment:
+      # DATABASE_URL: khai thẳng thì thắng, không thì tự ghép.
+      #
+      # Đây là biến sai nhiều nhất khi deploy, nên nó có ba đường vào theo đúng
+      # thứ tự ưu tiên:
+      #
+      #  1. `DATABASE_URL` trong `.env` — dùng khi DB nằm NGOÀI compose này
+      #     (managed service, hoặc Postgres của một stack khác). Khai gì dùng nấy.
+      #  2. Không khai thì ghép từ `POSTGRES_*`, với host `${DB_HOST}` mặc định là
+      #     `postgres` — tên service bên dưới.
+      #  3. `DB_HOST` / `DB_PORT` để trỏ sang một Postgres tên khác mà vẫn giữ
+      #     user/password/db chung một nguồn.
+      #
+      # Hai điều luôn đúng bất kể đường nào: host là TÊN SERVICE (trong container
+      # `localhost` là chính container đó), và cổng là cổng NỘI BỘ 5432 — không
+      # phải cổng publish như 5433.
+      DATABASE_URL: ${DATABASE_URL:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@${DB_HOST:-postgres}:${DB_PORT:-5432}/${POSTGRES_DB:?}?schema=public}
+    ports:
+      # 127.0.0.1: KHÔNG mở thẳng ra Internet. Reverse proxy phía trước.
+      - '127.0.0.1:3000:3000'
+    depends_on:
+      postgres:
+        condition: service_healthy
+      # App chờ bootstrap THOÁT VỚI MÃ 0.
+      #
+      # Đây là thứ thay cho "nhớ chạy migrate bằng tay": compose chạy bootstrap
+      # đúng một lần, đúng trước app, và nếu nó đỏ thì app KHÔNG khởi động —
+      # thay vì khởi động rồi loop vô hạn với "bảng Site không tồn tại".
+      bootstrap:
+        condition: service_completed_successfully
+    healthcheck:
+      # `/builder/login`, KHÔNG phải `/login`: route nằm trong group `(builder)`,
+      # group trong ngoặc không xuất hiện trong URL nhưng đoạn `builder` thì có —
+      # nó là thư mục thật. `/login` trả 404, và healthcheck trỏ vào 404 sẽ báo
+      # container chết trong khi app hoàn toàn sống.
+      test: ['CMD', 'wget', '--spider', '-q', 'http://127.0.0.1:3000/builder/login']
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 20s
+
+  # Khởi tạo: migrate → seed nếu DB trống → đồng bộ Effect. Rồi thoát.
+  #
+  # KHÔNG có `profiles`: nó là một phần của `up -d`, và `app` chờ nó qua
+  # `service_completed_successfully`. Chạy lại vô hại — mỗi bước tự kiểm trước
+  # khi làm (xem `scripts/bootstrap.sh`).
+  #
+  # `restart: "no"` là bắt buộc: một service chạy-rồi-thoát mà mang chính sách
+  # restart của stack sẽ bị khởi động lại vĩnh viễn sau khi thành công.
+  bootstrap:
+    image: ${REGISTRY:?chưa đặt trong .env}/quilder-bootstrap:${TAG:?chưa đặt trong .env}
+    container_name: ${COMPOSE_PROJECT_NAME:-quilder}-bootstrap
+    restart: 'no'
+    env_file: [.env]
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@${DB_HOST:-postgres}:${DB_PORT:-5432}/${POSTGRES_DB:?}?schema=public}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  pgdata:
+
+# ── Dùng Postgres CÓ SẴN trên server, không phải cái ở trên ──────────────────
+#
+# Ba bước, không cần sửa file này ngoài việc xoá service `postgres`:
+#
+#  1. Trong `.env`, trỏ đúng chỗ. Cùng compose, khác tên service:
+#         DB_HOST=db
+#     Hoặc DB nằm ngoài hẳn (managed, hoặc Postgres chạy trên host):
+#         DATABASE_URL=postgresql://user:pass@10.0.0.5:5432/quilder?schema=public
+#
+#  2. Xoá service `postgres` ở trên, và xoá cả hai khối `depends_on` trỏ tới nó —
+#     `depends_on` tới một service không tồn tại là lỗi cấu hình.
+#
+#  3. Nếu Postgres đó thuộc một compose project KHÁC thì hai bên đang ở hai
+#     network riêng, và tên service của nó KHÔNG resolve được từ đây. Nối vào
+#     network của nó — tên lấy bằng `docker network ls`:
+#
+#         networks:
+#           default:
+#             name: <tên-network-của-stack-kia>
+#             external: true
+#
+#     Đặt khối đó ở cấp cao nhất của file này.

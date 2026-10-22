@@ -1,0 +1,39 @@
+/* Effect menu-toggle --------------------------------------------------------
+   Effect ghi `data-menu-open="true"` lên node header và không ghi style nào —
+   "CSS sở hữu trạng thái, JS sở hữu trigger", đúng quy ước của site cũ.
+
+   ## Vì sao file này chỉ có phần TỐI THIỂU
+
+   Panel trượt từ đâu vào, nền mờ ra sao, burger có thành dấu X không — tất cả là
+   THIẾT KẾ của từng trang, và người dùng đặt chúng bằng `setStyle` với
+   `target: { state: "menu-open" }` (mở từ 07/09/2026, xem spec §4). Đặt cứng ở
+   đây thì mọi lần họ sửa sẽ không thấy gì đổi.
+
+   Còn lại đúng hai thứ CSS phải lo vì `setStyle` không biểu diễn được chúng:
+   panel bị ẩn khỏi CÂY A11Y khi đóng, và burger chỉ hiện ở khổ nhỏ. */
+
+/* Panel đóng: `visibility: hidden` chứ không chỉ `opacity: 0`.
+   Chỉ mờ đi thì link bên trong VẪN nhận được focus — Tab sẽ đi vào một trình đơn
+   vô hình, và người dùng bàn phím mất dấu con trỏ. `visibility` cũng là thứ
+   `nav-invert` dựa vào để bỏ qua panel đã dùng xong (xem docblock ở đó). */
+[data-fx~='menu-toggle'] [data-part~='menu-panel'] {
+  visibility: hidden;
+}
+
+[data-fx~='menu-toggle'][data-menu-open='true'] [data-part~='menu-panel'] {
+  visibility: visible;
+}
+
+/* Burger chỉ có nghĩa ở khổ mà trình đơn đầy đủ không vừa. Mốc `md` (900px) là
+   cùng breakpoint mà `design/breakpoints.ts` khai — không gõ số ở đây thì file
+   này và compiler sẽ lệch nhau một ngày nào đó. */
+@media (min-width: 900px) {
+  [data-fx~='menu-toggle'] [data-part~='burger'] {
+    display: none;
+  }
+
+  /* Ở desktop panel luôn hiện, kể cả khi state còn sót lại từ lúc thu hẹp màn. */
+  [data-fx~='menu-toggle'] [data-part~='menu-panel'] {
+    visibility: visible;
+  }
+}

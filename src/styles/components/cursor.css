@@ -1,0 +1,94 @@
+/* Custom cursor ------------------------------------------------------------ */
+
+.cursor {
+  position: fixed;
+  inset-block-start: 0;
+  inset-inline-start: 0;
+  z-index: var(--z-cursor);
+  pointer-events: none;
+  mix-blend-mode: difference;
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease-out);
+}
+
+.cursor[data-active="true"] {
+  opacity: 1;
+}
+
+.cursor__dot,
+.cursor__ring {
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline-start: 0;
+  border-radius: 50%;
+  /* cursor.js writes translate3d() here; the -50% keeps the hotspot centred. */
+  will-change: transform;
+}
+
+.cursor__dot {
+  inline-size: 6px;
+  block-size: 6px;
+  margin: -3px 0 0 -3px;
+  background: var(--color-bone);
+}
+
+.cursor__ring {
+  inline-size: 40px;
+  block-size: 40px;
+  margin: -20px 0 0 -20px;
+  border: 1px solid var(--color-bone);
+  display: grid;
+  place-items: center;
+  transition:
+    inline-size var(--dur-fast) var(--ease-out),
+    block-size var(--dur-fast) var(--ease-out),
+    margin var(--dur-fast) var(--ease-out),
+    background-color var(--dur-fast) var(--ease-out);
+}
+
+/* Hovering something interactive — the ring swallows the pointer. */
+.cursor[data-hover="true"] .cursor__ring {
+  inline-size: 72px;
+  block-size: 72px;
+  margin: -36px 0 0 -36px;
+  background: var(--color-bone);
+}
+
+.cursor[data-hover="true"] .cursor__dot {
+  opacity: 0;
+}
+
+.cursor__label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  color: var(--color-ink);
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease-out);
+  white-space: nowrap;
+}
+
+.cursor[data-hover="true"] .cursor__label:not(:empty) {
+  opacity: 1;
+}
+
+/* Hide the native pointer only when the custom one is actually running. */
+body[data-cursor-enabled="true"],
+body[data-cursor-enabled="true"] a,
+body[data-cursor-enabled="true"] button {
+  cursor: none;
+}
+
+/* Coarse pointers and reduced-motion users keep the system cursor. */
+@media (hover: none), (pointer: coarse), (prefers-reduced-motion: reduce) {
+  .cursor {
+    display: none;
+  }
+
+  body[data-cursor-enabled="true"],
+  body[data-cursor-enabled="true"] a,
+  body[data-cursor-enabled="true"] button {
+    cursor: auto;
+  }
+}

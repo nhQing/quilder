@@ -1,0 +1,21 @@
+/*
+ * Theme "Theo máy người xem" (`<html data-theme="system">`, xem src/lib/site/theme.ts).
+ *
+ * Máy để chế độ TỐI: không cần gì — khối `:root` của tokens.css đã là theme tối.
+ * Máy để chế độ SÁNG: lặp lại đúng khối `[data-theme="light"]` của tokens.css.
+ *
+ * Nhân bản chứ không sửa tokens.css: file đó là bản copy nguyên trạng, cấm sửa kể cả
+ * format (.claude/company.md, luật 2). `theme-system.test.ts` khẳng định khối dưới
+ * đây trùng từng biến với khối sáng của tokens.css — sửa một bên mà quên bên kia là đỏ.
+ */
+@media (prefers-color-scheme: light) {
+  [data-theme="system"] {
+    --color-bg: var(--color-bone);
+    --color-fg: var(--color-ink);
+    --color-muted: #565248;
+    --color-line: rgb(11 11 15 / 0.14);
+    --color-line-strong: rgb(11 11 15 / 0.3);
+    --color-veil: rgb(244 241 234 / 0.75);
+    --color-glass: rgb(11 11 15 / 0.04);
+  }
+}

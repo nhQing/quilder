@@ -1,0 +1,3 @@
+/* Điểm vào CSS của gói cho đường bundler (canvas builder). Đường site công khai đọc
+   thẳng styles/index.css (src/lib/render/static-css.ts). */
+@import './styles/index.css';

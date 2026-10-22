@@ -1,0 +1,134 @@
+# CI tối thiểu (08/10/2026).
+#
+# Trước đó repo có nhiều phép kiểm tốt (`prove:*`, `mcp:smoke`, `check:layout`) nhưng
+# không gì bắt chúng chạy — và `mcp:smoke` đã hỏng mà không ai biết. File này là thứ bắt.
+#
+#   check   mỗi push và PR, không cần DB, mục tiêu dưới 5 phút
+#   visual  mỗi push và PR, ảnh seed so với ảnh mẫu trong container Playwright — CHẶN
+#   e2e     PR và chạy đêm, chia 3 phần song song, mỗi phần một stack dùng một lần — KHÔNG chặn
+#
+# Lưu ý cho job e2e: trên CI không có DB dev để sao chép, nên stack seed bằng script
+# (`--scripted`) — trang chủ thật không có trong seed và một số spec sẽ đỏ cho tới khi
+# có fixture riêng cho CI. Vì vậy job này CHƯA nên là điều kiện bắt buộc để merge.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: '0 19 * * *' # 02:00 giờ Việt Nam
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Trên sự kiện pull_request, gitleaks hỏi API danh sách commit của PR — token mặc định
+    # (chỉ đọc contents) bị 403 "Resource not accessible by integration" (PR #1, 15/10).
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # gitleaks quét DẢI commit của lần push (`<đầu>^..<cuối>`). Clone nông mặc định
+          # chỉ có một commit, nên push nhiều commit thì git không thấy `<đầu>^` và bước
+          # quét đỏ mà không quét gì (đo ngày 08/10: "scanned ~0 bytes").
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm db:generate
+      - run: pnpm typecheck
+      - run: pnpm lint
+      - run: pnpm test
+      # check:tokens đọc doc và bảng Token trong DB nên chạy ở job e2e (proofs), không ở đây.
+      - name: Tài liệu sinh từ code phải khớp code
+        run: pnpm docs:check
+      - name: Không có secret trong commit
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Visual regression (D1): ảnh toàn trang ở 1440/768/320 so với ảnh mẫu đã commit
+  # (`e2e/visual/__screenshots__`), chụp trong container Playwright cùng phiên bản với
+  # repo — máy dev và CI cùng một bộ font. Dữ liệu là seed bằng script nên kết quả xác
+  # định, và job này CHẶN được (khác job e2e). Ảnh mẫu ghi lại bằng
+  # `pnpm e2e:up --scripted && pnpm e2e:visual --update`.
+  visual:
+    needs: check
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm db:generate
+      - run: node scripts/e2e-stack.mjs up --scripted
+      - run: node scripts/e2e-stack.mjs visual
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual-diff
+          path: |
+            test-results/visual/
+            .e2e-cache/dev.log
+          retention-days: 7
+      - if: always()
+        run: node scripts/e2e-stack.mjs down
+
+  # Chia BA phần chạy song song (`--shard`), mỗi phần một stack riêng trên máy riêng.
+  #
+  # Một máy, một worker: 308 test chạm trần 45 phút ngày 16/10/2026 (PR #1) — job bị huỷ,
+  # cả lượt CI ra `cancelled`, và `pnpm release` không coi đó là xanh. Đo được: nửa thời
+  # gian là test đỏ sẵn trên seed bằng script (chờ hết hạn ~30s mỗi test). Ba phần ~17 phút
+  # mỗi phần, không bỏ test nào. Tăng/giảm số phần: sửa `shard` VÀ mẫu số trong `--shard`.
+  e2e:
+    needs: check
+    if: github.event_name != 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+    name: e2e (${{ matrix.shard }}/3)
+    # KHÔNG chặn cho tới khi có fixture dữ liệu cho CI: trên seed bằng script, các spec
+    # cần trang chủ thật đỏ vì thiếu dữ liệu chứ không vì lỗi code, và một job lúc nào
+    # cũng đỏ thì dạy người ta bỏ qua nó. Job vẫn chạy và vẫn tải report lên khi đỏ —
+    # chỉ không làm cả workflow đỏ (và không gửi mail mỗi đêm). Gỡ dòng này khi job xanh
+    # ổn định khoảng hai tuần.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm db:generate
+      - run: pnpm exec playwright install --with-deps chromium
+      # up → seed → dev → e2e → mcp:smoke → prove:* → down
+      - run: node scripts/e2e-stack.mjs ci --scripted --shard=${{ matrix.shard }}/3
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-${{ matrix.shard }}
+          path: |
+            playwright-report/
+            test-results/
+            .e2e-cache/dev.log
+          retention-days: 7

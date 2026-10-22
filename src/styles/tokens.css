@@ -1,0 +1,115 @@
+/* Design tokens ------------------------------------------------------------
+   Every value the rest of the stylesheet is allowed to reference lives here.
+   -------------------------------------------------------------------------- */
+
+:root {
+  /* --- colour ---------------------------------------------------------- */
+  --color-ink: #0b0b0f;
+  --color-ink-raised: #121218;
+  --color-ink-sunken: #07070a;
+  --color-bone: #f4f1ea;
+  --color-bone-dim: #a5a198;
+  --color-bone-faint: #6d6a64;
+
+  --color-accent: #ff4d2e;
+  --color-accent-warm: #ffb03b;
+  --color-accent-cool: #2bd6bf;
+  --color-accent-violet: #8a74ff;
+
+  --color-bg: var(--color-ink);
+  --color-fg: var(--color-bone);
+  --color-muted: var(--color-bone-dim);
+
+  --color-line: rgb(244 241 234 / 0.12);
+  --color-line-strong: rgb(244 241 234 / 0.26);
+  --color-veil: rgb(11 11 15 / 0.72);
+  --color-glass: rgb(244 241 234 / 0.045);
+
+  /* --- type ------------------------------------------------------------
+     Inter tự host (base/typography.css), font hệ thống làm lớp dự phòng. Gói dự
+     án đặt font riêng của site bằng cách đè hai token này trong CSS của gói.
+     ---------------------------------------------------------------------- */
+  --font-display: "Inter Variable", "Inter", system-ui, -apple-system, BlinkMacSystemFont,
+    "Helvetica Neue", sans-serif;
+  --font-body: "Inter Variable", "Inter", system-ui, -apple-system, BlinkMacSystemFont,
+    "Helvetica Neue", sans-serif;
+  --font-mono: "SF Mono", ui-monospace, "Menlo", "Consolas", monospace;
+
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+
+  /* Fluid scale — 360px → 1600px viewport. */
+  --step--1: clamp(0.78rem, 0.75rem + 0.14vw, 0.86rem);
+  --step-0: clamp(0.95rem, 0.9rem + 0.22vw, 1.08rem);
+  --step-1: clamp(1.15rem, 1.05rem + 0.45vw, 1.45rem);
+  --step-2: clamp(1.45rem, 1.25rem + 0.9vw, 2.1rem);
+  --step-3: clamp(1.9rem, 1.45rem + 1.9vw, 3.2rem);
+  --step-4: clamp(2.4rem, 1.6rem + 3.4vw, 4.8rem);
+  /* Capped deliberately low for a display size: the hero has to fit an
+     eyebrow, three lines, a lede and two buttons inside 100svh on a laptop. */
+  --step-5: clamp(2.4rem, 1rem + 4.6vw, 5.5rem);
+
+  --leading-tight: 0.98;
+  --leading-snug: 1.14;
+  --leading-body: 1.62;
+
+  --tracking-tight: -0.03em;
+  --tracking-normal: -0.01em;
+  --tracking-wide: 0.16em;
+
+  /* --- space ----------------------------------------------------------- */
+  --space-3xs: 0.25rem;
+  --space-2xs: 0.5rem;
+  --space-xs: 0.75rem;
+  --space-s: 1rem;
+  --space-m: 1.5rem;
+  --space-l: 2.25rem;
+  --space-xl: 3.5rem;
+  --space-2xl: 5.5rem;
+  --space-3xl: clamp(6rem, 4rem + 9vw, 12rem);
+
+  --gutter: clamp(1.15rem, 0.6rem + 2.6vw, 3.5rem);
+  --measure: 62ch;
+  --max-width: 1560px;
+
+  /* --- radius / border -------------------------------------------------- */
+  --radius-s: 4px;
+  --radius-m: 10px;
+  --radius-l: 20px;
+  --radius-pill: 999px;
+
+  /* --- motion ----------------------------------------------------------- */
+  --dur-instant: 0.12s;
+  --dur-fast: 0.28s;
+  --dur-base: 0.55s;
+  --dur-slow: 0.9s;
+  --dur-glacial: 1.5s;
+
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --ease-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-back: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  /* --- depth ------------------------------------------------------------ */
+  --z-base: 0;
+  --z-raised: 10;
+  --z-header: 100;
+  --z-cursor: 900;
+  --z-loader: 1000;
+
+  --shadow-soft: 0 24px 60px -30px rgb(0 0 0 / 0.85);
+  --shadow-lift: 0 40px 90px -40px rgb(0 0 0 / 0.9);
+}
+
+/* The demo ships dark. A light theme is one attribute away. */
+[data-theme="light"] {
+  --color-bg: var(--color-bone);
+  --color-fg: var(--color-ink);
+  --color-muted: #565248;
+  --color-line: rgb(11 11 15 / 0.14);
+  --color-line-strong: rgb(11 11 15 / 0.3);
+  --color-veil: rgb(244 241 234 / 0.75);
+  --color-glass: rgb(11 11 15 / 0.04);
+}

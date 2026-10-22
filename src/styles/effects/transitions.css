@@ -1,0 +1,119 @@
+/* Page + section transition states ----------------------------------------- */
+
+/* --- Loader --------------------------------------------------------------- */
+
+.loader {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-loader);
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: var(--space-l);
+  background: var(--color-ink);
+  transition:
+    opacity var(--dur-slow) var(--ease-expo),
+    visibility 0s linear var(--dur-slow);
+}
+
+.loader__inner {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-s);
+}
+
+.loader__word {
+  font-size: var(--step-3);
+  color: var(--color-fg);
+}
+
+.loader__count {
+  font-family: var(--font-mono);
+  font-size: var(--step-0);
+  color: var(--color-accent);
+  font-variant-numeric: tabular-nums;
+}
+
+.loader__count i {
+  font-style: normal;
+  opacity: 0.6;
+}
+
+.loader__bar {
+  inline-size: min(42vw, 320px);
+  block-size: 1px;
+  background: var(--color-line);
+  overflow: clip;
+}
+
+.loader__fill {
+  display: block;
+  block-size: 100%;
+  inline-size: 100%;
+  background: var(--color-accent);
+  transform: scaleX(var(--loader-progress, 0));
+  transform-origin: left center;
+  transition: transform var(--dur-fast) var(--ease-out);
+}
+
+/* Teardown — main.js sets .is-loaded on <body>. */
+body.is-loaded .loader {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+/* Scroll locking during the splash is Lenis's job (loader.js calls
+   lenis.stop()), deliberately not `overflow: hidden` here — a CSS-only lock
+   would survive a JS failure and leave the page unscrollable. */
+
+/* --- Page enter ----------------------------------------------------------- */
+
+body.is-loading .header,
+body.is-loading main,
+body.is-loading .footer {
+  opacity: 0;
+}
+
+.header,
+main,
+.footer {
+  transition: opacity var(--dur-slow) var(--ease-out) 0.1s;
+  /* Failsafe: if main.js never runs (parse error, opened over file://),
+     reveal everything at 8s anyway. `forwards` pins opacity: 1. */
+  animation: page-failsafe 0.6s var(--ease-out) 8s forwards;
+}
+
+@keyframes page-failsafe {
+  to {
+    opacity: 1;
+  }
+}
+
+.loader {
+  animation: loader-failsafe 0.6s var(--ease-out) 8s forwards;
+}
+
+@keyframes loader-failsafe {
+  to {
+    opacity: 0;
+    visibility: hidden;
+  }
+}
+
+/* --- Section transition --------------------------------------------------- */
+
+.section {
+  transition: filter var(--dur-slow) var(--ease-out);
+}
+
+/* observer.js marks the section that owns the viewport. */
+.section[data-in-view="false"] {
+  filter: saturate(0.85);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .section[data-in-view="false"] {
+    filter: none;
+  }
+}

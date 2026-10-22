@@ -1,0 +1,28 @@
+/* Effect drag-scroll --------------------------------------------------------
+   Effect ghi `data-dragging` ("true" khi đang kéo, "glide" khi trôi theo đà)
+   lên viewport và không ghi style nào. CSS quyết định ý nghĩa của nó.
+
+   Chỉ hiện bàn tay ở thiết bị có chuột: trên màn cảm ứng effect bỏ qua chạm,
+   nên một con trỏ "grab" ở đó là hứa hẹn điều không có. */
+
+@media (hover: hover) and (pointer: fine) {
+  [data-fx~='drag-scroll'] {
+    cursor: grab;
+  }
+}
+
+/* Đang kéo hoặc trôi: bỏ snap và cuộn mượt của trình duyệt (chúng đánh nhau với
+   con trỏ và với cú trôi viết tay), và cấm bôi đen chữ lúc kéo. */
+[data-fx~='drag-scroll'][data-dragging] {
+  cursor: grabbing;
+  scroll-snap-type: none;
+  scroll-behavior: auto;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Link/ảnh bên trong không nhận chuột trong lúc kéo, để hover của thẻ không
+   nhấp nháy theo cú kéo. */
+[data-fx~='drag-scroll'][data-dragging] * {
+  pointer-events: none;
+}

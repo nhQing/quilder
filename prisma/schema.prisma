@@ -1,0 +1,1319 @@
+// Quilder — content store
+//
+// Tính chất chịu lực của schema này: PageVersion là IMMUTABLE một khi đã được
+// một Release tham chiếu. Sửa một trang đã publish luôn tạo version mới; bytes cũ
+// không bao giờ bị ghi đè. Nhờ vậy rollback chỉ là đổi con trỏ Site.activeReleaseId
+// và không bao giờ fail được.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Site {
+  id              String    @id @default(cuid())
+  name            String
+  primaryDomain   String    @unique
+  // Release đang được phục vụ ở domain chính. Publish/rollback = đổi field này.
+  activeReleaseId String?   @unique
+  activeRelease   Release?  @relation("ActiveRelease", fields: [activeReleaseId], references: [id])
+  // Nguồn cho binding source:'site' — tên công ty, hotline, số giấy phép, link store.
+  globals         Json      @default("{}")
+
+  /**
+   * Ảnh dùng làm favicon, trỏ tới một hàng `Asset`.
+   *
+   * ## Vì sao là một cột, không phải một file trong `public/`
+   *
+   * File trong `public/` đi vào image lúc build, tức favicon là CODE — đổi logo
+   * một dự án là build lại và deploy lại. Builder này chạy cho nhiều dự án nên đó
+   * là đúng thứ phải tránh.
+   *
+   * ## Vì sao là `Asset`, không phải một URL tự do
+   *
+   * Đi qua kho ảnh nghĩa là được `sniff()` kiểm kiểu từ magic bytes, được khoá
+   * theo nội dung, và có `Cache-Control: immutable` — favicon là thứ trình duyệt
+   * cache dai nhất, nên khoá theo nội dung mới làm việc "đổi favicon" thật sự
+   * hiện ra ở máy khách. Một URL tự do thì không có gì trong ba thứ đó.
+   *
+   * ## Vì sao KHÔNG niêm phong vào `Release`
+   *
+   * Favicon là chrome của site, không phải nội dung trang. Lùi một release để
+   * quay lại logo cũ là một hành vi không ai chờ đợi. Cùng lý lẽ như bảng
+   * `Redirect`: đây là cấu hình, và cấu hình sống ở bảng live.
+   */
+  faviconAssetId  String?
+
+  /**
+   * Nhận diện của CHÍNH BUILDER (09/10/2026): logo ở thanh menu + màn đăng nhập, và
+   * favicon của tab builder. Cùng lý lẽ với `faviconAssetId` ở trên: cột trỏ `Asset`,
+   * không phải file trong `public/` — builder chạy cho nhiều dự án.
+   *
+   * `null` = dùng mặc định (logo Quilder trong `public/brand`).
+   *
+   * `builderFaviconUseSite` mặc định `true`: tab builder dùng CHUNG favicon của web —
+   * thứ chủ dự án hỏi trước tiên — và chỉ khi tắt thì `builderFaviconAssetId` mới có
+   * tác dụng. Hai cột thay vì một: tắt "dùng chung" không được xoá mất file riêng đã
+   * chọn trước đó.
+   */
+  builderLogoAssetId    String?
+  builderFaviconAssetId String?
+  builderFaviconUseSite Boolean @default(true)
+
+  /**
+   * Ảnh chia sẻ MẶC ĐỊNH của site — `og:image` khi trang không đặt ảnh riêng.
+   *
+   * ## Vì sao cần một ảnh mặc định
+   *
+   * `Page.ogImageId` là per-trang, và thực tế gần như không trang nào được đặt:
+   * cột ấy có từ đầu mà không có đường ghi nào cho tới 11/09/2026. Không có ảnh
+   * mặc định thì mọi trang chưa ai chạm tới đều chia sẻ ra một thẻ TRẮNG — và với
+   * một chiến dịch quảng cáo thì thẻ trắng là thẻ không ai bấm.
+   *
+   * Thứ tự ưu tiên: ảnh của BÀI (trang chi tiết) → ảnh của TRANG → ảnh này.
+   *
+   * ## Vì sao ở bảng live, KHÔNG niêm phong vào Release
+   *
+   * Cùng lý lẽ với `faviconAssetId` ngay trên: đây là chrome của site, không phải
+   * nội dung trang. Lùi một release để quay lại ảnh chia sẻ cũ là hành vi không ai
+   * chờ đợi.
+   *
+   * Là CHUỖI chứ không khoá ngoại, cùng quy ước với mọi `assetId` khác: một khoá
+   * ngoại ở đây nghĩa là không xoá được tấm ảnh đang làm ảnh chia sẻ.
+   */
+  ogImageId       String?
+
+  /**
+   * Gốc URL công khai của site — có scheme, không có `/` cuối. `null` = chưa đặt.
+   *
+   * Canonical, sitemap, robots và `og:url` đều dựng trên gốc này, qua MỘT hàm
+   * (`src/lib/site/origin.ts`). Env `SITE_URL` nếu đặt thì GHI ĐÈ cột này: stg và
+   * prod chạy bằng env từ trước, và bỏ env là đổi hành vi của deploy đang chạy.
+   *
+   * Cột riêng chứ không suy từ `primaryDomain`: domain không có scheme, và đoán
+   * http hay https là loại thông minh sai chỗ. Lưu cột này thì host được đồng bộ
+   * sang `primaryDomain`.
+   */
+  siteUrl          String?
+
+  /**
+   * SEO mặc định cho cả site. `null` = hành vi trước đây (không template, không
+   * mô tả mặc định). Bật template là đổi tiêu đề MỌI trang, nên đó phải là việc
+   * người dùng chủ động làm. `seoTitleTemplate` chứa đúng một `%s`.
+   */
+  seoTitleTemplate String?
+  seoDescription   String?
+
+  /**
+   * robots.txt tự soạn. `null` = tự sinh (`defaultRobotsTxt`). `SITE_NOINDEX=true`
+   * vẫn thắng nội dung này — xem `src/app/robots.txt/route.ts`.
+   */
+  robotsTxt        String?
+
+  /**
+   * Điều chỉnh sitemap tự sinh: `{ include?: string[], exclude?: string[] }`. Không
+   * cho thay cả file XML: sitemap tự sinh là thứ cập nhật theo bài mới.
+   *
+   * Các cột trên KHÔNG niêm phong vào `Release`, cùng lý lẽ với favicon: đây là cấu
+   * hình của site, không phải nội dung trang.
+   */
+  sitemapRules     Json      @default("{}")
+
+  /**
+   * Theme của site công khai: `light` | `dark` | `system` (theo máy người xem).
+   *
+   * Mặc định `light` cho site MỚI (21/10/2026). Site có từ trước được migration đặt
+   * `dark` — đúng thứ chúng đang render (`data-theme="dark"` gõ cứng trước đó), vì màu
+   * chưa bị đè trong DB của chúng đang lấy từ khối theme tối, và đổi ngầm sang sáng là
+   * đổi giao diện site đang chạy. Cấu hình live như favicon: không niêm phong vào Release.
+   */
+  theme            String    @default("light")
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  pages     Page[]
+  releases  Release[] @relation("SiteReleases")
+  redirects Redirect[]
+}
+
+/**
+ * Địa chỉ cũ → địa chỉ mới, 301.
+ *
+ * ## Vì sao bảng này là LIVE chứ không nằm trong ảnh chụp release
+ *
+ * Mọi thứ khác trong dự án này đều được niêm phong vào `Release`. Redirect thì
+ * không, và đó là chủ ý: nó là chuyện ĐỊNH TUYẾN, không phải nội dung. Một link
+ * cũ ai đó gửi qua Zalo năm ngoái phải còn chạy dù site đã lùi về release nào.
+ *
+ * ## Vì sao nó không làm hỏng hợp đồng nháp/publish
+ *
+ * Route site tra redirect **SAU KHI** `getPublishedPage()` trả về null. Đổi slug ở
+ * bản nháp thì `ReleaseEntry` vẫn mang slug cũ, nên slug cũ vẫn render trang thật
+ * và redirect nằm im. Nó chỉ bắt đầu chạy sau lần Publish tiếp theo — và nếu lùi
+ * release, slug cũ sống lại và redirect lại nằm im. Tự đúng ở cả bốn trạng thái.
+ */
+model Redirect {
+  id     String @id @default(cuid())
+  siteId String
+  site   Site   @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  /** Slug cũ, không có dấu `/` đầu. Chuỗi rỗng = trang chủ. */
+  from String
+  /** Slug mới. */
+  to   String
+
+  /** Trang đã dẫn tới việc này, để giao diện nhóm được. Null khi trang bị xoá. */
+  pageId String?
+
+  createdAt DateTime @default(now())
+
+  @@unique([siteId, from])
+  @@index([siteId, to])
+}
+
+model Page {
+  id     String @id @default(cuid())
+  siteId String
+  site   Site   @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  slug String // '' = trang chủ
+
+  // Metadata SEO đọc trực tiếp từ đây, không phải duyệt cây node.
+  title       String
+  description String?
+  ogImageId   String?
+  canonical   String?
+  noindex     Boolean @default(false)
+  /**
+   * Bộ đếm phiên bản của trang này. Chỉ tăng, không bao giờ giảm.
+   *
+   * Được TRIGGER cập nhật, không phải application code — xem doc của
+   * `PageVersion.seq`. Đừng tự tăng nó ở TypeScript: hai chỗ tăng là hai bộ đếm.
+   */
+  versionSeq Int @default(0)
+  jsonLd      Json?
+  /**
+   * Trang này là mặt tiền của một loại nội dung.
+   *
+   * `{ typeKey: 'news', mode: 'list' }`   → trang danh sách, slug 'tin-tuc'
+   * `{ typeKey: 'news', mode: 'detail' }` → template cho MỌI bài, slug 'tin-tuc/:slug'
+   *
+   * Vắng (null) = trang thường, hành vi y như trước. Optional là điều kiện để thêm
+   * tính năng này KHÔNG đổi một URL nào đang chạy.
+   */
+  collection Json?
+
+  /**
+   * Trang này là ĐỒ GÁ CỦA TEST, không phải nội dung.
+   *
+   * `/gioi-thieu` là chỗ thao tác của 12 spec e2e, với đúng 4 node `ab000001..4`.
+   * `inspector.spec.ts:426` khẳng định mọi node của nó phải bắt đầu bằng `ab`.
+   * Dựng nội dung thật lên đó đã xảy ra hai lần (HANDOFF §3.35, rồi lại 21/08/2026
+   * với 47 node "Về chúng tôi" → 3 spec đỏ), và cả hai lần đều vì `list_pages` hiện
+   * nó y như một trang bình thường: published, có tiêu đề nghe rất thật.
+   *
+   * Cờ này KHÔNG phải ghi chú. `applyOpsToPage` từ chối mọi op có `actor:'ai'`
+   * trên trang có cờ — vì một quy ước mà người phải nhớ thì Agent thứ ba sẽ không
+   * nhớ. Người vẫn sửa được: họ chạy `pnpm seed:second` để dựng lại đồ gá.
+   */
+  fixture Boolean @default(false)
+
+  /**
+   * Trang HỆ THỐNG: `'not-found'` hoặc `null`.
+   *
+   * Trang hệ thống sửa nội dung bằng builder và đi qua nháp → Publish như mọi
+   * trang, nhưng không xoá được, không đổi slug được, và không mở thẳng bằng URL
+   * (route trả 404 — tức chính trang này). Unique theo site: mỗi loại đúng một
+   * trang. Postgres coi các NULL là khác nhau, nên ràng buộc không chạm trang thường.
+   */
+  system String?
+
+  // Bản nháp đang làm việc. Autosave ghi vào đây.
+  draftVersionId String?      @unique
+  draftVersion   PageVersion? @relation("Draft", fields: [draftVersionId], references: [id])
+
+  versions      PageVersion[] @relation("PageVersions")
+  translations  Translation[]
+  archivedAt    DateTime?
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+
+  @@unique([siteId, slug])
+  @@unique([siteId, system])
+}
+
+model PageVersion {
+  id     String @id @default(cuid())
+  pageId String
+  page   Page   @relation("PageVersions", fields: [pageId], references: [id], onDelete: Cascade)
+
+  // Doc (xem src/lib/doc/types.ts). IMMUTABLE khi đã có Release trỏ tới.
+  doc       Json
+  // Migration function forward-only áp LÚC ĐỌC, không bao giờ sửa tại chỗ.
+  schemaVer Int    @default(1)
+  /**
+   * Số phiên bản người dùng đọc được: `v41`.
+   *
+   * ĐƯỢC ĐIỀN BỞI TRIGGER `page_version_next_seq_trg`, không bởi code gọi
+   * `create()`. Đừng đi tìm phép tăng này trong `src/` — nó không ở đó, và đó là
+   * chủ ý: có TÁM chỗ trong repo tạo `PageVersion` (ba trong `src/`, năm trong
+   * seed/script), nên một helper phải-nhớ-gọi sẽ trôi ở chỗ thứ chín. Trigger
+   * nằm trong `prisma/migrations/20260908092320_page_version_seq/migration.sql`.
+   *
+   * Giá trị `create()` truyền vào bị trigger ghi đè. `0` không bao giờ tồn tại
+   * sau khi insert xong.
+   */
+  seq Int @default(0)
+
+  label     String?
+  // Prompt đã tạo ra version này, nếu do AI sinh. null = sửa tay.
+  prompt    String?
+  createdAt DateTime @default(now())
+  createdBy String
+  // Cây version, để diff hai bản bất kỳ.
+  parentId  String?
+
+  entries ReleaseEntry[]
+  draftOf Page?          @relation("Draft")
+
+  @@index([pageId, createdAt])
+  @@unique([pageId, seq])
+}
+
+model Release {
+  id     String @id @default(cuid())
+  siteId String
+  site   Site   @relation("SiteReleases", fields: [siteId], references: [id], onDelete: Cascade)
+
+  label     String
+  note      String?
+  createdAt DateTime @default(now())
+  createdBy String
+
+  entries   ReleaseEntry[]
+  activeFor Site?          @relation("ActiveRelease")
+
+  /**
+   * Ảnh chụp bản dịch tại thời điểm publish, map "locale:nodeId:field" → giá trị.
+   *
+   * ## Vì sao là ảnh chụp, không phải quan hệ tới bảng Translation
+   *
+   * Bảng `Translation` là BẢN NHÁP — sửa tiếng Anh trong builder phải không
+   * chạm site thật, đúng như sửa tiếng Việt. Nếu render đọc thẳng bảng đó thì
+   * mọi ký tự vừa gõ lên sóng ngay, và toàn bộ hợp đồng nháp/publish sụp ở đúng
+   * chỗ này.
+   *
+   * Ảnh chụp cũng làm việc lùi bản đúng miễn phí: lùi release là lùi cả bố cục
+   * lẫn bản dịch của nó. Với quan hệ live thì lùi bố cục về bản cũ nhưng bản
+   * dịch vẫn của bản mới — trang tiếng Anh vỡ trong khi tiếng Việt bình thường.
+   *
+   * Kích thước: 74 đơn vị × số ngôn ngữ × ~60 byte. Ở mức gấp mười hiện tại vẫn
+   * dưới 100KB, nên một cột Json rẻ hơn hẳn một bảng nữa.
+   */
+  translations Json?
+
+  /**
+   * Ảnh chụp cây component tại thời điểm publish, map `presetId` → cây node.
+   *
+   * ## Vì sao phải chụp
+   *
+   * Instance render bằng cách tra cây component lúc render. Nếu tra thẳng bảng
+   * `Preset` thì SỬA MỘT COMPONENT LÀ ĐỔI NGAY SITE ĐANG CHẠY — bỏ qua publish
+   * hoàn toàn. Trên site tài chính thì đó là chuyện không được phép, và nó xảy ra
+   * im lặng: người dùng chỉnh một thẻ trong thư viện, không bấm gì thêm, và trang
+   * thật đổi.
+   *
+   * Cùng lý do và cùng cơ chế với `translations`. Và cũng cho lùi bản đúng miễn
+   * phí: lùi release là lùi cả component của nó.
+   */
+  components Json?
+
+  /**
+   * Ảnh chụp token TỰ TẠO tại thời điểm publish: name → value.
+   *
+   * Cùng lý do với `translations` và `components`: bảng `Token` là BẢN NHÁP. Đọc
+   * nó lúc render nghĩa là sửa một token đổi ngay site đang chạy, bỏ qua publish
+   * — và nó xảy ra im lặng, vì `var(--tên)` sai chỉ làm mất giá trị chứ không
+   * gây lỗi nào.
+   *
+   * CHỈ token `custom`. Token tĩnh do `src/styles/tokens.css` khai báo, nên
+   * chúng thuộc `cssHash` dưới đây. Chụp cả hai là nhân đôi 398 khai báo trên
+   * mọi lượt tải — đúng cái bẫy mà docblock của `Token.custom` đã cảnh báo.
+   *
+   * Đo 18/08/2026: 0 token tự tạo. Field này hôm nay là BẢO HIỂM, không phải một
+   * đường đang tải dữ liệu — ghi ra để không ai tưởng nó đang chịu lực.
+   */
+  tokens Json?
+
+  /**
+   * Ảnh chụp `Site.globals` tại thời điểm publish.
+   *
+   * Nguồn cho binding `source:'site'` — tên công ty, hotline, số giấy phép, link
+   * store. Chúng đang đọc live ở `render/page.ts`, nên sửa hotline là đổi site
+   * thật ngay. Trên site tài chính thì số giấy phép sai là chuyện pháp lý, không
+   * phải chuyện hiển thị.
+   */
+  globals Json?
+
+  /**
+   * Ảnh chụp metadata asset: assetId → { url, width, height, blurhash, mime }.
+   *
+   * File KHÔNG được chụp, chỉ metadata. Điều đó chỉ đúng khi `Asset.key` là BẤT
+   * BIẾN: thay ảnh phải tạo key mới, không ghi đè key cũ — xem
+   * `src/lib/assets/key.ts`. Ghi đè key là làm mọi release cũ trỏ tới một file
+   * đã đổi nội dung, tức lùi release sẽ lùi bố cục, chữ, token, CSS, nhưng ảnh
+   * thì không. Đó là vết nứt duy nhất còn lại trong hợp đồng này.
+   */
+  assets Json?
+
+  /**
+   * Bó CSS tĩnh của chính release này, đánh địa chỉ theo nội dung.
+   *
+   * Vì sao phải chụp: `site.css` đi qua bundler lúc build, tức nó nằm trong
+   * CODE. Với mô hình "mỗi domain một bản builder, nâng cấp được" thì mỗi lần
+   * nâng cấp là một lần đổi CSS dưới chân release đang chạy. Đây đúng ca đã cắn
+   * Plasmic — xem docs/BENCHMARK.md §1.5.
+   *
+   * Vì sao không phải một cột String: đo được 56 release × 137 KB ≈ 7,7 MB cho
+   * dữ liệu gần như y hệt nhau. Hash nghĩa là nhiều release trùng CSS lưu MỘT
+   * bản, và nâng cấp builder sinh đúng MỘT bó mới.
+   */
+  cssHash   String?
+  cssBundle StyleBundle? @relation(fields: [cssHash], references: [hash])
+
+  @@index([siteId, createdAt])
+}
+
+/**
+ * CSS tĩnh đã gộp, đánh địa chỉ theo nội dung.
+ *
+ * Khoá chính LÀ hash, không phải cuid: hai lần publish không đổi CSS phải trỏ
+ * cùng một hàng, và điều đó chỉ tự đúng khi danh tính CỦA hàng là nội dung của
+ * nó. Dùng cuid thì phải tự viết bước "tìm hàng có css giống" — chậm hơn, và
+ * thêm một chỗ để sai.
+ *
+ * Không có `onDelete`: một bó bị xoá trong khi release còn trỏ tới nó là làm
+ * trắng site. Bó chỉ được xoá khi không release nào trỏ tới, và việc đó chưa cần
+ * làm — 137 KB mỗi PHIÊN BẢN builder, không phải mỗi lần publish.
+ */
+model StyleBundle {
+  hash      String   @id
+  css       String
+  bytes     Int
+  createdAt DateTime @default(now())
+
+  releases Release[]
+}
+
+/**
+ * Ngôn ngữ của site.
+ *
+ * Bảng chứ không phải enum: thêm một ngôn ngữ là việc của người vận hành, không
+ * phải một lần deploy.
+ */
+model Locale {
+  code  String @id
+  label String
+  /** Đúng một dòng. Ngôn ngữ này KHÔNG có tiền tố URL — đổi URL của site đang chạy là vứt đi thứ hạng tìm kiếm đã có. */
+  isDefault Boolean @default(false)
+  /**
+   * Dịch trước, bật sau.
+   *
+   * Bật một ngôn ngữ mới dịch 30% là công bố một trang nửa vời, và fallback về
+   * tiếng Việt khiến nó trông như lỗi chứ không như "chưa xong".
+   */
+  enabled   Boolean @default(false)
+  createdAt DateTime @default(now())
+
+  translations Translation[]
+  entryLocales EntryLocale[]
+}
+
+/**
+ * Một chuỗi đã dịch — LỚP PHỦ lên doc, không phải bản sao của doc.
+ *
+ * ## Vì sao lớp phủ, không fork doc theo ngôn ngữ
+ *
+ * Fork thì mỗi lần đổi bố cục phải làm lại N lần, và hai cây sẽ trôi khỏi nhau
+ * ngay lần đầu có người quên. Sáu tháng sau không ai biết bản nào đúng. Lớp phủ
+ * thì cấu trúc và style dùng chung nên không lệch được.
+ *
+ * Đổi lại: xoá node sinh ra bản dịch mồ côi. Chấp nhận được vì phát hiện được
+ * (quét `nodeId` không còn trong doc) và vô hại (không ai đọc tới).
+ */
+model Translation {
+  id     String @id @default(cuid())
+  locale String
+  loc    Locale @relation(fields: [locale], references: [code], onDelete: Cascade)
+
+  pageId String
+  page   Page   @relation(fields: [pageId], references: [id], onDelete: Cascade)
+
+  /** Node trong doc. KHÔNG có quan hệ FK — node sống trong JSONB. */
+  nodeId String
+  /** content | label | alt | a11yLabel — xem TextField trong builder/text-units.ts. */
+  field  String
+
+  /**
+   * Json, không phải String.
+   *
+   * `content` và `label` là RichText (cây inline node); `alt` và `a11yLabel` là
+   * chuỗi. Ép tất cả thành String ở tầng lưu trữ là lặp lại đúng cạm bẫy mà
+   * `flat` được tạo ra để tránh — và nó sẽ chặn đường thêm bản dịch có link về
+   * sau.
+   */
+  value Json
+
+  /**
+   * Vân tay bản gốc lúc dịch.
+   *
+   * Không có nó thì "bản gốc đã đổi sau khi dịch" là trạng thái vô hình: bản
+   * tiếng Anh nói một đằng, tiếng Việt nói một nẻo, và không ai biết cái nào mới.
+   */
+  sourceHash String
+
+  updatedAt DateTime @updatedAt
+  updatedBy String
+
+  @@unique([locale, pageId, nodeId, field])
+  @@index([pageId, locale])
+}
+
+model ReleaseEntry {
+  releaseId String
+  release   Release     @relation(fields: [releaseId], references: [id], onDelete: Cascade)
+  pageId    String
+  versionId String
+  version   PageVersion @relation(fields: [versionId], references: [id])
+  // Denormalize slug tại thời điểm publish: đổi slug sau này không làm hỏng release cũ.
+  slug      String
+
+  @@id([releaseId, pageId])
+  @@index([releaseId, slug])
+}
+
+model Asset {
+  id   String @id @default(cuid())
+  // image | video | svg | font | data
+  //
+  // 'data' là hạng đặc biệt: displacement.png là INPUT của shader, không phải hình
+  // trang trí. Nó phải được miễn nén và miễn đổi định dạng — tối ưu nó là âm thầm
+  // làm hỏng hiệu ứng image-hover.
+  kind      String
+  key       String   @unique // S3 key
+  url       String
+  mime      String
+  bytes     Int
+  width     Int?
+  height    Int?
+  blurhash  String?
+  alt       String?
+
+  /**
+   * Thư mục ảo, ví dụ `trang-chu/hero`. `null` = chưa phân loại.
+   *
+   * Cố ý KHÔNG nằm trong `key`: khoá đánh địa chỉ theo nội dung và bất biến, nên
+   * cùng một ảnh dùng ở hai trang là MỘT hàng — thư mục trong khoá sẽ buộc nó
+   * thành hai object và giết phép chống trùng. Đổi tên thư mục cũng sẽ thành đổi
+   * khoá, tức mọi release cũ trỏ tới một khoá không còn tồn tại.
+   *
+   * Đây là dữ liệu để DUYỆT kho, không phải để render: nó không có trong
+   * `AssetSeal`, và `Release.assets` không chụp nó. Xem `src/lib/assets/folder.ts`.
+   */
+  folder    String?
+
+  /**
+   * Thời điểm ảnh bị đưa vào thùng rác. `null` = ảnh bình thường.
+   *
+   * Đây là CỜ HIỂN THỊ, không phải cờ tồn tại: nó chỉ ẩn ảnh khỏi thư viện, picker
+   * và danh sách MCP. TUYỆT ĐỐI không lọc theo cột này ở publish, render,
+   * site-icons hay og — lọc nhầm ở đó thì lần Publish sau ảnh trên trang vỡ ngay,
+   * dù ảnh vẫn còn nguyên trên S3.
+   *
+   * "Xoá hoàn toàn" mới xoá thật: xoá hàng này. Object S3 chỉ xoá ngay khi không
+   * release nào TRONG CỬA SỔ ROLLBACK còn trỏ tới ảnh; còn thì object được giữ lại
+   * (`AssetHold`) cho tới khi các release đó ra khỏi cửa sổ.
+   */
+  trashedAt DateTime?
+  /** Email của người đưa ảnh vào thùng rác. Chuỗi, cùng quy ước với `User.lockedBy`. */
+  trashedBy String?
+
+  createdAt DateTime @default(now())
+
+  @@index([kind])
+  @@index([folder])
+  @@index([trashedAt])
+}
+
+/**
+ * Object S3 của một ảnh ĐÃ xoá hoàn toàn, được giữ lại vì release trong cửa sổ
+ * rollback còn trỏ tới nó (xem `src/lib/builder/rollback-window.ts`).
+ *
+ * Hàng `Asset` đã mất — ảnh không còn trong thư viện, picker hay MCP — nhưng lùi về
+ * một release trong cửa sổ vẫn ra đúng ảnh, vì object còn nguyên ở đúng khoá cũ.
+ * `sweepAssetHolds` xoá object khi không còn release nào trong `releaseIds` nằm
+ * trong cửa sổ; nó chạy sau mỗi lần publish, sau mỗi lần xoá hoàn toàn, và qua
+ * `pnpm assets:sweep`.
+ *
+ * `releaseIds` chốt lúc xoá: release là ảnh chụp bất biến, và một release MỚI không
+ * thể trỏ tới ảnh đã mất hàng `Asset`, nên tập này không bao giờ lớn thêm.
+ *
+ * Khoá theo `key`, không theo id ảnh: khoá đánh địa chỉ theo nội dung, tải lại đúng
+ * file là ra lại đúng khoá. Khi đó object có chủ trở lại, và lượt dọn chỉ gỡ hàng
+ * này chứ không xoá object.
+ */
+model AssetHold {
+  key        String   @id
+  url        String
+  bytes      Int
+  releaseIds String[]
+  purgedAt   DateTime @default(now())
+  /** Email người xoá hoàn toàn, cùng quy ước `Asset.trashedBy`. */
+  purgedBy   String
+}
+
+/**
+ * Thư mục ảo TỒN TẠI, kể cả khi chưa có ảnh nào trong nó.
+ *
+ * ## Bảng này KHÔNG phải nơi lưu "ảnh nào nằm đâu"
+ *
+ * Quan hệ ảnh ↔ thư mục vẫn là cột `Asset.folder`, và đó không phải di sản chưa
+ * kịp dọn — xem lý do đầy đủ ở `src/lib/assets/folder.ts`. Bảng này trả lời đúng
+ * một câu mà cột kia không trả lời được: *thư mục này có tồn tại dù rỗng không?*
+ *
+ * Vì sao không đổi hẳn sang khoá ngoại `Asset.folderId`: kho được lọc theo NHÁNH
+ * (chọn `trang-chu` phải thấy cả `trang-chu/hero`). Với khoá ngoại thuần, câu đó
+ * thành truy vấn đệ quy, nên trong thực tế vẫn phải giữ một cột `path` materialise
+ * ở đây — và khi đã có `path` thì đổi tên lại phải cập nhật đường dẫn của mọi con,
+ * đúng vòng lặp mà `renameFolder()` đang chạy. Khoá ngoại trả đủ giá mà không mua
+ * được thứ nó hứa.
+ *
+ * ## Cái giá của thiết kế này, nói thẳng
+ *
+ * Có HAI nguồn cho cây thư mục: hàng ở đây, và đường dẫn suy ra từ ảnh. Luật giữ
+ * chúng khớp nhau: **mọi lối ghi `Asset.folder` phải upsert hàng ở đây cùng toàn bộ
+ * cấp cha, trong cùng transaction.** Xem `ensureFolders()`.
+ *
+ * Khi luật đó bị vi phạm, hậu quả xấu nhất là một thư mục rỗng không hiện trong cây.
+ * Không ảnh nào mất, không release nào vỡ. Đó là lý do bảng này chịu được việc không
+ * có khoá ngoại ép toàn vẹn.
+ */
+model AssetFolder {
+  /**
+   * Đường dẫn đầy đủ đã chuẩn hoá, ví dụ `trang-chu/hero`. Chính nó là khoá chính:
+   * đường dẫn LÀ danh tính của thư mục, nên một id thay thế chỉ thêm một lớp tra
+   * cứu giữa `Asset.folder` và hàng này.
+   */
+  path String @id
+
+  /**
+   * `sub` của người tạo — dùng cho luật xoá: người tạo xoá được thư mục của mình,
+   * admin xoá được mọi thứ.
+   *
+   * `NULL` nghĩa là KHÔNG BIẾT ai tạo, và khi đó chỉ admin xoá được. Hai nguồn đẻ
+   * ra `NULL`: thư mục có từ trước bảng này (migration backfill từ ảnh đang có) và
+   * thư mục sinh ngầm khi Agent gọi `upload_asset` bằng token service. Từ chối đoán
+   * chủ sở hữu an toàn hơn gán bừa rồi trao quyền xoá 40 ảnh cho nhầm người.
+   */
+  createdBy String?
+
+  createdAt DateTime @default(now())
+
+  @@index([createdBy])
+}
+
+model Token {
+  id String @id @default(cuid())
+  // Tên không có '--', ví dụ 'space-l'. TokenRef { $token: 'space-l' } → var(--space-l).
+  name String @unique
+  value String
+  // color | space | typeScale | radius | duration | easing | shadow | figma | other
+  category String
+  group    String?
+  // Mô tả cho AI đọc trong capability catalog.
+  aiDescription String?
+  deprecated    Boolean @default(false)
+
+  // Token do người dùng tạo trong builder — KHÔNG có trong src/styles/tokens.css.
+  //
+  // Phân biệt này chịu lực thật, không phải để thống kê. Token tĩnh tồn tại vì
+  // file CSS khai báo chúng; token tự tạo thì không ai khai báo, nên
+  // `render/custom-tokens.ts` phải tự phát `:root { --tên: giá-trị }` lúc render.
+  // Phát nhầm cả token tĩnh sẽ nhân đôi 469 khai báo trên mọi lượt tải trang;
+  // quên phát token tự tạo thì `var(--tên)` rỗng và màu biến mất không dấu vết.
+  //
+  // Cũng là ranh giới an toàn của `pnpm tokens:import`: script đó đánh dấu
+  // deprecated thứ không còn trong file CSS, mà token tự tạo chưa từng ở đó.
+  custom Boolean @default(false)
+
+  // Giá trị GỐC trong `src/styles/tokens.css`, chỉ ghi khi token TĨNH bị sửa từ
+  // màn Cài đặt. NULL = chưa ai đụng vào.
+  //
+  // Một cột làm hai việc, và cả hai đều cần:
+  //
+  //  1. **Đánh dấu để phát CSS.** `render/custom-tokens.ts` phải phát `:root` cho
+  //     token nào? Phát cả 469 token tĩnh là nhân đôi mọi khai báo trên mọi lượt
+  //     tải trang; không phát thì người dùng đổi màu xong và không có gì đổi cả —
+  //     `tokens.css` đi qua PostCSS lúc BUILD, nên giá trị mới trong database
+  //     không có đường nào vào stylesheet đó.
+  //  2. **Đường về mặc định.** Không giữ giá trị gốc thì nút "về mặc định" phải
+  //     đi đọc lại file CSS lúc chạy — một file không có trong image runtime.
+  //
+  // Cũng là rào của `pnpm tokens:import`: script đó đồng bộ `value` từ file CSS,
+  // nên không có cột này thì lần chạy sau sẽ lặng lẽ xoá mọi màu người dùng đặt.
+  baseValue String?
+
+  @@index([category])
+}
+
+/**
+ * Component dựng sẵn.
+ *
+ * ## Hai cách dùng: Instance (LIÊN KẾT) và insertNode (đóng dấu)
+ *
+ * - Node `Instance` trỏ tới `Preset.id`: LIÊN KẾT. Sửa preset đổi mọi trang cắm nó.
+ *   Publish chụp TOÀN BỘ cây Preset vào `Release.components`, nên site thật chỉ đổi ở
+ *   lần Publish kế tiếp — và Publish bất kỳ trang nào cũng mang theo mọi chỉnh sửa
+ *   component. Header/footer dùng chung cả site chạy theo cách này (effect, htmlId,
+ *   Composite, Video đều hoạt động trong instance không lặp).
+ * - Chèn preset bằng op `insertNode` (id MỚI, xem `doc/preset.ts`) là ĐÓNG DẤU một bản
+ *   sao độc lập: sửa preset sau đó không đổi bản sao.
+ *
+ * Giao diện phải nói rõ hai nghĩa này — giấu đi thì người dùng sửa một component, mở
+ * trang, thấy khác với kỳ vọng, và kết luận là công cụ hỏng.
+ */
+model Preset {
+  id            String  @id @default(cuid())
+  key           String  @unique
+  name          String
+  category      String
+  aiDescription String
+  thumbnailUrl  String?
+  // Cây node dựng sẵn — SỬA TỰ DO sau khi chèn, không phải hộp đen.
+  // Hình dạng giống hệt `Doc` trừ `schemaVersion`, nên toàn bộ hệ op và
+  // validator chạy trên nó không cần sửa gì. Xem `doc/apply-to-preset.ts`.
+  tree          Json
+
+  /**
+   * Do `scripts/extract-presets.ts` sinh ra từ trang thật.
+   *
+   * Không phải để trang trí: script đó `upsert` theo `key`, nên chạy lại sẽ GHI
+   * ĐÈ mọi chỉnh sửa tay. Cờ này là chỗ để cảnh báo trước khi điều đó xảy ra, và
+   * là thứ giao diện dùng để nói "component này sẽ bị ghi đè khi trích lại".
+   */
+  builtin Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  // @default(now()) đi kèm @updatedAt: không có nó thì cột là NOT NULL không
+  // default, và migration không chạy được trên các hàng đã có sẵn.
+  updatedAt DateTime @default(now()) @updatedAt
+
+  versions PresetVersion[]
+
+  @@index([category])
+}
+
+/**
+ * Lịch sử sửa một component.
+ *
+ * Cùng lý do với `PageVersion`: mỗi lần ghi là một bản BẤT BIẾN, nên lùi lại
+ * luôn là đổi một con trỏ chứ không phải dựng lại từ diff.
+ *
+ * Rủi ro ở đây thấp hơn hẳn `PageVersion` — sửa component không chạm trang nào
+ * đang chạy — nhưng cùng một cơ chế nghĩa là cùng một cách suy nghĩ, và AI sửa
+ * component qua MCP thì lịch sử là thứ duy nhất cho biết nó đã làm gì.
+ */
+model PresetVersion {
+  id       String @id @default(cuid())
+  presetId String
+  preset   Preset @relation(fields: [presetId], references: [id], onDelete: Cascade)
+
+  tree Json
+
+  label     String?
+  /** Prompt sinh ra version này, nếu do AI. null = sửa tay. */
+  prompt    String?
+  createdAt DateTime @default(now())
+  createdBy String
+  /** Cây version, để diff hai bản bất kỳ. */
+  parentId  String?
+
+  @@index([presetId, createdAt])
+}
+
+model Effect {
+  id            String   @id @default(cuid())
+  key           String   @unique
+  name          String
+  aiDescription String
+  // Node type mà effect này gắn được.
+  appliesTo     String[]
+  // JSON Schema cho params. Validate server-side, không tin output model.
+  paramsSchema  Json
+  defaults      Json
+  // light | medium | heavy — tính vào motion budget của trang.
+  runtimeCost   String   @default("light")
+  // Key của các effect xung đột khi gắn cùng một node.
+  conflicts     String[] @default([])
+  // Tên data-attribute mà effect này ghi ra khi chạy, ví dụ nav-collapse ghi
+  // `collapsed` → `[data-collapsed="true"]`.
+  //
+  // Đây là thứ làm `style.states` an toàn: validator tầng semantic chỉ chấp nhận
+  // tên state có trong statesWritten của một effect đang gắn trên node đó. Không
+  // có nó thì tác giả (và AI) tạo được state chết — CSS hợp lệ, selector không
+  // bao giờ khớp, và không ai phát hiện ra cho tới khi nhìn tận mắt.
+  statesWritten String[] @default([])
+}
+
+/**
+ * Một hiệu ứng "mới" là một HÀNG DỮ LIỆU, không phải một lần deploy.
+ *
+ * BẢNG NÀY ĐƯỢC TẠO BỞI migration `20260911072329_site_og_image`, không phải bởi
+ * một migration mang tên nó. Hai người sửa `schema.prisma` cùng lúc, và
+ * `migrate dev` chụp CẢ file chứ không chụp phần thay đổi của người chạy — nên
+ * `CREATE TABLE "EffectPreset"` nằm lẫn trong migration của `Site.ogImageId`.
+ * Ghi ra đây vì tên migration không nhắc tới nó và người đi tìm sẽ không thấy.
+ *
+ * ## Vì sao bảng này tồn tại
+ *
+ * `EFFECT_REGISTRY` dùng `import()` với đường dẫn hằng, và bundler phân giải
+ * chúng lúc BUILD. Nên mỗi effect mới = một file mới + một dòng registry = một
+ * lần deploy, và không có đường vòng nào ở tầng dữ liệu. Nhưng một nửa vấn đề đã
+ * giải xong từ trước: phần MÔ TẢ effect đã là dữ liệu (`model Effect`), và
+ * `list_effects` đọc từ DB chứ không từ code. Thứ duy nhất còn bắt buộc phải
+ * build là `init()` — phần code thật.
+ *
+ * Preset khai thác đúng chỗ hở đó: nó KHÔNG mang code, chỉ mang một `effectKey`
+ * đã có trong registry cộng một bộ `params`. "Dải logo chạy" hiện ra trong
+ * `list_effects` như một hiệu ứng riêng, có tên tiếng Việt và mô tả riêng, còn
+ * runtime vẫn chỉ có `slider`. Thêm một hiệu ứng đơn giản = thêm một hàng.
+ *
+ * ## Vì sao MACRO chứ không phải LIÊN KẾT SỐNG
+ *
+ * `attachEffect { effect: "dai-logo-chay" }` được `expandEffectPresets` giải
+ * ngay tại validator thành `{ effect: "slider", params: {…đã trộn} }`, và đó là
+ * thứ đi vào `PageVersion`. Preset KHÔNG được nhớ như một liên kết.
+ *
+ * Cách hiển nhiên hơn là lưu `presetKey` rồi giải lúc render, và nó sai ở một
+ * chỗ rất đắt: sửa một hàng preset sẽ đổi MỌI trang đã publish đang dùng nó, âm
+ * thầm, không qua nút Publish nào. Cả mô hình release ở đây dựng lên để chuyện
+ * đó không xảy ra được. Cái giá của hướng macro: sửa preset không sửa được các
+ * trang cũ, phải gắn lại. Đúng, và đó là đánh đổi có chủ đích.
+ *
+ * `EffectAttachment.fromPreset` giữ lại TÊN preset đã dùng, chỉ để truy vết —
+ * không ai đọc nó lúc chạy. Không có nó thì một node mang 9 tham số lạ và không
+ * ai biết chúng từ đâu ra.
+ *
+ * ## `effectKey` KHÔNG có quan hệ tới `Effect`
+ *
+ * Cố ý, cùng lý do `scripts/sync-effects.ts` không xoá hàng lạ: bảng `Effect` là
+ * bản sao dẫn xuất từ manifest và có thể chưa sync, còn nguồn sự thật cho "chạy
+ * được hay không" là `EFFECT_REGISTRY` trong code. Một foreign key ở đây sẽ chặn
+ * việc tạo preset cho một effect vừa thêm mà chưa kịp `pnpm effects:sync` — tức
+ * bắt đúng sai người. `scripts/effect-preset.ts` đối chiếu với registry lúc GHI,
+ * và `list_effects` đánh dấu `runnable: false` lúc ĐỌC.
+ */
+model EffectPreset {
+  id String @id @default(cuid())
+
+  /** Slug, và là thứ `attachEffect.effect` nhận. Không được trùng key trong EFFECT_REGISTRY. */
+  key           String  @unique
+  name          String
+  aiDescription String
+  /** Key của effect thật trong EFFECT_REGISTRY. Không phải quan hệ — xem docblock. */
+  effectKey     String
+  /** Params trộn DƯỚI params người gắn tự gõ. Đã validate bằng paramsSchema lúc ghi. */
+  params        Json
+  note          String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([effectKey])
+}
+
+/**
+ * Origin mà `CustomCode` được phép tải script và kết nối tới.
+ *
+ * Là DỮ LIỆU chứ không phải hằng số trong code, vì thêm một nhà cung cấp CDN là
+ * việc vận hành — không đáng một lần deploy. Đó cũng là điều kiện để lời hứa
+ * "sau lần deploy này, thêm trang có JS mới không cần deploy lại" còn đúng khi
+ * người dùng muốn một thư viện từ nguồn khác.
+ *
+ * Bảng RỖNG nghĩa là JS trong iframe không gọi được ra ngoài — CSP sinh ra
+ * `connect-src;` trần. Đó là trạng thái khoá chặt có chủ đích, không phải lỗi
+ * cấu hình; migration seed sẵn ba CDN thông dụng để bản mới dùng được ngay.
+ */
+model EmbedOrigin {
+  id        String   @id @default(cuid())
+  /** Gốc tuyệt đối, không có đường dẫn: `https://esm.sh`. */
+  origin    String   @unique
+  note      String?
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now())
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  /**
+   * Ảnh đại diện — `Asset.id`, không phải URL.
+   *
+   * Là CHUỖI chứ không quan hệ, cùng quy ước với `ContentOverride.assetId` và mọi
+   * node ảnh: kho ảnh có vòng đời riêng, và một khoá ngoại ở đây nghĩa là không
+   * xoá được một ảnh đang là avatar của ai đó — một ràng buộc nặng hơn hẳn giá
+   * trị nó bảo vệ. Asset biến mất thì byline không có ảnh, không phải byline hỏng.
+   */
+  avatarAssetId String?
+  // viewer | editor | admin
+  role      String   @default("editor")
+  googleSub String?  @unique
+  // argon2. null khi chỉ đăng nhập bằng Google.
+  passwordHash String?
+
+  /**
+   * Đã khoá lúc nào. `null` = đang dùng được.
+   *
+   * ## Vì sao KHOÁ chứ không xoá
+   *
+   * Trước đây `DELETE /api/users/[id]` xoá vật lý, và nó có hai hậu quả mà route
+   * ấy không thấy:
+   *
+   *  1. **Byline mồ côi.** `Entry.createdBy` giữ email của một hàng không còn tồn
+   *     tại. Từ khi `createdBy` là tác giả hiện ra trên site thật, đó là một lỗi
+   *     HIỂN THỊ chứ không còn là một dấu vết kỹ thuật lệch.
+   *  2. **`ServiceToken` biến mất im lặng** — quan hệ là `onDelete: Cascade`. Xoá
+   *     một tài khoản là thu hồi mọi token MCP của họ mà không để lại dấu vết nào.
+   *     Chính docblock của model ấy đã lập luận rằng "không thu hồi được" là
+   *     không chấp nhận được; "thu hồi mà không ai biết" cũng vậy.
+   *
+   * Nên đường xoá cứng đã BỎ HẲN, và khoá ngoại `Restrict` ở `Entry` bên dưới
+   * cưỡng chế điều đó ở tầng DB chứ không dựa vào route nhớ kiểm.
+   *
+   * Tài khoản bị khoá VẪN hiện trong byline và trong bảng admin, kèm nhãn "đã
+   * khoá" — giữ lại lịch sử chính là mục đích của việc khoá thay vì xoá.
+   */
+  lockedAt DateTime?
+  /** Email của admin đã khoá. Chuỗi, cùng quy ước với `Entry.createdBy`. */
+  lockedBy String?
+
+  createdAt DateTime @default(now())
+
+  serviceTokens ServiceToken[]
+  entriesCreated Entry[] @relation("EntryAuthor")
+  entriesUpdated Entry[] @relation("EntryEditor")
+}
+
+// Token dài hạn cấp cho một máy (MCP server), không phải cho một phiên trình duyệt.
+//
+// Tồn tại vì JWT tự nó KHÔNG THU HỒI ĐƯỢC: chữ ký hợp lệ là hợp lệ cho tới lúc hết
+// hạn, và cách duy nhất để vô hiệu hoá sớm là đổi AUTH_SECRET — thao tác đó đăng
+// xuất toàn bộ mọi người. Với một token sống 30 ngày, đứng tên tài khoản publish
+// được lên site của công ty tài chính, và nằm plaintext trong một file cấu hình
+// trên máy cá nhân, "không thu hồi được" không phải một đánh đổi chấp nhận được.
+//
+// Nên mỗi token mang một `jti`, và mỗi lần dùng đều tra bảng này. Đó là chi phí
+// một truy vấn cho mỗi request — trả để đổi lấy nút Thu hồi.
+model ServiceToken {
+  id  String @id @default(cuid())
+  // Khớp với claim `jti` trong JWT. Bản thân token KHÔNG được lưu ở đây.
+  jti String @unique
+
+  // Tên do người dùng đặt, để biết cái nào là của máy nào lúc cần thu hồi.
+  name   String
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /**
+   * Token này được phép ĐĂNG bản dịch của entry hay không.
+   *
+   * ## Vì sao một cờ, chứ không phải mở cho mọi token
+   *
+   * Bảng ranh giới ở đầu `ai/collection-tools.ts` ghi `publish_entry KHÔNG`, kèm
+   * câu *"đừng thêm nó vào sau bằng lý lẽ tiện lợi: cả hai tool ghi ở trên đều vô
+   * hại chính vì có đúng một cửa mà AI không mở được"*. Cờ này nới đúng MỘT nửa
+   * của cửa ấy — bản DỊCH, không phải bản gốc — và nới bằng một thứ kiểm được
+   * bằng code chứ không bằng quy ước.
+   *
+   * Mặc định `false`. Bật là một lựa chọn con người làm một lần, có ý thức, ở
+   * `/builder/admin/tokens`. Và thu hồi có hiệu lực NGAY: bảng này được tra ở mỗi
+   * lời gọi (`checkServiceToken`), không phải đọc từ JWT.
+   *
+   * ## Vì sao chỉ bản dịch
+   *
+   * Bản gốc lên sóng là lần đầu nội dung ấy tồn tại với người đọc. Bản dịch thì
+   * bản gốc đã qua mắt người rồi; thứ được đăng là một lớp phủ chữ của cùng nội
+   * dung đó. Hai mức rủi ro khác nhau, nên hai quyết định khác nhau.
+   *
+   * Phiên TRÌNH DUYỆT không có token, nên không có cờ — AI trong builder không
+   * đăng được bản dịch. Đó là chủ ý: cờ gắn với một máy được cấp quyền, không với
+   * việc ai đang ngồi trước màn hình.
+   */
+  canPublishLocale Boolean @default(false)
+
+  expiresAt DateTime
+  // Ghi có tiết chế (xem service-token.ts): cập nhật mỗi request là một lượt ghi
+  // DB cho mỗi lời gọi tool.
+  lastUsedAt DateTime?
+  revokedAt  DateTime?
+  createdBy  String
+  createdAt  DateTime  @default(now())
+
+  @@index([userId])
+}
+
+/**
+ * Một LOẠI nội dung. 'news', 'faq', 'su-kien' — không có gì trong code biết chúng
+ * là gì; chúng chỉ là hàng trong bảng này. Đó là điều làm "thêm một loại nội dung"
+ * KHÔNG phải một lần deploy.
+ */
+model CollectionType {
+  id         String @id @default(cuid())
+  /**
+   * Dùng trong URL, trong binding của doc, và trong URL API mà mobile gọi.
+   *
+   * BẤT BIẾN sau khi tạo. Đổi nó là làm chết mọi `bind` trỏ tới loại này và mọi
+   * client đang gọi — im lặng, vì binding sai chỉ rơi về `fallback`. UI phải khoá
+   * ô này sau lần lưu đầu.
+   */
+  key        String @unique
+  name       String
+  namePlural String
+  icon       String?
+  /** FieldDef[] — validate bằng `zCollectionSchema`. KHÔNG phải Json tự do. */
+  schema     Json   @default("[]")
+  /** Field dùng làm tiêu đề trong bảng entry của admin. */
+  titleField String
+  /** Field kiểu `slug`. null = loại này không có trang chi tiết. */
+  slugField  String?
+  defaultSort String @default("publishedAt:desc")
+  /**
+   * Thứ tự do người dùng đặt trên màn Kho dữ liệu. Nhỏ hơn = đứng trước.
+   *
+   * Đọc kèm `createdAt` làm khoá phụ (`[{ order: 'asc' }, { createdAt: 'asc' }]`):
+   * mọi hàng cũ backfill xong đều có `order` riêng, nhưng một hàng MỚI tạo mang
+   * `order = 0` và sẽ đụng hàng đầu tiên — khoá phụ quyết định chỗ đứng thay vì để
+   * Postgres trả thứ tự tuỳ lượt, vốn đổi được sau một lần VACUUM.
+   *
+   * Không có ràng buộc duy nhất: đổi chỗ hai loại là hai lần UPDATE, và một unique
+   * index sẽ chặn ngay ở lần đầu — sửa được bằng giao dịch, nhưng đó là chi phí cho
+   * một bất biến mà màn này không cần.
+   */
+  order      Int    @default(0)
+  /**
+   * Loại chỉ có MỘT entry — 'single type' của Strapi, dùng cho trang Giới thiệu
+   * hay một khối cấu hình. Cùng bảng `Entry`, chỉ khác một phép kiểm lúc tạo:
+   * một bảng nữa cho đúng một hàng là chi phí không đổi lấy gì.
+   */
+  singleton  Boolean @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  entries Entry[]
+}
+
+/**
+ * Nhóm field dùng lại được — thứ Strapi gọi là "component".
+ *
+ * ## Vì sao KHÔNG gọi là Component
+ *
+ * `Preset` đã là "component" trong dự án này: một cây node, có hình dáng và style.
+ * Cái này là một nhóm FIELD DỮ LIỆU, không có hình. Trùng tên là mời người dùng và
+ * AI qua MCP chọn sai thứ, và lỗi đó KHÔNG BÁO — nó chỉ ra một trang trông lạ.
+ */
+model FieldGroupDef {
+  id     String @id @default(cuid())
+  key    String @unique
+  name   String
+  icon   String?
+  /** FieldDef[] — lồng được, sâu tối đa 3 (xem MAX_FIELD_DEPTH). */
+  schema Json   @default("[]")
+  /** Thứ tự trên màn Kho dữ liệu. Cùng quy ước với `CollectionType.order`. */
+  order  Int    @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+/**
+ * Một entry — NGUỒN LIVE, cố ý nằm ngoài mọi ảnh chụp của `Release`.
+ *
+ * ## Ngoại lệ có tên của bất biến số 3
+ *
+ * Mọi thứ khác trên site đến từ ảnh chụp release, nên lùi release là lùi tất cả.
+ * Nội dung thì không: đăng một bài KHÔNG cần publish, và lùi release KHÔNG lùi bài
+ * viết. Đó đúng là điều cần — lùi landing page về bản tuần trước không được làm
+ * biến mất 200 bài đăng sau đó.
+ *
+ * Cái mất: "trang này hôm nay giống hệt hôm qua" không còn đúng cho trang có
+ * collection. Màn xem trước phải nói rõ nội dung đang là bản LIVE.
+ */
+model Entry {
+  id     String         @id @default(cuid())
+  typeId String
+  type   CollectionType @relation(fields: [typeId], references: [id], onDelete: Cascade)
+  /** Denormalize để filter nóng không phải join. BẤT BIẾN cùng lý do với `CollectionType.key`. */
+  typeKey String
+  slug    String
+
+  /**
+   * Giá trị field, khớp `CollectionType.schema`.
+   *
+   * Validate ở ĐƯỜNG GHI — `entry-data.ts` dựng zod từ schema, và mọi đường ghi
+   * (route HTTP, tool MCP) đi qua `entry-write.ts`. Bản dịch trong `i18n` đi qua cùng
+   * cửa đó, chỉ với `required` được nới.
+   *
+   * Đường ĐỌC không validate lại: nó CHIẾU QUA schema. Form admin render từ
+   * `FieldDef[]`, và `toPublicData` của API công khai đi theo schema — nên field đã bị
+   * xoá khỏi schema vẫn còn nguyên trong JSONB (spec §10) mà không bao giờ ra tới form
+   * hay tới API. Chính phép chiếu đó là thứ ẩn field đã xoá, không phải một validator.
+   * Parse lại cả `data` mỗi lượt đọc là một lượt zod cho mỗi entry, đổi lấy một bảo
+   * đảm đã có.
+   */
+  data Json @default("{}")
+
+  /**
+   * Bản dịch là LỚP PHỦ lên `data`, map locale → phần data đã dịch.
+   *
+   * Cùng lý do và cùng cơ chế với model `Translation`: fork theo ngôn ngữ thì thêm
+   * một field là phải sửa N chỗ, và hai bên trôi khỏi nhau ngay lần đầu có người
+   * quên. Sáu tháng sau không ai biết bản nào đúng.
+   */
+  i18n Json @default("{}")
+
+  /** draft | published. Không có 'review' — xem §12 của spec. */
+  status String @default("draft")
+  /**
+   * Mốc lên sóng. Ở TƯƠNG LAI nghĩa là đã duyệt nhưng chưa hiện, nên hẹn giờ là
+   * một phép so sánh trong WHERE chứ không phải một cron job.
+   */
+  publishedAt DateTime?
+  archivedAt  DateTime?
+
+  /**
+   * Số lượt xem trang chi tiết. Là thứ định nghĩa cột "Bài viết nổi bật".
+   *
+   * ## Vì sao là một CỘT chứ không phải một bảng sự kiện
+   *
+   * Câu hỏi nghiệp vụ duy nhất đang có là "10 bài xem nhiều nhất" — một phép sắp
+   * xếp, không phải một phép phân tích. Một bảng `EntryView` mỗi lượt một hàng trả
+   * lời được nhiều câu hơn (theo ngày, theo nguồn), nhưng nó đổi một `ORDER BY`
+   * dùng index thành một `GROUP BY` quét theo khoảng thời gian, và nó sinh ra một
+   * bảng lớn nhất database cho một trang chưa ai bấm vào.
+   *
+   * Đánh đổi phải nói thẳng: cột này KHÔNG lùi lại được. Không có "lượt xem tháng
+   * này", không xoá được lượt xem của một đợt bot. Ngày nào cần những câu đó thì
+   * thêm bảng sự kiện BÊN CẠNH, và cột này thành bản tổng đã tính sẵn.
+   *
+   * Ghi có tiết chế ở đường ghi — xem `entry-views.ts`.
+   */
+  viewCount Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /**
+   * TÁC GIẢ. Email, và là khoá ngoại tới `User.email`.
+   *
+   * ## Vì sao tham chiếu `email` chứ không `id`
+   *
+   * Vì cột này ĐÃ chứa email từ trước (mọi đường ghi truyền `auth.email` qua
+   * `actorEmail`), và `User.email` đã `@unique`. Đổi sang `id` nghĩa là một
+   * migration dữ liệu trên mọi hàng, đổi chín chỗ ghi, VÀ đổi bảng admin — nơi
+   * đang hiện thẳng cột này cho người đọc. Tham chiếu `email` cho đúng thứ cần
+   * (toàn vẹn tham chiếu + join ra tên và avatar) mà không đụng gì trong số đó.
+   *
+   * `onUpdate: Cascade` trả nốt phần yếu của email: đổi email của một tài khoản
+   * thì Postgres sửa theo ở đây, nên không có bài nào mồ côi vì một lần đổi tên
+   * đăng nhập.
+   *
+   * ## `createdBy` LÀ tác giả — chốt 11/09/2026
+   *
+   * `updatedBy` chỉ phục vụ bảng admin và audit, KHÔNG BAO GIỜ hiện ra byline:
+   * lấy nó thì một lần sửa chính tả của biên tập viên đổi tên tác giả bài báo.
+   *
+   * Kéo theo: `createdBy` từ nay là NỘI DUNG HIỂN THỊ, không còn là dấu vết kỹ
+   * thuật. Nên có một đường đổi tác giả tường minh, chỉ admin — cho ba ca có
+   * thật: nhập bài cũ vào hệ thống, người này soạn hộ người kia, và tác giả nghỉ
+   * việc mà bài vẫn phải đứng đúng tên. Mọi lần đổi vào `AuditLog`. Ngoài đường
+   * đó ra, `createdBy` bất biến.
+   */
+  createdBy String
+  author    User   @relation("EntryAuthor", fields: [createdBy], references: [email], onDelete: Restrict, onUpdate: Cascade)
+
+  /** Người sửa gần nhất. Bảng admin và audit — KHÔNG phải byline. */
+  updatedBy String
+  editor    User   @relation("EntryEditor", fields: [updatedBy], references: [email], onDelete: Restrict, onUpdate: Cascade)
+
+  taxonomies EntryTaxonomy[]
+  locales    EntryLocale[]
+
+  @@unique([typeId, slug])
+  /**
+   * Đường đi của "10 tin mới nhất". Ba cột trong MỘT index vì mọi truy vấn danh
+   * sách đều lọc typeKey + status rồi sắp theo publishedAt — tách ra là bắt
+   * Postgres sắp lại sau khi lọc.
+   */
+  @@index([typeKey, status, publishedAt(sort: Desc)])
+  /** Đường đi của bảng entry trong admin, vốn sắp theo lần sửa gần nhất. */
+  @@index([typeKey, updatedAt(sort: Desc)])
+  /**
+   * Đường đi của "10 bài xem nhiều nhất" — song song với index `publishedAt` ngay
+   * trên, vì truy vấn ấy lọc y hệt rồi chỉ đổi cột sắp.
+   */
+  @@index([typeKey, status, viewCount(sort: Desc)])
+}
+
+/**
+ * Danh mục — CÂY, và là BẢNG RIÊNG.
+ *
+ * ## Vì sao không phải một field trong Entry.data
+ *
+ * "FAQ theo danh mục" và "tin liên quan nhất" đều là truy vấn THEO danh mục. Nhét
+ * danh mục vào JSONB nghĩa là mọi truy vấn đó quét GIN index trên một mảng lồng,
+ * và "đổi tên danh mục" phải UPDATE N hàng entry. Bảng nối cho index B-tree thật,
+ * và một chỗ duy nhất giữ tên.
+ */
+model Taxonomy {
+  id      String @id @default(cuid())
+  /** Danh mục thuộc về MỘT loại. Danh mục tin tức không được hiện ở form FAQ. */
+  typeKey String
+  key     String
+  name    String
+  /**
+   * `SetNull` chứ không `Cascade`: xoá một danh mục cha không được xoá theo cả
+   * nhánh con cùng mọi liên kết của chúng. Con thành gốc là thứ sửa được bằng một
+   * lần kéo; dữ liệu đã mất thì không.
+   */
+  parentId String?
+  parent   Taxonomy?  @relation("TaxTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children Taxonomy[] @relation("TaxTree")
+  order    Int @default(0)
+
+  /**
+   * draft | published — cùng hai giá trị với `Entry.status`, cố ý.
+   *
+   * ## Vì sao cần nó
+   *
+   * Yêu cầu nghiệp vụ là *"chỉ danh mục được publish, và có bài viết, thì hiển
+   * thị"*. Trước đây không có chỗ nào để đặt vế thứ nhất, nên dải danh mục trên
+   * trang danh sách hiện MỌI hàng của bảng này — kể cả danh mục vừa tạo để chuẩn
+   * bị cho một chuyên đề chưa chạy.
+   *
+   * ## Vì sao KHÔNG có `publishedAt` như `Entry`
+   *
+   * Ở `Entry`, `publishedAt` mang nghĩa hẹn giờ: mốc ở tương lai = đã duyệt, chưa
+   * hiện, và đó là lý do nó là một phép so sánh trong WHERE chứ không phải cron.
+   * Danh mục không có nhịp làm việc đó — không ai hẹn giờ một danh mục. Thêm cột
+   * cho đối xứng là thêm một cột mà mọi truy vấn phải nhớ bỏ qua, và ngày nào có
+   * người tưởng nó có tác dụng thì họ đặt một mốc tương lai và danh mục vẫn hiện.
+   *
+   * Mặc định `draft`: danh mục mới phải được bật mới lên sóng. Migration đặt MỌI
+   * hàng đang có thành `published` — chúng đã hiện trên site từ trước, và một
+   * migration làm chúng biến mất là một migration phá site.
+   */
+  status String @default("draft")
+
+  entries EntryTaxonomy[]
+
+  @@unique([typeKey, key])
+  /*
+   * `status` KHÔNG vào index này. Bảng danh mục của một loại là vài chục hàng, nên
+   * Postgres quét xong trước khi đọc xong index — thêm cột vào đây chỉ làm index
+   * to hơn và làm mọi truy vấn không lọc status chậm đi một chút.
+   */
+  @@index([typeKey, parentId, order])
+}
+
+/**
+ * Slug và trạng thái đăng của MỘT ngôn ngữ cho một entry.
+ *
+ * ## Vì sao là bảng quan hệ, khi giá trị field đã dịch nằm trong `Entry.i18n`
+ *
+ * Hai thứ có vòng đời khác nhau. Giá trị field đã dịch là lớp phủ BỘ PHẬN, chỉ được
+ * đọc ra sau khi đã chọn được hàng — nó không bao giờ vào `WHERE`, nên JSONB là chỗ
+ * đúng của nó và docblock của `Entry.i18n` giữ nguyên giá trị.
+ *
+ * Slug và trạng thái đăng thì NGƯỢC LẠI: chúng là thứ dùng để CHỌN hàng. Một câu
+ * "10 tin tiếng Anh mới nhất đã đăng" mà lọc trong JSONB là bắt Postgres quét cả
+ * bảng — index không với tới đường dẫn bên trong một cột `jsonb` theo cách một
+ * `@@index` thường làm. Nên chúng phải là cột thật.
+ *
+ * ## Vì sao `slug` nullable
+ *
+ * `null` = ngôn ngữ này dùng slug gốc. Đó là trạng thái ĐÚNG của một bài mới dịch
+ * nội dung mà chưa ai đặt URL riêng, và nó giữ mọi URL đang chạy không đổi khi bảng
+ * này ra đời. Postgres coi các `NULL` là khác nhau nên `@@unique` bên dưới không
+ * chặn nhiều ngôn ngữ cùng để trống.
+ *
+ * ## Vì sao KHÔNG có `data`
+ *
+ * Để tránh có hai nguồn cho cùng một giá trị field. `i18n` đang giữ việc đó, đã
+ * được validate ở `entry-write.ts` và đã có `localeCoverage` đếm trên chữ thật.
+ */
+model EntryLocale {
+  entryId String
+  entry   Entry  @relation(fields: [entryId], references: [id], onDelete: Cascade)
+
+  /** Phải có trong bảng `Locale` — cùng luật với `Translation.locale`. */
+  locale String
+  loc    Locale @relation(fields: [locale], references: [code], onDelete: Cascade)
+
+  /**
+   * Denormalize, cùng lý do với `Entry.typeKey`: `@@unique` phải phạm vi theo LOẠI
+   * (hai loại được có bài cùng slug), và đường tra URL lọc theo nó nên không phải
+   * join sang `Entry` chỉ để biết loại. BẤT BIẾN.
+   */
+  typeKey String
+
+  /** null = dùng `Entry.slug`. Xem docblock model. */
+  slug String?
+
+  /**
+   * draft | published — của RIÊNG ngôn ngữ này.
+   *
+   * Không kế thừa `Entry.status`: đăng bản gốc rồi mới dịch là nhịp làm việc thật,
+   * và bắt hai thứ lên sóng cùng lúc nghĩa là bản dịch 20% ra mắt cùng bản gốc.
+   */
+  status      String    @default("draft")
+  /** Cùng nghĩa với `Entry.publishedAt`: ở tương lai = đã duyệt, chưa hiện. */
+  publishedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  updatedBy String
+
+  @@id([entryId, locale])
+  /** Một slug chỉ thuộc một bài, trong phạm vi một loại và một ngôn ngữ. */
+  @@unique([typeKey, locale, slug])
+  /** Đường đi của "10 tin tiếng Anh mới nhất" — cùng khuôn index của `Entry`. */
+  @@index([typeKey, locale, status, publishedAt(sort: Desc)])
+}
+
+model EntryTaxonomy {
+  entryId    String
+  entry      Entry    @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  taxonomyId String
+  taxonomy   Taxonomy @relation(fields: [taxonomyId], references: [id], onDelete: Cascade)
+
+  @@id([entryId, taxonomyId])
+  /** Chiều này chịu lực cho "tin liên quan": từ danh mục tìm ra entry. */
+  @@index([taxonomyId])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String
+  action     String
+  targetType String
+  targetId   String
+  meta       Json
+  createdAt  DateTime @default(now())
+
+  @@index([targetId, createdAt])
+}

@@ -1,0 +1,11 @@
+/* Chỉ áp lúc chụp (toHaveScreenshot stylePath): giấu lớp phủ của `next dev`. */
+nextjs-portal {
+  display: none !important;
+}
+
+/* Viên thuốc công cụ của màn xem nháp (`PreviewPill`): chrome của builder, không phải
+ * nội dung trang. Nó nổi (`position: fixed`) nên giấu đi không xê dịch gì — và ảnh mẫu
+ * không phải chụp lại mỗi lần ai đó chỉnh một nút trong viên thuốc. */
+[data-preview-pill] {
+  display: none !important;
+}

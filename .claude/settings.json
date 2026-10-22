@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pnpm typecheck)",
+      "Bash(npx tsc --noEmit)",
+      "Bash(npx tsc --noEmit *)",
+      "Bash(pnpm exec tsc --noEmit)",
+      "Bash(pnpm exec tsc --noEmit *)",
+      "Bash(pnpm test)",
+      "Bash(pnpm vitest run)",
+      "Bash(pnpm vitest run *)",
+      "Bash(pnpm exec vitest run)",
+      "Bash(pnpm exec vitest run *)",
+      "Bash(pnpm verify)",
+      "Bash(pnpm lint)"
+    ]
+  }
+}

@@ -1,0 +1,617 @@
+/* Stylesheet của VỎ BUILDER — không phải của website được sinh ra.
+ *
+ * ## Phạm vi quét bị khoá có chủ đích
+ *
+ * Tailwind v4 tự dò source từ thư mục gốc. Ở đây ta tắt hành vi đó và chỉ định
+ * đúng hai thư mục, vì một lý do kiến trúc chứ không phải tối ưu:
+ *
+ * Trang website được sinh ra từ cây node trong Postgres, và nội dung đó đổi SAU
+ * KHI Docker image đã build. Tailwind JIT chỉ sinh CSS cho class nó nhìn thấy
+ * dưới dạng chuỗi trong source lúc build — nên một class sinh từ DB row sẽ không
+ * bao giờ tồn tại. Nếu để Tailwind quét cả `src/lib/render`, sẽ rất dễ có người
+ * (hoặc AI) viết class Tailwind vào renderer, chạy đúng ở dev, rồi hỏng im lặng
+ * trên production.
+ *
+ * Trang website dùng CSS compiler + tokens.css. Vỏ builder dùng Tailwind. Ranh
+ * giới này được chặn ở config, không trông chờ vào kỷ luật.
+ */
+
+@import 'tailwindcss' source(none);
+
+@source "../app/(builder)";
+@source "../components/builder";
+/* Hai file công thức class của vỏ (giao diện v2). Thiếu dòng này thì class CHỈ xuất hiện
+ * ở đây — `bg-tint-*`, `backdrop:bg-shell-backdrop`, `focus:ring-*` của ô nhập — không
+ * bao giờ được sinh, và component trông "gần đúng" mà không báo lỗi gì. Chỉ đích danh
+ * hai file, không cả `lib/builder`: phần còn lại là logic, không phải giao diện. */
+@source "../lib/builder/ui.ts";
+@source "../lib/builder/btn.ts";
+
+/* Bảng màu của builder — cố ý KHÔNG dùng token của website.
+ *
+ * Vỏ công cụ và nội dung phải phân biệt được bằng mắt: khi bạn nhìn preview,
+ * phải biết ngay đâu là site của mình và đâu là chrome của công cụ. Dùng chung
+ * token sẽ làm hai thứ hoà vào nhau. */
+/* ## Giá trị: design system "Quilder UI" (09/10/2026)
+ *
+ * Nguồn: https://claude.ai/artifact/Qmb5fd9fWnoFKqXDGs6w6T (`tokens.json`). Tên ở đây
+ * GIỮ vai trò cũ (`shell-bg`, `shell-panel`…) nên 700+ utility màu trong vỏ không phải
+ * sửa; đổi vỏ là đổi giá trị. Theme SÁNG là chính (khối này), theme tối ghi đè ở dưới.
+ * Ghi chú dùng từng token: README của design system và `Design.md`. */
+@theme {
+  /* Ba lớp bề mặt, từ sâu lên: nền trang → panel/thẻ/dialog → hàng hover, ô lồng. */
+  --color-shell-bg: #eef3f9;
+  --color-shell-panel: #ffffff;
+  --color-shell-raised: #f5f8fc;
+  /* Vách ngăn không mang nghĩa. Viền của CONTROL (ô nhập, checkbox, switch tắt) dùng
+   * `shell-line-strong`: control phải thấy được ở mức 3:1, vách ngăn thì không cần. */
+  --color-shell-line: #e1e7f0;
+  --color-shell-line-strong: #8592a7;
+  --color-shell-ink: #0f1a2e;
+  --color-shell-muted: #536176;
+  --color-shell-accent: #2a62d9;
+  --color-shell-accent-soft: #e7effd;
+  /* Chữ NẰM TRÊN nền accent. Ở theme tối accent sáng lên nên chữ trên nó là chữ tối:
+   * đây là lý do không viết `text-white` cứng. */
+  --color-shell-on-accent: #ffffff;
+  --color-shell-ok: #147a3b;
+  --color-shell-ok-soft: #e1f4e7;
+  /* Cảnh báo — "vẫn chạy, nhưng có thứ bạn nên biết": node bị khoá, customCss
+   * đang đè một thuộc tính, có thay đổi chưa publish. */
+  --color-shell-warn: #995a00;
+  --color-shell-warn-soft: #fdf1dc;
+  --color-shell-danger: #c2362f;
+  --color-shell-danger-soft: #fde8e7;
+  --color-shell-on-danger: #ffffff;
+  /* Thẻ được làm nổi duy nhất trong một lưới (Trang chủ trên màn Trang). */
+  --color-shell-hero: #0f1a2e;
+  --color-shell-on-hero: #ffffff;
+  --color-shell-hero-muted: #b4c3d9;
+  --color-shell-backdrop: rgba(15, 26, 46, 0.45);
+  /* Màu thương hiệu CỐ ĐỊNH, không đổi theo theme: panel thương hiệu ở màn đăng nhập
+   * và cài đặt lần đầu. Không dùng `shell-accent` ở đó: accent tối (#6c9bff) chỉ cho
+   * logo trắng ~2.7:1. */
+  --color-brand: #2a62d9;
+  --color-on-brand: #ffffff;
+
+  /* Giấy của trang đang soạn — KHÔNG phải nền của vỏ, không đổi theo theme. */
+  --color-shell-paper: #ffffff;
+  --color-shell-paper-ink: #0f1a2e;
+
+  /* Màu theo LOẠI node trong cây lớp. Không dùng làm màu trạng thái. */
+  --color-node-image: #0f7f74;
+  --color-node-button: #b4540a;
+  --color-node-code: #6d3fd0;
+
+  /* Ô chữ cái đầu của thẻ trang / mục dữ liệu, xoay vòng theo thứ tự. */
+  --color-tint-blue: #e4edff;
+  --color-tint-blue-ink: #2350c2;
+  --color-tint-teal: #ddf5f2;
+  --color-tint-teal-ink: #0e6b62;
+  --color-tint-amber: #fff0d6;
+  --color-tint-amber-ink: #8a4b06;
+  --color-tint-violet: #efe7ff;
+  --color-tint-violet-ink: #5b34b8;
+  --color-tint-rose: #fde4ee;
+  --color-tint-rose-ink: #a3214f;
+
+  /* Icon thư mục trong Thư viện (≥3:1 trên panel). */
+  --color-folder-slate: #7c8aa0;
+  --color-folder-amber: #c2850a;
+  --color-folder-teal: #1a9aa6;
+  --color-folder-rose: #d6457a;
+
+  /* Tờ giấy của thẻ file theo đuôi; nhãn đuôi in bằng `kind-label`. */
+  --color-kind-png: #2563eb;
+  --color-kind-jpg: #15803d;
+  --color-kind-svg: #c2410c;
+  --color-kind-pdf: #c2362f;
+  --color-kind-video: #6d3fd0;
+  --color-kind-font: #475569;
+  --color-kind-label: #ffffff;
+
+  /* Bóng: thẻ nổi trên nền, thẻ bấm được khi hover, lớp nổi (menu/dialog/toast), dock. */
+  --shadow-shell-card: 0 1px 2px rgba(15, 26, 46, 0.05), 0 10px 28px rgba(15, 26, 46, 0.06);
+  --shadow-shell-card-hover: 0 2px 4px rgba(15, 26, 46, 0.06), 0 18px 40px rgba(15, 26, 46, 0.1);
+  --shadow-shell-pop: 0 4px 12px rgba(15, 26, 46, 0.08), 0 24px 56px rgba(15, 26, 46, 0.16);
+  --shadow-shell-dock: 0 8px 24px rgba(15, 26, 46, 0.14);
+
+  /* Mặt bàn của canvas — khác panel bằng mắt ở cả hai theme. */
+  --color-canvas-bg: #e4eaf3;
+  --color-canvas-grid: #d3dce8;
+  --color-canvas-grid-major: #c3cedd;
+
+  /* Bo góc theo vai trò. Ghi đè thang mặc định của Tailwind thay vì đổi 400 class:
+   *   rounded     (10px) nút icon, mục menu, chip, ô nhập trong panel
+   *   rounded-sm  (6px)  phím tắt, chip nhỏ
+   *   rounded-md  (12px) nút, ô nhập ở dashboard và dialog
+   *   rounded-lg  (20px) thẻ, dialog, popover, dock
+   *   rounded-xl  (22px) panel lớn của vỏ: thanh menu, cây thư mục, Inspector */
+  --radius-xs: 0.25rem;
+  --radius-sm: 0.375rem;
+  --radius: 0.625rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 1.25rem;
+  --radius-xl: 1.375rem;
+  --radius-2xl: 1.5rem;
+
+  /* Be Vietnam Pro vẽ riêng cho dấu tiếng Việt; tự host qua @fontsource (nạp ở
+   * layout), nên build không phụ thuộc mạng tới Google Fonts. */
+  --font-shell: 'Be Vietnam Pro', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-shell-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', 'Cascadia Mono', Consolas, monospace;
+
+  /* ── Thang chữ của vỏ builder ──────────────────────────────────────────
+   *
+   * Trước đây 193 chỗ đặt cứng `text-[10px]`, `text-[11px]`, `text-[9px]`. Hai
+   * hậu quả, và cái thứ hai mới nặng:
+   *
+   *  1. Trên màn 2560px thì 10px quá bé để đọc thoải mái.
+   *  2. Không có thang thì mỗi lần thêm một dòng chữ là một lần chọn số bằng
+   *     mắt. Bốn cỡ đã trôi thành bốn-cỡ-gần-giống-nhau và không cỡ nào mang
+   *     nghĩa gì; muốn chỉnh cỡ chữ thì phải sửa 193 chỗ.
+   *
+   * Bốn bậc, mỗi bậc có VAI TRÒ chứ không phải một con số:
+   *
+   *   micro  nhãn phụ, mã id, badge — đọc khi cần, không đọc liên tục
+   *   mini   nhãn ô, chú thích, metadata — đọc lướt
+   *   small  nội dung bảng và panel — đọc thật
+   *   base   chữ chính của trang
+   *
+   * `rem` chứ không `px`: ai chỉnh cỡ chữ hệ thống lên thì cả vỏ builder giãn
+   * theo, còn px thì phớt lờ hoàn toàn.
+   */
+  --text-micro: 0.6875rem;   /* 11px — trước là 9px  */
+  --text-micro--line-height: 1.45;
+  --text-mini: 0.75rem;      /* 12px — trước là 10px */
+  --text-mini--line-height: 1.45;
+  --text-small: 0.8125rem;   /* 13px — trước là 11px */
+  --text-small--line-height: 1.5;
+  --text-ui: 0.875rem;       /* 14px — trước là 12px */
+  --text-ui--line-height: 1.5;
+
+  /* `text-xs` còn 63 chỗ và `text-sm` 16 chỗ. Không đổi tên chúng, mà GHIM
+   * chúng vào cùng thang: mặc định của Tailwind là 12px/14px, tức là `text-xs`
+   * sẽ bé hơn `text-ui` — hai cái tên cho hai cỡ gần nhau đúng kiểu đã sinh ra
+   * mớ 9/10/11/12px ban đầu. Ghim rồi thì viết cách nào cũng rơi vào thang. */
+  --text-xs: var(--text-small);
+  --text-xs--line-height: 1.5;
+  --text-sm: var(--text-ui);
+  --text-sm--line-height: 1.5;
+
+  /* Ba bậc tiêu đề của design system mới. `text-page` dùng đúng một lần mỗi màn
+   * (h1, đậm 700); `text-section` cho nhóm trong màn và tiêu đề dialog;
+   * `text-card` cho tên trên thẻ. */
+  --text-page: 1.875rem;     /* 30px */
+  --text-page--line-height: 1.27;
+  --text-page--letter-spacing: -0.01em;
+  --text-section: 1.125rem;  /* 18px */
+  --text-section--line-height: 1.45;
+  --text-card: 1rem;         /* 16px */
+  --text-card--line-height: 1.375;
+
+  /* Chiều cao control: dashboard 44px, thanh công cụ 36px, panel editor 28px. */
+  --spacing-control-sm: 1.75rem;
+  --spacing-control-md: 2.25rem;
+  --spacing-control-lg: 2.75rem;
+}
+
+/* ── Sáng / tối ─────────────────────────────────────────────────────────
+ *
+ * ## Vì sao ghi đè BIẾN, không dùng biến thể `dark:`
+ *
+ * Vỏ builder có hơn 700 chỗ dùng utility màu. Với `dark:` thì mỗi chỗ phải viết
+ * hai lần, và mỗi chỗ bỏ sót là một ô chữ đen trên nền đen — lỗi chỉ lộ ra khi
+ * có người thật bật chế độ sáng. Ghi đè `--color-shell-*` thì không một dòng
+ * utility nào phải sửa, và một token mới quên khai sẽ sai ở CẢ HAI theme, tức
+ * lộ ra ngay ở lần nhìn đầu.
+ *
+ * ## Ba trạng thái, không phải hai
+ *
+ * `data-theme` nhận `dark` | `light` | `system`, mặc định `system` và đọc từ
+ * cookie ở `(builder)/layout.tsx`. Một công tắc hai trạng thái buộc người dùng
+ * chọn một bên, và lựa chọn đó không đi theo họ khi máy tự đổi sang tối buổi
+ * tối.
+ *
+ * ## Thứ tự khối là một phần của luật
+ *
+ * Theme SÁNG là gốc (`@theme`); theme tối là phần ghi đè. Khối `@media` chỉ khớp
+ * `html[data-theme="system"]`, tức tự loại trừ hai lựa chọn tường minh. Thiếu phép
+ * loại trừ đó thì người chọn "sáng" trên một máy đang ở chế độ tối sẽ bị kéo về tối,
+ * và cái nút họ vừa bấm trông như bị hỏng.
+ */
+:root {
+  color-scheme: light;
+}
+
+/* Theme TỐI. Hai khối giống hệt nhau: một cho lựa chọn tường minh, một cho "theo
+ * hệ thống" khi máy đang tối. Thêm token tối thì thêm ở CẢ HAI. Chỉ ghi đè thứ khác
+ * giữa hai theme: `kind-*`, `shell-paper*` giữ nguyên. */
+[data-theme='dark'] {
+  --color-shell-bg: #111722;
+  --color-shell-panel: #1a2230;
+  --color-shell-raised: #1f2938;
+  --color-shell-line: #2a3445;
+  --color-shell-line-strong: #66758c;
+  --color-shell-ink: #e7ecf3;
+  --color-shell-muted: #9aa8ba;
+  --color-shell-accent: #6c9bff;
+  --color-shell-accent-soft: #21304a;
+  --color-shell-on-accent: #0b1220;
+  --color-shell-ok: #5bd98a;
+  --color-shell-ok-soft: #173424;
+  --color-shell-warn: #f5b94a;
+  --color-shell-warn-soft: #3a2c12;
+  --color-shell-danger: #ff8a80;
+  --color-shell-danger-soft: #3d1c1c;
+  --color-shell-on-danger: #1a0b0b;
+  --color-shell-hero: #26365a;
+  --color-shell-hero-muted: #c3cfe2;
+  --color-shell-backdrop: rgba(0, 0, 0, 0.6);
+  --color-node-image: #4fd1c5;
+  --color-node-button: #f6a55b;
+  --color-node-code: #b69cff;
+  --color-tint-blue: #1e3157;
+  --color-tint-blue-ink: #9dbbff;
+  --color-tint-teal: #143a39;
+  --color-tint-teal-ink: #7fdcd0;
+  --color-tint-amber: #3a2c12;
+  --color-tint-amber-ink: #f6c76e;
+  --color-tint-violet: #2c2350;
+  --color-tint-violet-ink: #c4aeff;
+  --color-tint-rose: #3d1a2a;
+  --color-tint-rose-ink: #f7a3c3;
+  --color-folder-slate: #8d9bb0;
+  --color-folder-amber: #f2b53a;
+  --color-folder-teal: #3cc8d4;
+  --color-folder-rose: #f07aa3;
+  --shadow-shell-card: 0 1px 2px rgba(0, 0, 0, 0.35), 0 10px 28px rgba(0, 0, 0, 0.28);
+  --shadow-shell-card-hover: 0 2px 4px rgba(0, 0, 0, 0.4), 0 18px 40px rgba(0, 0, 0, 0.36);
+  --shadow-shell-pop: 0 4px 12px rgba(0, 0, 0, 0.45), 0 24px 56px rgba(0, 0, 0, 0.5);
+  --shadow-shell-dock: 0 8px 24px rgba(0, 0, 0, 0.5);
+  --color-canvas-bg: #0d121b;
+  --color-canvas-grid: #182131;
+  --color-canvas-grid-major: #222d40;
+  color-scheme: dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  html[data-theme='system'] {
+    --color-shell-bg: #111722;
+    --color-shell-panel: #1a2230;
+    --color-shell-raised: #1f2938;
+    --color-shell-line: #2a3445;
+    --color-shell-line-strong: #66758c;
+    --color-shell-ink: #e7ecf3;
+    --color-shell-muted: #9aa8ba;
+    --color-shell-accent: #6c9bff;
+    --color-shell-accent-soft: #21304a;
+    --color-shell-on-accent: #0b1220;
+    --color-shell-ok: #5bd98a;
+    --color-shell-ok-soft: #173424;
+    --color-shell-warn: #f5b94a;
+    --color-shell-warn-soft: #3a2c12;
+    --color-shell-danger: #ff8a80;
+    --color-shell-danger-soft: #3d1c1c;
+    --color-shell-on-danger: #1a0b0b;
+    --color-shell-hero: #26365a;
+    --color-shell-hero-muted: #c3cfe2;
+    --color-shell-backdrop: rgba(0, 0, 0, 0.6);
+    --color-node-image: #4fd1c5;
+    --color-node-button: #f6a55b;
+    --color-node-code: #b69cff;
+    --color-tint-blue: #1e3157;
+    --color-tint-blue-ink: #9dbbff;
+    --color-tint-teal: #143a39;
+    --color-tint-teal-ink: #7fdcd0;
+    --color-tint-amber: #3a2c12;
+    --color-tint-amber-ink: #f6c76e;
+    --color-tint-violet: #2c2350;
+    --color-tint-violet-ink: #c4aeff;
+    --color-tint-rose: #3d1a2a;
+    --color-tint-rose-ink: #f7a3c3;
+    --color-folder-slate: #8d9bb0;
+    --color-folder-amber: #f2b53a;
+    --color-folder-teal: #3cc8d4;
+    --color-folder-rose: #f07aa3;
+    --shadow-shell-card: 0 1px 2px rgba(0, 0, 0, 0.35), 0 10px 28px rgba(0, 0, 0, 0.28);
+    --shadow-shell-card-hover: 0 2px 4px rgba(0, 0, 0, 0.4), 0 18px 40px rgba(0, 0, 0, 0.36);
+    --shadow-shell-pop: 0 4px 12px rgba(0, 0, 0, 0.45), 0 24px 56px rgba(0, 0, 0, 0.5);
+    --shadow-shell-dock: 0 8px 24px rgba(0, 0, 0, 0.5);
+    --color-canvas-bg: #0d121b;
+    --color-canvas-grid: #182131;
+    --color-canvas-grid-major: #222d40;
+    color-scheme: dark;
+  }
+}
+
+/* ── Thang bề rộng và cỡ chữ, tới 2500px ───────────────────────────────
+ *
+ * ## MỘT cần điều khiển cho cỡ chữ
+ *
+ * `font-size` của `:root` nhảy 16 → 17 → 18px. Mọi token cỡ chữ, padding, gap, bo
+ * góc trong vỏ này đều là `rem`, nên một dòng ở đây là cả vỏ lớn lên cùng nhịp —
+ * không có chỗ nào để sót.
+ *
+ * Cách kia — thêm một bậc chữ mới cho màn rộng — đã được thử và hậu quả còn
+ * đó: 193 chỗ `text-[Npx]` rời rạc, bốn cỡ gần giống nhau và không cỡ nào mang
+ * nghĩa gì, mà HANDOFF §2.2 vẫn đang phải đi dọn. Thêm bậc là thêm một lần phải
+ * chọn số bằng mắt ở mọi dòng chữ viết sau đó.
+ *
+ * Hai mốc 1680 và 2100 là hai khoảng giữa các khổ thật (1440 → 1920 → 2560), chứ
+ * không phải chính các khổ đó: đặt ngưỡng đúng 1920 thì một cửa sổ không full-screen
+ * trên màn 1920 rơi vào bậc dưới, và hai máy cùng màn hiện hai cỡ chữ khác nhau.
+ */
+:root {
+  font-size: 16px;
+}
+
+@media (min-width: 1680px) {
+  :root {
+    font-size: 17px;
+  }
+}
+
+@media (min-width: 2100px) {
+  :root {
+    font-size: 18px;
+  }
+}
+
+/* ## Bề rộng: ba mức, và mức nào cũng CÓ TRẦN
+ *
+ * Hai pane cố định 240px và 300px được chọn cho màn 1440. Trên 2560 chúng chiếm
+ * 21% màn, canvas thừa chỗ, mà cây node vẫn cắt tên và inspector vẫn phải cuộn —
+ * tức là màn rộng hơn KHÔNG đổi lấy được gì.
+ *
+ * `clamp` giữ nguyên hành vi ở màn hẹp (vẫn 240/300) và cho thêm chỗ khi có chỗ.
+ * Có chặn trên, vì pane nuốt canvas thì cũng hỏng theo chiều ngược lại.
+ */
+:root {
+  /* Phần chiều cao màn KHÔNG thuộc về trang. Hai editor shell trừ nó ra khỏi
+   * `100svh` qua `var(--shell-nav, 3rem)`.
+   *
+   * Từ giao diện v2 thanh menu nằm DỌC bên trái, nên phần bị trừ không còn là một
+   * thanh ngang mà là đệm trên + dưới của khung vỏ (`--shell-gutter` × 2). Lệch giá
+   * trị này thì canvas cao hơn phần màn còn lại và trang có thêm một thanh cuộn dọc. */
+  --shell-gutter: 0.75rem;
+  --shell-nav: calc(var(--shell-gutter) * 2);
+
+  /* Bề rộng thanh menu: đầy đủ ở dashboard, thu thành rail chỉ có icon ở Thư viện và
+   * editor (nhường chỗ cho cây thư mục / Inspector). */
+  --shell-sidebar: 15.5rem;
+  --shell-rail: 4.75rem;
+
+  --shell-left: clamp(240px, 17vw, 440px);
+  /* Dải còn lại khi thu gọn pane trái. KHÔNG phải 0: một pane biến mất hẳn thì
+   * không còn gì để bấm mở lại, và cái nút đó phải nằm ở đúng chỗ pane vừa đứng.
+   *
+   * 2.75rem = 44px, nới từ 2rem (32px) cho rail v2: mỗi mục giờ là một glyph Unicode
+   * trên một dòng chữ nhỏ, thay cho chữ viết dọc. 32px không đủ cho hai dòng đó, và
+   * 44px cũng đúng ngưỡng vùng bấm tối thiểu của WCAG. Xem docblock của `Rail`. */
+  --shell-left-rail: 2.75rem;
+  --shell-right: clamp(300px, 21vw, 560px);
+
+  /* Trần pane nới từ 380/480 lên 440/560 giữ TỈ LỆ chrome ~34% ở khổ 2500 đúng
+   * như hiện tại, trong khi canvas vẫn to hơn tuyệt đối (1620px). Giữ nguyên
+   * 380/480 thì tỉ lệ chrome tụt xuống 26% — nghe như lãi cho canvas, nhưng thực tế
+   * là cây node và inspector lại cắt chữ ở đúng cái màn đáng ra phải thoải mái nhất. */
+
+  /* Trang không có canvas (bảng điều khiển, Cài đặt, chi tiết component) đọc theo
+   * DÒNG chứ không theo lưới, nên chúng cần trần chứ không cần full-bleed. */
+  --shell-page: min(1600px, 94vw);
+
+  /* Bảng nhiều cột và lưới `auto-fill` đọc theo HÀNG: cắt chiều ngang là cắt thẳng
+   * vào cột bản dịch, hoặc bớt một cột ảnh trong kho.
+   *
+   * Trước đây mức này là `96vw` KHÔNG TRẦN, và đó là cái bẫy: ở 1440 nó cho
+   * 1382px — hợp lý — nhưng ở 2500 nó thành 2400px, tức một hàng bảng dài 2352px.
+   * Mắt phải đi HẾT chiều ngang màn để nối cột đầu với cột cuối của cùng một hàng,
+   * và với một bảng không có đường kẻ ngang thì đó là cách đọc lệch hàng. */
+  --shell-page-wide: min(2200px, 96vw);
+
+  /* Trang chỉ có MỘT cột văn bản (danh mục) không dài ra được — kéo rộng chỉ tạo
+   * một dải trống bên phải mỗi hàng. 900px thay vì 1100px: ở bậc font 18px thì
+   * 1100px đã vượt ~100 ký tự một dòng, quá dài để mắt tìm được đầu dòng sau. */
+  --shell-page-narrow: min(900px, 92vw);
+}
+
+@utility shell-page {
+  margin-inline: auto;
+  width: 100%;
+  max-width: var(--shell-page);
+}
+
+@utility shell-page-wide {
+  margin-inline: auto;
+  width: 100%;
+  max-width: var(--shell-page-wide);
+}
+
+@utility shell-page-narrow {
+  margin-inline: auto;
+  width: 100%;
+  max-width: var(--shell-page-narrow);
+}
+
+/* ── Khung đang tải (skeleton) ──────────────────────────────────────────
+ *
+ * Chỗ nào đang chờ một ẢNH hay một Ô có hình dạng biết trước thì vẽ đúng hình dạng
+ * đó và cho một dải sáng chạy qua — không in chữ "đang nạp…". Chữ chiếm đúng chỗ
+ * của ảnh, nhảy sang ảnh khi xong, và nói một điều mà dải sáng đã nói rồi.
+ *
+ * Nền `shell-raised`, dải `shell-line`: ở theme sáng dải ĐẬM hơn nền, ở theme tối
+ * dải SÁNG hơn nền — cả hai đều thấy được mà không cần khai riêng cho từng theme.
+ *
+ * Người bật "giảm chuyển động" thấy khung tĩnh: vẫn biết có thứ sắp hiện ở đó.
+ */
+@utility shell-skeleton {
+  background-color: var(--color-shell-raised);
+  background-image: linear-gradient(
+    100deg,
+    transparent 20%,
+    color-mix(in srgb, var(--color-shell-line) 85%, transparent) 50%,
+    transparent 80%
+  );
+  background-size: 200% 100%;
+  background-repeat: no-repeat;
+  animation: shell-shimmer 1.4s ease-in-out infinite;
+
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+  }
+}
+
+@keyframes shell-shimmer {
+  from {
+    background-position: 150% 0;
+  }
+  to {
+    background-position: -50% 0;
+  }
+}
+
+/* ── Thanh cuộn ─────────────────────────────────────────────────────────
+ *
+ * Vỏ builder có bốn vùng cuộn cùng lúc: cây node, khung xem trước, bảng thuộc
+ * tính, và trang bên dưới. Thanh cuộn mặc định của Windows dày 17px, màu xám hệ
+ * thống, và bốn cái cạnh nhau nhìn như bốn vết rạn trên một giao diện tối.
+ *
+ * ## Vì sao khai CẢ HAI cú pháp
+ *
+ * `scrollbar-color` + `scrollbar-width` là chuẩn, Firefox và Chrome mới đều hiểu,
+ * nhưng nó không cho tạo kiểu chi tiết. `::-webkit-scrollbar-*` cho toàn quyền
+ * nhưng chỉ WebKit/Blink. Khai cả hai: chuẩn lo phần lớn trình duyệt, webkit lo
+ * phần đẹp hơn ở Chrome và Edge — nơi dự án này thật sự được dùng.
+ *
+ * ## Vì sao KHÔNG dùng `scrollbar-width: none`
+ *
+ * Ẩn hẳn thanh cuộn là ẩn luôn thông tin "còn nội dung phía dưới", và với cây 159
+ * hàng thì đó là thông tin cần. Làm mảnh và mờ đi thì vẫn thấy được mà không ồn.
+ */
+@layer base {
+  /* Chuẩn — mọi vùng cuộn trong vỏ builder. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-shell-line) transparent;
+  }
+
+  ::-webkit-scrollbar {
+    inline-size: 10px;
+    block-size: 10px;
+  }
+
+  /* Rãnh trong suốt, không phải một màu đặc: thanh cuộn nằm trên nhiều nền khác
+   * nhau trong vỏ này (panel, sunken, bg), và một rãnh đặc sẽ thành một dải sáng
+   * lệch màu ở ba trong bốn chỗ. */
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: var(--color-shell-line);
+    border-radius: 99px;
+    /* Viền trong suốt + `background-clip` là cách duy nhất tạo được lề quanh
+     * thumb: `margin` không áp dụng cho phần tử scrollbar. */
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--color-shell-muted);
+    background-clip: padding-box;
+  }
+
+  ::-webkit-scrollbar-thumb:active {
+    background: var(--color-shell-accent);
+    background-clip: padding-box;
+  }
+
+  /* Góc nơi hai thanh cuộn gặp nhau. Để mặc định thì nó là một ô xám hệ thống. */
+  ::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+
+  /* ── <dialog> mở bằng showModal() phải nằm GIỮA màn ──────────────
+   *
+   * Trình duyệt canh giữa modal bằng `margin: auto` trong stylesheet mặc định của
+   * nó. Preflight của Tailwind đặt `margin: 0` cho MỌI phần tử, nên luật đó bị đè
+   * và mọi `showModal()` trong vỏ rơi về góc trên trái. Không nhìn ra được từ chỗ
+   * khai dialog, vì ở đó không ai viết một dòng margin nào cả.
+   *
+   * Đặt ở tầng base chứ không thêm `m-auto` vào từng chỗ: vỏ đang có 17 dialog ở 6
+   * component và tất cả cùng lệch, cái thứ 18 sẽ lại quên. `:modal` chỉ khớp khi mở
+   * bằng `showModal()`, nên `<dialog>` không-modal giữ nguyên vị trí trong luồng.
+   *
+   * Hai cái `max-*`: dialog cao hơn màn thì phần trên bị cắt và không cuộn tới được
+   * — canh giữa làm lỗi đó nặng hơn chứ không nhẹ đi.
+   */
+  dialog:modal {
+    margin: auto;
+    max-height: calc(100dvh - 4rem);
+    max-width: calc(100vw - 2rem);
+  }
+}
+
+/* ── Đang chuyển trang: thanh tiến độ và link đang chờ ─────────────────
+ *
+ * Hai mảnh của cùng một lời đáp "đã nhận cú bấm" (xem `NavProgress`, `ui/LinkPending` và
+ * `lib/builder/nav-pending.ts`):
+ *
+ *  - `shell-nav-bar`: thanh mảnh ở mép trên, mọc nhanh rồi chậm dần về ~90% — không bao giờ
+ *    tự chạm 100%, vì chạm đích là việc của lúc trang THẬT tới (component đẩy nó nốt bằng JS).
+ *  - `shell-pending-show` / `shell-pending-hide`: đổi icon thành spinner SAU một nhịp trễ.
+ *    Điều hướng đã prefetch xong trong vài chục ms; không trễ thì mỗi cú bấm nhanh là một cái
+ *    nháy spinner. Nhịp trễ dùng chung `--shell-pending-delay` với thanh tiến độ, để hai thứ
+ *    cùng hiện một lúc chứ không lệch pha.
+ *
+ * Giảm chuyển động: thanh đứng yên, đủ dài để thấy; spinner vẫn đổi chỗ với icon (đó là đổi
+ * TRẠNG THÁI, không phải chuyển động), còn vòng quay do bên gọi tắt bằng `motion-reduce:`.
+ */
+:root {
+  --shell-pending-delay: 120ms;
+}
+
+@utility shell-nav-bar {
+  transform-origin: 0 50%;
+  animation: shell-nav-grow 9s cubic-bezier(0.08, 0.7, 0.2, 1) forwards;
+
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+    transform: scaleX(0.6);
+  }
+}
+
+@keyframes shell-nav-grow {
+  from {
+    transform: scaleX(0.04);
+  }
+  to {
+    transform: scaleX(0.9);
+  }
+}
+
+@utility shell-pending-show {
+  animation: shell-pending-show 1ms var(--shell-pending-delay) both;
+}
+
+@utility shell-pending-hide {
+  animation: shell-pending-hide 1ms var(--shell-pending-delay) both;
+}
+
+@keyframes shell-pending-show {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes shell-pending-hide {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}

@@ -1,0 +1,12 @@
+# pnpm 11 đọc setting ở đây (key `allowBuilds`), không còn đọc field "pnpm" trong
+# package.json và cũng không dùng `onlyBuiltDependencies` như pnpm 10.
+#
+# Các package này cần chạy build script: Prisma sinh client + query engine, esbuild
+# và unrs-resolver tải native binary, sharp build binding xử lý ảnh cho image pipeline.
+allowBuilds:
+  '@prisma/client': true
+  '@prisma/engines': true
+  esbuild: true
+  prisma: true
+  sharp: true
+  unrs-resolver: true

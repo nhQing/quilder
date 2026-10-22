@@ -1,0 +1,107 @@
+/* Button ------------------------------------------------------------------- */
+
+.btn {
+  --btn-bg: transparent;
+  --btn-fg: var(--color-fg);
+  --btn-line: var(--color-line-strong);
+
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2xs);
+  padding: 0.7em 1.25em;
+  border: 1px solid var(--btn-line);
+  border-radius: var(--radius-pill);
+  background: var(--btn-bg);
+  color: var(--btn-fg);
+  font-size: var(--step--1);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: clip;
+  isolation: isolate;
+  transition:
+    color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out);
+}
+
+/* Wipe fill — a pseudo-element scales up from the bottom.
+   Hover no longer triggers it; keyboard focus still does. See the note below. */
+.btn::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: var(--color-accent);
+  transform: scaleY(0);
+  transform-origin: bottom center;
+  transition: transform var(--dur-base) var(--ease-expo);
+}
+
+/* Chỉ còn `:focus-visible`, KHÔNG còn `:hover`.
+   Hover bị gỡ theo yêu cầu. Focus thì không: nó là thứ DUY NHẤT cho người đi
+   bằng bàn phím biết đang đứng ở nút nào — gỡ nốt là làm trang không dùng được
+   bằng Tab, một chuyện khác hẳn với "nút bớt động đậy khi rê chuột". */
+.btn:focus-visible::after {
+  transform: scaleY(1);
+  transform-origin: top center;
+}
+
+.btn:focus-visible {
+  color: var(--color-bone);
+  border-color: var(--color-accent);
+}
+
+.btn__label {
+  display: inline-block;
+}
+
+.btn__icon {
+  flex: none;
+}
+
+.btn--solid {
+  --btn-bg: var(--color-bone);
+  --btn-fg: var(--color-ink);
+  --btn-line: var(--color-bone);
+}
+
+.btn--ghost {
+  --btn-bg: transparent;
+}
+
+.btn--lg {
+  padding: 1em 1.9em;
+  font-size: var(--step-0);
+  letter-spacing: 0.08em;
+  text-transform: none;
+  font-family: var(--font-mono);
+}
+
+/* A link that only looks like a button when you touch it. */
+.btn--text {
+  border-color: transparent;
+  padding-inline: 0;
+  color: var(--color-muted);
+}
+
+.btn--text::after {
+  display: none;
+}
+
+.btn--text:focus-visible {
+  color: var(--color-fg);
+  border-color: transparent;
+}
+
+/* magnetic.js writes these; the transform stays on the wrapper so the
+   fill above is untouched. The builder renders [data-fx~="magnetic"], not the
+   old site's [data-magnetic] — see effects/hover.css. */
+[data-fx~="magnetic"] {
+  will-change: transform;
+}
+
+[data-fx~="magnetic"] .btn__label,
+[data-fx~="magnetic"] .btn__icon {
+  will-change: transform;
+}

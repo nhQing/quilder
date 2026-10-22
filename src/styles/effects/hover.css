@@ -1,0 +1,97 @@
+/* Hover effects ------------------------------------------------------------ */
+
+/* --- Underline sweep ------------------------------------------------------
+   Two-stage: the rule exits right, then re-enters from the left.
+   -------------------------------------------------------------------------- */
+
+.link-sweep {
+  position: relative;
+  display: inline-block;
+  padding-block-end: 0.12em;
+}
+
+.link-sweep::after {
+  content: "";
+  position: absolute;
+  inset-block-end: 0;
+  inset-inline: 0;
+  block-size: 1px;
+  background: currentColor;
+  transform: scaleX(0);
+  transform-origin: right center;
+  transition: transform var(--dur-base) var(--ease-expo);
+}
+
+.link-sweep:hover::after,
+.link-sweep:focus-visible::after {
+  transform: scaleX(1);
+  transform-origin: left center;
+}
+
+/* --- Image zoom ----------------------------------------------------------- */
+
+.zoom-frame {
+  overflow: clip;
+  border-radius: var(--radius-m);
+}
+
+.zoom-frame img {
+  transition: transform var(--dur-glacial) var(--ease-expo);
+}
+
+.zoom-frame:hover img {
+  transform: scale(1.07);
+}
+
+/* --- Magnetic ------------------------------------------------------------- */
+/* magnetic.js sets --mag-x / --mag-y in px on the element and the inner
+   label; CSS decides how that translates so reduced-motion can veto it.
+   The old site keyed this on [data-magnetic]; the builder renders
+   [data-fx~="magnetic"], so the old selector matched nothing and the effect
+   wrote numbers nobody read. Same story as tilt below. */
+
+[data-fx~="magnetic"] {
+  transform: translate3d(var(--mag-x, 0px), var(--mag-y, 0px), 0);
+}
+
+[data-fx~="magnetic"] .btn__label {
+  display: inline-block;
+  transform: translate3d(
+    calc(var(--mag-x, 0px) * 0.35),
+    calc(var(--mag-y, 0px) * 0.35),
+    0
+  );
+}
+
+/* The return-to-rest glide is damped in magnetic.js, deliberately not with a
+   transition here — a CSS transition on the same property would fight the
+   per-frame writes and make the release feel gummy. */
+
+/* --- Tilt ----------------------------------------------------------------- */
+/* tilt.ts writes --tilt-x / --tilt-y in degrees; this rule is the only thing
+   that turns them into a transform. Ported from the old site's
+   shared/css/components/_card.css, where it sat on [data-tilt] — the builder
+   renders [data-fx~="tilt"] instead, so without this rule the effect wrote
+   numbers nobody read. Lives in layer(base): a typed transform or customCss on
+   the same node still wins. */
+
+[data-fx~="tilt"] {
+  transform: perspective(900px) rotateX(var(--tilt-x, 0deg)) rotateY(var(--tilt-y, 0deg));
+  transition: transform var(--dur-fast) var(--ease-out);
+  will-change: transform;
+}
+
+[data-fx~="tilt"][data-tilt-active="true"] {
+  transition: none;
+}
+
+@media (hover: none), (pointer: coarse), (prefers-reduced-motion: reduce) {
+  [data-fx~="magnetic"],
+  [data-fx~="magnetic"] .btn__label {
+    transform: none;
+  }
+
+  [data-fx~="tilt"] {
+    transform: none;
+  }
+}

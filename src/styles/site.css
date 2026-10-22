@@ -1,0 +1,45 @@
+/* Điểm vào CSS của website công khai.
+ *
+ * ## Vì sao phải có file này thay vì import từng file trong layout.tsx
+ *
+ * CSS KHÔNG nằm trong layer nào luôn thắng CSS nằm trong layer — bất kể
+ * specificity. Đó là quy tắc cascade, không phải lỗi.
+ *
+ * Bản đầu import trực tiếp từng file (unlayered) rồi đặt stylesheet sinh ra vào
+ * `@layer doc`. Hậu quả: rule cấp element trong reset.css và typography.css
+ * (`h1, h2 { … }`, `p { … }`) đè lên toàn bộ style của doc. Triệu chứng thấy
+ * được là hero mất nền và tiêu đề sẫm nằm trên nền tối — chữ đen trên nền đen,
+ * không có lỗi nào báo ra. Dữ liệu trong doc hoàn toàn đúng; chỉ là nó không
+ * bao giờ được áp.
+ *
+ * Cách sửa: đưa CSS tĩnh vào `@layer base`, đứng TRƯỚC `doc` trong thứ tự khai.
+ * Từ đó độ ưu tiên là: base < doc < doc-custom, đúng ý định ban đầu.
+ *
+ * Thứ tự khai layer phải đứng ở dòng đầu, và cũng phải khớp với dòng compiler
+ * phát ra (`@layer doc, doc-custom;`) — khai lại một layer đã có không đổi thứ tự.
+ */
+@layer base, doc, doc-custom;
+
+/* Thứ tự import giữ nguyên như css/main.css của site cũ:
+   reset → tokens → typography → components → effects. */
+@import './base/reset.css' layer(base);
+@import './tokens.css' layer(base);
+@import './base/theme-system.css' layer(base);
+@import './base/typography.css' layer(base);
+@import './components/accordion.css' layer(base);
+@import './components/button.css' layer(base);
+@import './components/cursor.css' layer(base);
+@import './components/form.css' layer(base);
+@import './components/nav-chart.css' layer(base);
+@import './effects/glass.css' layer(base);
+@import './effects/gradient.css' layer(base);
+@import './effects/hover.css' layer(base);
+@import './effects/menu.css' layer(base);
+@import './effects/nav-invert.css' layer(base);
+@import './effects/marquee.css' layer(base);
+@import './effects/slider.css' layer(base);
+@import './effects/video-lazy.css' layer(base);
+@import './effects/modal.css' layer(base);
+@import './effects/drag-scroll.css' layer(base);
+@import './effects/reveal.css' layer(base);
+@import './effects/transitions.css' layer(base);

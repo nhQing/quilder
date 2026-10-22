@@ -1,0 +1,3 @@
+#!/bin/sh
+# Bật bằng `pnpm hooks:install`. Logic nằm ở scripts/pre-push.mjs.
+exec node scripts/pre-push.mjs "$@"

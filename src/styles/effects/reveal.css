@@ -1,0 +1,73 @@
+/* Reveal on viewport entry -------------------------------------------------
+   The CSS owns the *from* and *to* states. JS only flips [data-revealed],
+   so a JS failure leaves content visible rather than stuck at opacity 0.
+   -------------------------------------------------------------------------- */
+
+[data-reveal],
+[data-reveal-group] > * {
+  --reveal-shift: 1.75rem;
+  opacity: 1;
+  transform: none;
+}
+
+/* Only arm the hidden state once JS has confirmed it can un-hide things. */
+html[data-reveal-ready="true"] [data-reveal],
+html[data-reveal-ready="true"] [data-reveal-group] > * {
+  opacity: 0;
+  transform: translate3d(0, var(--reveal-shift), 0);
+  transition:
+    opacity var(--dur-slow) var(--ease-expo),
+    transform var(--dur-slow) var(--ease-expo);
+  transition-delay: var(--reveal-delay, 0s);
+  will-change: opacity, transform;
+}
+
+html[data-reveal-ready="true"] [data-reveal][data-revealed="true"],
+html[data-reveal-ready="true"] [data-reveal-group] > [data-revealed="true"] {
+  opacity: 1;
+  transform: none;
+  will-change: auto;
+}
+
+/* --- Split text ----------------------------------------------------------- */
+
+.split {
+  display: block;
+}
+
+.split__line {
+  display: block;
+  overflow: clip;
+  /* clip would otherwise shave descenders off the last line. */
+  padding-block-end: 0.12em;
+  margin-block-end: -0.12em;
+}
+
+/* Wrapper so characters never break across a line mid-word. */
+.split__word {
+  display: inline-block;
+  white-space: nowrap;
+}
+
+/* No start transform here on purpose. text-split.js sets `yPercent: 110` with
+   GSAP in the same task it builds these, so there is no flash — and GSAP then
+   owns the property outright. Declaring the offset in CSS as well breaks the
+   reveal: animating back to `yPercent: 0` writes no transform, so the CSS rule
+   would simply keep the unit hidden. */
+.split__unit {
+  display: inline-block;
+  will-change: transform;
+}
+
+/* Words need a real space between them once they become inline-blocks. */
+.split--words .split__unit {
+  white-space: pre;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html[data-reveal-ready="true"] [data-reveal],
+  html[data-reveal-ready="true"] [data-reveal-group] > * {
+    opacity: 1;
+    transform: none;
+  }
+}

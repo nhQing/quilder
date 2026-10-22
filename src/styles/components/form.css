@@ -1,0 +1,145 @@
+/* Composite Form -------------------------------------------------------------
+   Nền cho ô nhập, nhãn, nút gửi và vùng thông báo.
+
+   ## Vì sao file này là CODE, không phải dữ liệu
+
+   Ô nhập của Form không phải node, nên không có `data-n` để `setStyle` nhắm vào
+   (xem `formField` trong composites/registry.ts). Style nền phải nằm ở đây, và
+   người dựng trang tinh chỉnh qua `data-part` — bằng `setStyle` trên chính node
+   `Composite`, hoặc `customCss` scope xuống `[data-part="field"]`.
+
+   ## Vì sao KHÔNG đặt nền, padding hay bề rộng của cả khối
+
+   Cùng lý do như `simulator.css` không có `.s4`: nền và padding thuộc về node
+   `Section` bao ngoài, người dùng sửa chúng trong bảng thuộc tính. Đặt cứng ở đây
+   thì mọi lần họ sửa sẽ không thấy gì đổi.
+
+   Mọi giá trị đọc token — không có hex hay px trần nào, để form theo được theme
+   và lần đổi nhận diện sau không phải sửa file này. */
+
+.mm-form-root {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-m);
+}
+
+.mm-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-s);
+}
+
+.mm-form__row {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--space-xs) / 2);
+}
+
+/* Checkbox nằm NGANG với nhãn của nó: một ô vuông trên một dòng riêng rồi nhãn ở
+   dòng dưới đọc như hai thứ không liên quan. */
+.mm-form__row--checkbox {
+  flex-direction: row-reverse;
+  align-items: center;
+  justify-content: flex-start;
+  gap: var(--space-xs);
+}
+
+.mm-form__label {
+  font-family: var(--font-body);
+  font-size: var(--step--1);
+  font-weight: var(--weight-medium);
+  color: var(--color-fg);
+}
+
+.mm-form__req {
+  color: var(--color-accent);
+}
+
+.mm-form__input {
+  font-family: inherit;
+  font-size: var(--step-0);
+  color: var(--color-fg);
+  background: var(--color-glass);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-s);
+  padding: var(--space-xs) var(--space-s);
+  /* `inline-size` chứ không `width`: compiler và site cũ đều dùng logical
+     property, và trộn hai hệ là hai tên cho một thứ. */
+  inline-size: 100%;
+  /* Ô nhập KHÔNG được rộng hơn ô chứa khi có padding — border-box là mặc định của
+     reset.css, khai lại ở đây là dư. Nhưng `min-inline-size: 0` thì cần: một
+     input là flex item có bề rộng nội tại và nó sẽ từ chối co lại. */
+  min-inline-size: 0;
+}
+
+.mm-form__input::placeholder {
+  color: var(--color-muted);
+}
+
+.mm-form__input:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+  border-color: var(--color-accent);
+}
+
+.mm-form__input--textarea {
+  resize: vertical;
+  min-block-size: 6rem;
+}
+
+.mm-form__checkbox {
+  inline-size: 1.15rem;
+  block-size: 1.15rem;
+  accent-color: var(--color-accent);
+  flex: 0 0 auto;
+}
+
+.mm-form__help {
+  font-size: var(--step--1);
+  color: var(--color-muted);
+}
+
+.mm-form__submit {
+  align-self: flex-start;
+}
+
+.mm-form__submit:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* Vùng thông báo LUÔN có trong DOM (xem Form.tsx), nên nó phải không chiếm chỗ
+   khi rỗng — nếu không mỗi form mang một dòng trống dưới nút. `:empty` làm đúng
+   việc đó và không cần JS nào tham gia. */
+.mm-form__status {
+  font-size: var(--step--1);
+  color: var(--color-fg);
+}
+
+.mm-form__status:empty {
+  display: none;
+}
+
+.mm-form[data-status='error'] .mm-form__status {
+  color: var(--color-accent);
+}
+
+/* Honeypot: ra khỏi màn hình chứ không `display: none`.
+   `display: none` và `visibility: hidden` là hai thứ bot ĐỌC ĐƯỢC từ CSS và bỏ
+   qua. Một ô nằm ngoài viewport thì với DOM nó vẫn là ô bình thường. */
+.mm-form__trap {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.mm-form__misconfig {
+  font-size: var(--step--1);
+  color: var(--color-accent);
+  border: 1px dashed var(--color-accent);
+  border-radius: var(--radius-s);
+  padding: var(--space-xs) var(--space-s);
+}

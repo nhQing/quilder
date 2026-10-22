@@ -1,0 +1,13 @@
+# LF ở mọi nơi, khớp .editorconfig.
+#
+# Quan trọng với src/styles/tokens.css: file đó là bản copy byte-identical từ
+# ../new-website/css/base/_tokens.css. Để git tự chuyển CRLF là làm nó khác bản gốc,
+# và mất khả năng diff hai bên để chứng minh không có gì bị đổi trong lúc migrate.
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.webp binary
+*.avif binary
+*.woff2 binary
+*.mp4 binary

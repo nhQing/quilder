@@ -1,0 +1,97 @@
+/* Effect modal ---------------------------------------------------------------
+   Effect ghi, lên node gốc:
+     data-modal-ready    effect đã gắn (CSS đóng chỉ "lên đạn" sau đó, nên không có
+                         JS thì modal giữ nguyên trạng thái mở của node)
+     data-modal-visible  đang hiển thị, KỂ CẢ lúc mờ dần khi đóng
+     data-modal-open     đang mở (kích hoạt chuyển động vào)
+     data-modal-swapping đang đổi tấm (thẻ mờ hết trong swapMs)
+     data-modal-panel    id của tấm đang bật
+   và `data-active` lên tấm đang bật.
+
+   ## Vì sao trạng thái ĐÓNG dùng `!important`
+
+   Trang chủ được trích ra với modal ở trạng thái MỞ: style mở (display, opacity,
+   transform...) nằm sẵn trong style của node và compiler đưa chúng vào
+   `@layer doc`. File này ở `@layer base`, đứng TRƯỚC `doc` (thứ tự khai:
+   `base, doc, doc-custom`), nên một khai báo thường ở đây luôn thua style của
+   node. Chỉ `!important` ở layer sớm hơn mới thắng khai báo thường ở layer muộn
+   hơn. Vì vậy:
+
+     - đóng / tấm không bật: `!important`;
+     - mở: không khai gì, để style của node quyết định — khi trạng thái đóng gỡ
+       ra thì giá trị mở của node nhận lại;
+     - transition: khai thường (doc không bake nó), nên chuyển động vào/ra chạy
+       ở cả hai chiều.
+
+   Đóng là `display: none` chứ KHÔNG chỉ opacity 0: một tấm `fixed; inset: 0` trong
+   suốt đè lên trang sẽ nuốt mọi click và hover (lỗi thật của bản port đầu).
+   `data-modal-visible` giữ nó hiển thị suốt quãng mờ dần. */
+
+/* --- gốc: ẩn hẳn khi không hiển thị, mờ khi chưa mở ----------------------------- */
+[data-fx~='modal'] {
+  transition: opacity var(--dur-fast) var(--ease-out);
+}
+
+[data-fx~='modal'][data-modal-ready]:not([data-modal-visible]) {
+  display: none !important;
+}
+
+[data-fx~='modal'][data-modal-ready]:not([data-modal-open]) {
+  opacity: 0 !important;
+  /* Đang mờ dần thì không nhận chuột: click lúc ấy không được rơi vào modal đã đóng. */
+  pointer-events: none !important;
+}
+
+/* --- lớp phủ ------------------------------------------------------------------ */
+[data-fx~='modal'] [data-part~='modal-scrim'] {
+  transition: opacity var(--dur-fast) var(--ease-out);
+}
+
+[data-fx~='modal'][data-modal-ready]:not([data-modal-open]) [data-part~='modal-scrim'] {
+  opacity: 0 !important;
+}
+
+/* --- tấm nội dung ---------------------------------------------------------------
+   Chỉ tấm đang bật hiện ra; mọi tấm khác bị ẩn. Thẻ nhích từ 96.5% lên và trượt
+   8px khi mở — đọc từ video tham chiếu của bản thiết kế. */
+[data-fx~='modal'][data-modal-ready] [data-part~='modal-panel']:not([data-active]) {
+  display: none !important;
+}
+
+[data-fx~='modal'] [data-part~='modal-panel'] {
+  transition:
+    opacity var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
+}
+
+[data-fx~='modal'][data-modal-ready]:not([data-modal-open]) [data-part~='modal-panel'] {
+  opacity: 0 !important;
+  transform: translateY(8px) scale(0.965) !important;
+}
+
+/* Đổi tấm: chỉ THẺ mờ đi, nhanh hơn lúc mở. Nội dung được thay ở GIỮA quãng này,
+   lúc thẻ đang opacity 0, nên chiều cao đổi mà không ai thấy. */
+[data-fx~='modal'][data-modal-swapping] [data-part~='modal-panel'][data-active] {
+  opacity: 0 !important;
+  transform: none !important;
+  transition-duration: var(--dur-instant);
+}
+
+/* Khối cuộn bên trong: không để cuộn lan ra trang phía sau. */
+[data-fx~='modal'] [data-part~='modal-body'] {
+  overscroll-behavior: contain;
+}
+
+/* --- ít chuyển động -------------------------------------------------------------
+   Bỏ trượt và nở, bỏ luôn transition: modal bật/tắt tức thì, vẫn dùng được. */
+@media (prefers-reduced-motion: reduce) {
+  [data-fx~='modal'],
+  [data-fx~='modal'] [data-part~='modal-scrim'],
+  [data-fx~='modal'] [data-part~='modal-panel'] {
+    transition: none;
+  }
+
+  [data-fx~='modal'][data-modal-ready]:not([data-modal-open]) [data-part~='modal-panel'] {
+    transform: none !important;
+  }
+}

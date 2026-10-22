@@ -1,0 +1,223 @@
+{
+  "$comment": "SINH TỰ ĐỘNG bởi scripts/mcp-snapshot.ts. Đổi tool thì chạy `pnpm mcp:snapshot` và commit.",
+  "hash": "ec25ea7f49da5ddf",
+  "ops": "2d1a9a049f23",
+  "writeTools": [
+    "apply_component_ops",
+    "apply_ops",
+    "create_clone_draft",
+    "create_component",
+    "create_entry",
+    "create_page",
+    "create_taxonomy",
+    "duplicate_component",
+    "set_entry_locale",
+    "set_translation",
+    "update_component",
+    "update_entry",
+    "update_page",
+    "upload_asset"
+  ],
+  "tools": [
+    {
+      "name": "analyze_layout",
+      "readOnly": true,
+      "schema": "1aeb78e7c887"
+    },
+    {
+      "name": "apply_component_ops",
+      "readOnly": false,
+      "schema": "ece0dd961944"
+    },
+    {
+      "name": "apply_ops",
+      "readOnly": false,
+      "schema": "f4b8185fda03"
+    },
+    {
+      "name": "create_clone_draft",
+      "readOnly": false,
+      "schema": "a50ee1dcbea4"
+    },
+    {
+      "name": "create_component",
+      "readOnly": false,
+      "schema": "a4ed3edbf3a7"
+    },
+    {
+      "name": "create_entry",
+      "readOnly": false,
+      "schema": "639cc6dcc496"
+    },
+    {
+      "name": "create_page",
+      "readOnly": false,
+      "schema": "7af558668dce"
+    },
+    {
+      "name": "create_taxonomy",
+      "readOnly": false,
+      "schema": "3ec1c5918e0a"
+    },
+    {
+      "name": "duplicate_component",
+      "readOnly": false,
+      "schema": "c25511c4c84d"
+    },
+    {
+      "name": "find_nodes",
+      "readOnly": true,
+      "schema": "2324b442bd5f"
+    },
+    {
+      "name": "get_component",
+      "readOnly": true,
+      "schema": "06f8028be7e4"
+    },
+    {
+      "name": "get_component_node",
+      "readOnly": true,
+      "schema": "af8c56bd92f0"
+    },
+    {
+      "name": "get_design_system",
+      "readOnly": true,
+      "schema": "f973399805c1"
+    },
+    {
+      "name": "get_draft_diff",
+      "readOnly": true,
+      "schema": "c363346a7a23"
+    },
+    {
+      "name": "get_entry",
+      "readOnly": true,
+      "schema": "cbd3d7378104"
+    },
+    {
+      "name": "get_node",
+      "readOnly": true,
+      "schema": "77fc12ca0cde"
+    },
+    {
+      "name": "get_node_schema",
+      "readOnly": true,
+      "schema": "a3cad2b27f3c"
+    },
+    {
+      "name": "get_page_outline",
+      "readOnly": true,
+      "schema": "1dee239469cd"
+    },
+    {
+      "name": "list_asset_folders",
+      "readOnly": true,
+      "schema": "f973399805c1"
+    },
+    {
+      "name": "list_assets",
+      "readOnly": true,
+      "schema": "9f1bf44a2a6e"
+    },
+    {
+      "name": "list_collection_types",
+      "readOnly": true,
+      "schema": "f973399805c1"
+    },
+    {
+      "name": "list_components",
+      "readOnly": true,
+      "schema": "f973399805c1"
+    },
+    {
+      "name": "list_effects",
+      "readOnly": true,
+      "schema": "640b4141e871"
+    },
+    {
+      "name": "list_entries",
+      "readOnly": true,
+      "schema": "26002ee9be7b"
+    },
+    {
+      "name": "list_locales",
+      "readOnly": true,
+      "schema": "f973399805c1"
+    },
+    {
+      "name": "list_pages",
+      "readOnly": true,
+      "schema": "f973399805c1"
+    },
+    {
+      "name": "list_site_globals",
+      "readOnly": true,
+      "schema": "f973399805c1"
+    },
+    {
+      "name": "list_taxonomies",
+      "readOnly": true,
+      "schema": "a1e9b52f4469"
+    },
+    {
+      "name": "list_text_units",
+      "readOnly": true,
+      "schema": "977d5aa2cd06"
+    },
+    {
+      "name": "list_translations",
+      "readOnly": true,
+      "schema": "8c5395ded1b6"
+    },
+    {
+      "name": "open_builder_link",
+      "readOnly": true,
+      "schema": "540184932a48"
+    },
+    {
+      "name": "resolve_repeat",
+      "readOnly": true,
+      "schema": "0ca5288422cb"
+    },
+    {
+      "name": "resolve_style",
+      "readOnly": true,
+      "schema": "ee46455bf33f"
+    },
+    {
+      "name": "search_tokens",
+      "readOnly": true,
+      "schema": "d51d39f497d0"
+    },
+    {
+      "name": "set_entry_locale",
+      "readOnly": false,
+      "schema": "9220e2ac6193"
+    },
+    {
+      "name": "set_translation",
+      "readOnly": false,
+      "schema": "8b7beb57b025"
+    },
+    {
+      "name": "update_component",
+      "readOnly": false,
+      "schema": "8d481c37d460"
+    },
+    {
+      "name": "update_entry",
+      "readOnly": false,
+      "schema": "b058e0f46763"
+    },
+    {
+      "name": "update_page",
+      "readOnly": false,
+      "schema": "18e2c6daf70c"
+    },
+    {
+      "name": "upload_asset",
+      "readOnly": false,
+      "schema": "99cf20856325"
+    }
+  ]
+}

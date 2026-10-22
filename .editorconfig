@@ -1,0 +1,16 @@
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+indent_style = space
+indent_size = 2
+trim_trailing_whitespace = true
+max_line_length = 100
+
+# Token file được copy nguyên trạng từ new-website — comment provenance và giá trị
+# sub-pixel (--mm-nav-h: 53.25px) là tài liệu chịu lực. Không reformat.
+[src/styles/tokens.css]
+trim_trailing_whitespace = false
+max_line_length = off

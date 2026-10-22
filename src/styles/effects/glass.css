@@ -1,0 +1,37 @@
+/* Glass -------------------------------------------------------------------- */
+
+.glass {
+  position: relative;
+  background: var(--color-glass);
+  border: 1px solid var(--color-line);
+  backdrop-filter: blur(18px) saturate(150%);
+  -webkit-backdrop-filter: blur(18px) saturate(150%);
+}
+
+/* Hairline highlight along the top edge — the thing that sells the material. */
+.glass::before {
+  content: "";
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline: 10%;
+  block-size: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgb(244 241 234 / 0.4),
+    transparent
+  );
+  pointer-events: none;
+}
+
+.glass--strong {
+  backdrop-filter: blur(28px) saturate(180%) brightness(1.05);
+  -webkit-backdrop-filter: blur(28px) saturate(180%) brightness(1.05);
+}
+
+/* backdrop-filter is still not universal — fall back to an opaque panel. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .glass {
+    background: color-mix(in srgb, var(--color-ink-raised) 92%, var(--color-bone));
+  }
+}

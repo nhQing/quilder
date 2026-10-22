@@ -1,0 +1,111 @@
+/* Composite NavChart -------------------------------------------------------
+   Đường vẽ là SVG, số thật là một `<table>`. File này tạo hình cho cả hai.
+
+   ## Vì sao KHÔNG đặt nền, padding hay bề rộng của cả khối
+
+   Cùng lý do như `simulator.css` không có `.s4`: nền và padding thuộc về node bao
+   ngoài, người dùng sửa chúng trong bảng thuộc tính. Đặt cứng ở đây thì mọi lần
+   họ sửa sẽ không thấy gì đổi. */
+
+.mm-nav-root {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-s);
+}
+
+.mm-nav__head {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--space-xs) var(--space-s);
+}
+
+.mm-nav__value {
+  font-family: var(--font-display);
+  font-size: var(--step-2);
+  font-weight: var(--weight-medium);
+  color: var(--color-fg);
+  /* Số đổi khi bấm mốc khác, nên bề rộng chữ số phải cố định — không có nó thì cả
+     dòng nhảy ngang mỗi lần đổi. */
+  font-variant-numeric: tabular-nums;
+}
+
+.mm-nav__date {
+  font-size: var(--step--1);
+  font-weight: var(--weight-regular);
+  color: var(--color-muted);
+}
+
+.mm-nav__change {
+  font-size: var(--step--1);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Màu KHÔNG phải thứ duy nhất nói lên chiều: dấu `+`/`−` đã có trong chữ, nên
+   người không phân biệt được màu vẫn đọc đúng. Màu là lớp thứ hai. */
+.mm-nav__change[data-dir='up'] {
+  color: var(--color-accent);
+}
+
+.mm-nav__change[data-dir='down'] {
+  color: var(--color-muted);
+}
+
+.mm-nav__ranges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs);
+}
+
+.mm-nav__range {
+  font: inherit;
+  font-size: var(--step--1);
+  color: var(--color-muted);
+  background: none;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-s);
+  padding: calc(var(--space-xs) / 2) var(--space-xs);
+  cursor: pointer;
+}
+
+/* Trạng thái chọn bám vào `aria-pressed`, KHÔNG một class riêng.
+   Một nguồn cho cả hình và cây a11y: lệch đi thì nút trông như đang chọn mà
+   screen reader nói ngược, và không có gì báo. */
+.mm-nav__range[aria-pressed='true'] {
+  color: var(--color-fg);
+  border-color: var(--color-fg);
+}
+
+.mm-nav__range:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+.mm-nav__chart {
+  inline-size: 100%;
+  /* Chiều cao cố định: SVG dùng `preserveAspectRatio="none"` nên nó không có tỉ
+     lệ nội tại, và không có chiều cao thì nó sập về 0. */
+  block-size: clamp(9rem, 24vw, 16rem);
+  color: var(--color-accent);
+}
+
+.mm-nav__line {
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+/*
+  Bảng số: ẩn khỏi MẮT, không ẩn khỏi cây a11y.
+  `display: none` hay `hidden` sẽ xoá luôn lý do bảng tồn tại — nó là thứ screen
+  reader duyệt và crawler đọc. Đây là khuôn "visually hidden" quy ước, và
+  `clip-path` là phần khiến nó không còn chiếm một pixel nào trong luồng.
+*/
+.mm-nav__data {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

@@ -1,0 +1,47 @@
+# Stack DÙNG MỘT LẦN cho e2e. Chạy qua `node scripts/e2e-stack.mjs`, không chạy tay.
+#
+# Vì sao có file này: trước 08/10/2026, 41 spec chạy trên DB dev dùng chung. Sự cố
+# 19/08 (HANDOFF §3.35) là một test publish bản nháp bẩn lên trang chủ thật của dev.
+# Webstudio có cùng quy tắc, ghi thẳng trong apps/builder/backend/lib.sh:
+# "Disposable modes must never share the persistent development volume".
+#
+# Khác với docker-compose.yml ở ba chỗ, và cả ba là chủ đích:
+#   - project name `mm-e2e` (đặt ở script) → network, container riêng
+#   - dữ liệu trên tmpfs → không volume nào sống sót sau `down`, và nhanh hơn ổ đĩa
+#   - cổng 5434 / 9010 → chạy song song với stack dev (5433 / 9000) không đụng nhau
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: e2e
+      POSTGRES_PASSWORD: e2e
+      POSTGRES_DB: mm_e2e
+    ports:
+      - '5434:5432'
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U e2e -d mm_e2e']
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  minio:
+    # KHÔNG phải `minio/minio`: Docker Hub từ chối kéo image đó từ cuối 2025 ("pull access
+    # denied"), và máy nào đã có sẵn bản cũ trong cache sẽ không thấy lỗi — CI thấy ngay
+    # (08/10/2026). Bản của Chainguard có người duy trì, entrypoint là `minio` và có sẵn
+    # `mc`, nên `command` và healthcheck bên dưới giữ nguyên.
+    image: cgr.dev/chainguard/minio:latest
+    command: server /data
+    environment:
+      MINIO_ROOT_USER: e2e-minio
+      MINIO_ROOT_PASSWORD: e2e-minio-secret
+    ports:
+      - '9010:9000'
+    tmpfs:
+      - /data
+    healthcheck:
+      test: ['CMD', 'mc', 'ready', 'local']
+      interval: 2s
+      timeout: 3s
+      retries: 30
