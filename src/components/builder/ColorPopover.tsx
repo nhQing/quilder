@@ -20,7 +20,7 @@
  * là quay lại con đường chính.
  */
 
-import { useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 import { cn } from '@/lib/builder/cn';
@@ -29,6 +29,7 @@ import { normalizeHex } from '@/lib/builder/hex';
 import { ColorPickerPanel } from './ColorField';
 import type { ColorValue } from '@/lib/doc/types';
 import { Button } from './ui/Button';
+import { Tip } from './ui/Tip';
 
 /**
  * Hạt giống cho bánh xe màu khi giá trị hiện tại không phải hex.
@@ -72,6 +73,13 @@ export function ColorCustomPanel({
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
   const nameId = useId();
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  // Vừa bấm "Màu tự chọn…" thì phần này phải nằm trong tầm nhìn: popover cao hơn màn thì
+  // nó ở dưới đáy vùng cuộn, và người dùng sẽ tưởng bấm mà không có gì xảy ra.
+  useEffect(() => {
+    rootRef.current?.scrollIntoView({ block: 'nearest' });
+  }, []);
 
   const saveAsToken = async () => {
     // Chuẩn hoá trước khi gửi: `TOKEN_COLOR_RE` ở server nhận hex 3/4/6/8, nhưng
@@ -110,23 +118,32 @@ export function ColorCustomPanel({
   };
 
   return (
-    <div className="p-2.5" data-color-custom="">
+    <div ref={rootRef} className="p-2.5" data-color-custom="">
       <p className={cn(ui.label, 'mb-1.5')}>Màu tự chọn</p>
-      <ColorPickerPanel hex={hex} onHex={setHex} seed={DEFAULT_SEED} />
-
-      <div className="mt-2 flex items-center justify-end">
-        {/* Chuẩn hoá TRƯỚC khi ghi: người dùng gõ `abc` hay `#ABC` thì cái đi vào doc
-            phải là `#aabbcc`. Bốn cách viết cùng một màu nằm rải trong doc là thứ làm
-            mọi phép so "hai node này cùng màu chưa" nói dối. */}
-        <Button
-          variant="primary"
-          size="sm"
-          disabled={normalizeHex(hex) === null}
-          onClick={() => onPick({ hex: normalizeHex(hex)! })}
-        >
-          Dùng màu này
-        </Button>
-      </div>
+      <ColorPickerPanel
+        hex={hex}
+        onHex={setHex}
+        seed={DEFAULT_SEED}
+        action={
+          // Nút icon + tooltip, đứng ngay sau ô mã màu (22/10/2026): một hàng nút chữ riêng
+          // làm popover dài thêm một nấc mà không nói thêm được gì.
+          //
+          // Chuẩn hoá TRƯỚC khi ghi: người dùng gõ `abc` hay `#ABC` thì cái đi vào doc
+          // phải là `#aabbcc`. Bốn cách viết cùng một màu nằm rải trong doc là thứ làm
+          // mọi phép so "hai node này cùng màu chưa" nói dối.
+          <Tip content="Dùng màu này">
+            <Button
+              variant="primary"
+              size="sm"
+              icon="check"
+              aria-label="Dùng màu này"
+              className="w-control-sm px-0"
+              disabled={normalizeHex(hex) === null}
+              onClick={() => onPick({ hex: normalizeHex(hex)! })}
+            />
+          </Tip>
+        }
+      />
 
       <div className="border-shell-line mt-2.5 border-t pt-2.5">
         <label htmlFor={nameId} className={cn(ui.label, 'mb-1.5 block')}>

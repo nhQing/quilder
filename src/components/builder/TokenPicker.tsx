@@ -21,7 +21,17 @@ import { Icon } from './ui/Icon';
  *
  *  - **portal** — Inspector `overflow-hidden`, một popover tuyệt đối bên trong bị cắt;
  *  - **tự lật** khi đụng mép màn;
- *  - rộng bằng ô, cao tối đa ~320px, cuộn BÊN TRONG.
+ *  - rộng bằng ô, cuộn BÊN TRONG.
+ *
+ * ## Chiều cao
+ *
+ * Danh sách token tự giới hạn (16rem; ô màu 10rem ≈ 6 dòng, vì bên dưới còn bánh xe màu)
+ * và cuộn riêng; không phần nào co. Khung ngoài chỉ giới
+ * hạn theo chỗ trống của màn hình và CUỘN CẢ KHUNG khi không đủ chỗ. Trước 22/10/2026 khung
+ * ngoài có trần 22rem + `overflow-hidden`: mở "Màu tự chọn" (bánh xe + lưu biến, cao hơn
+ * cả trần đó) thì danh sách bị ép còn một vạch và ô "Lưu" bị cắt mất (ảnh user gửi). Cho
+ * hai phần cùng co và cuộn riêng thì bánh xe bị cắt ngang ở màn 720px — hai thanh cuộn
+ * lồng nhau, nên chọn một thanh cuộn chung.
  *
  * ## Bố cục
  *
@@ -31,8 +41,11 @@ import { Icon } from './ui/Icon';
  *
  * ## Giá trị trả về
  *
- * Cùng mã với bộ chọn cũ để `commitUnit` không đổi: `''` (gỡ), `'px'` (đơn vị),
- * `'kw:auto'` (từ khoá), `'tk:space-m'` (token).
+ * Cùng mã với bộ chọn cũ để `commitUnit` không đổi: `'px'` (đơn vị), `'kw:auto'` (từ khoá),
+ * `'tk:space-m'` (token).
+ *
+ * Không có chip "— gỡ" (bỏ 22/10/2026): nhãn của mỗi hàng đã có nút × gỡ giá trị khỏi lớp
+ * đang xem, một nút thứ hai trong bộ chọn chỉ làm nó dài thêm.
  */
 export function TokenPicker({
   kind,
@@ -44,7 +57,6 @@ export function TokenPicker({
   onPick,
   trigger,
   label,
-  allowClear = true,
   footer,
   anchor,
   open: openProp,
@@ -71,7 +83,6 @@ export function TokenPicker({
   onOpenChange?: (open: boolean) => void;
   /** Tên ô — cho `aria-label` của danh sách. */
   label: string;
-  allowClear?: boolean;
   /** Phần thêm ở đáy (bộ chọn màu tự do, nút tạo token). */
   footer?: (close: () => void) => React.ReactNode;
 }) {
@@ -169,7 +180,7 @@ export function TokenPicker({
           data-token-picker={label}
           className={cn(
             ui.pop,
-            'z-[90] flex max-h-[min(22rem,var(--radix-popover-content-available-height))] w-[max(15rem,var(--radix-popover-trigger-width))] max-w-[calc(100vw-1rem)] flex-col overflow-hidden',
+            'z-[90] flex max-h-[var(--radix-popover-content-available-height)] w-[max(15rem,var(--radix-popover-trigger-width))] max-w-[calc(100vw-1rem)] flex-col overflow-y-auto',
           )}
         >
           {tokens.length >= 8 && (
@@ -188,17 +199,16 @@ export function TokenPicker({
             </div>
           )}
 
-          {(units.length > 0 || keywords.length > 0 || allowClear) && (
+          {(units.length > 0 || keywords.length > 0) && (
             <div className="flex flex-col gap-1.5 border-b border-shell-line p-1.5">
               {units.length > 0 && (
                 <div className="flex flex-wrap gap-1" role="group" aria-label="Đơn vị">
                   {units.map((u) => chip(u, u))}
                 </div>
               )}
-              {(keywords.length > 0 || allowClear) && (
+              {keywords.length > 0 && (
                 <div className="flex flex-wrap gap-1" role="group" aria-label="Từ khoá">
                   {keywords.map((k) => chip(`kw:${k}`, k))}
-                  {allowClear && chip('', '— gỡ')}
                 </div>
               )}
             </div>
@@ -209,7 +219,7 @@ export function TokenPicker({
               ref={listRef}
               role="listbox"
               aria-label={`Token cho ${label}`}
-              className="min-h-0 flex-1 overflow-y-auto p-1"
+              className={cn('shrink-0 overflow-y-auto p-1', kind === 'color' ? 'max-h-40' : 'max-h-64')}
             >
               {rows.map((t, i) => {
                 const active = t.name === selectedToken;
@@ -262,7 +272,7 @@ export function TokenPicker({
           ) : null}
 
           {footer && (
-            <div data-picker-footer="" className="min-h-0 shrink-0 overflow-y-auto border-t border-shell-line">
+            <div data-picker-footer="" className="shrink-0 border-t border-shell-line">
               {footer(close)}
             </div>
           )}

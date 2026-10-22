@@ -43,6 +43,7 @@ import { focusRing, ui } from '@/lib/builder/ui';
 import { normalizeHex, toPickerHex } from '@/lib/builder/hex';
 
 import { buttonClass } from './ui/Button';
+import { Tip } from './ui/Tip';
 
 /* ── Ô xem trước, và cũng là nút mở ────────────────────────────────────── */
 
@@ -98,6 +99,7 @@ export function ColorPickerPanel({
   onHex,
   seed,
   alpha = false,
+  action,
 }: {
   /** Giá trị thô đang sửa. Có thể chưa phải hex hợp lệ trong lúc gõ dở. */
   hex: string;
@@ -105,6 +107,8 @@ export function ColorPickerPanel({
   /** Màu đang hiển thị, dùng làm hạt giống khi `hex` chưa đọc được. */
   seed: string;
   alpha?: boolean;
+  /** Nút đứng giữa ô mã màu và nút chọn màu từ màn hình (vd. "Dùng màu này"). */
+  action?: React.ReactNode;
 }) {
   const Picker = alpha ? HexAlphaColorPicker : HexColorPicker;
   const canDrop = typeof window !== 'undefined' && 'EyeDropper' in window;
@@ -142,18 +146,20 @@ export function ColorPickerPanel({
             hex !== '' && normalizeHex(hex) === null && 'border-shell-danger',
           )}
         />
+        {action}
         {canDrop && (
-          <button
-            type="button"
-            onClick={() => void pick()}
-            title="Hút màu từ màn hình"
-            aria-label="Hút màu từ màn hình"
-            // `secondary` chứ không `ghost`: nút này đứng sát một ô nhập có viền,
-            // và một nút không viền cạnh đó trông như chữ rơi ra ngoài ô.
-            className={buttonClass('secondary', 'sm', 'w-control-sm px-0')}
-          >
-            <PipetteIcon />
-          </button>
+          <Tip content="Chọn màu từ màn hình">
+            <button
+              type="button"
+              onClick={() => void pick()}
+              aria-label="Chọn màu từ màn hình"
+              // `secondary` chứ không `ghost`: nút này đứng sát một ô nhập có viền,
+              // và một nút không viền cạnh đó trông như chữ rơi ra ngoài ô.
+              className={buttonClass('secondary', 'sm', 'w-control-sm px-0')}
+            >
+              <PipetteIcon />
+            </button>
+          </Tip>
         )}
       </div>
     </div>
@@ -161,29 +167,22 @@ export function ColorPickerPanel({
 }
 
 /**
- * Icon ống hút, vẽ theo đúng quy ước của bộ `Icon` (24×24, nét 2 cho cỡ ≤16px, đầu tròn).
+ * Icon ống nhỏ giọt ĐẶC: bóp cao su + vành + ống thuỷ tinh có ô sáng, kèm một giọt màu rơi
+ * ở đầu ống (22/10/2026, user chọn kiểu này thay cho ống hút nét mảnh — nét mảnh ở cỡ 15px
+ * trông như cây bút chì).
  *
- * Ở đây chứ không ở `ui/Icon.tsx`: bộ icon dùng chung chưa có hình này, và đó là phần nền
- * của người khác. Thêm vào đó thì xoá bản này.
+ * Đặc, khác quy ước nét của bộ `Icon`, nên nằm ở đây chứ không ở `ui/Icon.tsx`. Ống vẽ
+ * dựng đứng rồi xoay 45° cho dễ đọc toạ độ.
  */
 function PipetteIcon() {
   return (
-    <svg
-      width={15}
-      height={15}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-      focusable="false"
-      className="shrink-0"
-    >
-      <path d="M14.5 5.5l4 4" />
-      <path d="M16.6 3.4a2 2 0 0 1 2.8 0l1.2 1.2a2 2 0 0 1 0 2.8L18 10l-4-4z" />
-      <path d="M13 7l-8.3 8.3a2 2 0 0 0-.6 1.4V20h3.3a2 2 0 0 0 1.4-.6L17 11" />
+    <svg width={15} height={15} viewBox="0 0 24 24" fill="currentColor" aria-hidden focusable="false" className="shrink-0">
+      <g transform="rotate(45 12 12)">
+        <rect x="10" y="1" width="4" height="6" rx="2" />
+        <rect x="7.5" y="6" width="9" height="3" rx="1.2" />
+        <path fillRule="evenodd" d="M10 9h4v7a2 2 0 0 1-4 0zm1.2 1.4v3.2l1.6-3.2z" />
+      </g>
+      <path d="M4.6 17.2s-2.1 2.7-2.1 3.9a2.1 2.1 0 0 0 4.2 0c0-1.2-2.1-3.9-2.1-3.9z" />
     </svg>
   );
 }

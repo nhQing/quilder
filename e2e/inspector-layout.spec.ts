@@ -54,7 +54,7 @@ async function projectColorTokens(request: APIRequestContext, names: string[]) {
 
 /**
  * Chọn đơn vị / từ khoá / token qua `TokenPicker` (từ 21/10/2026 — trước đó là `<select>`).
- * `code` cùng mã với bộ chọn cũ: `px`, `kw:auto`, `tk:space-m`, `''` = gỡ.
+ * `code` cùng mã với bộ chọn cũ: `px`, `kw:auto`, `tk:space-m`.
  */
 async function pickUnit(page: Page, trigger: Locator, code: string) {
   await trigger.click();
@@ -681,8 +681,8 @@ test('ô độ dài: gõ số rồi chọn đơn vị, và bộ chọn có cả 
     expect(row?.value).toBe('auto');
   }).toPass({ timeout: 8_000 });
 
-  // 5. Về "—" là GỠ hẳn khỏi lớp này.
-  await pickUnit(page, unit, '');
+  // 5. Nút × ở nhãn là GỠ hẳn khỏi lớp này (bộ chọn không còn chip "— gỡ" từ 22/10/2026).
+  await page.getByRole('button', { name: 'Gỡ inline-size', exact: true }).click();
   await expect(num).toBeEnabled();
 });
 
@@ -859,4 +859,60 @@ test('ô màu: danh sách token có ô màu thật, chọn là ghi token', async
     const row = (result.fields as { field: string; value: unknown }[]).find((f) => f.field === 'fill.color');
     expect(row?.value).toEqual({ $token: name });
   }).toPass({ timeout: 8_000 });
+});
+
+/*
+ * Mở "Màu tự chọn…" (22/10/2026, ảnh user gửi): phần đáy cao hơn trần 22rem của cả popover
+ * mà lại `shrink-0`, nên danh sách token bị ép còn một vạch và ô "Lưu thành biến" bị cắt mất
+ * dưới đáy. Kiểm bằng thứ người dùng thấy: phần nào dài hơn khung thì khung đó cuộn được (không
+ * `overflow: hidden` nuốt mất), danh sách vẫn còn vài dòng, bánh xe hiện ngay khi vừa mở, và ô
+ * tên biến tới được.
+ */
+test('ô màu: mở "Màu tự chọn" không cắt nội dung, danh sách token vẫn còn', async ({ page, request }) => {
+  await projectColorTokens(request, ['e2e-mau-1', 'e2e-mau-2', 'e2e-mau-3', 'e2e-mau-4']);
+  await openEditor(page);
+  await selectHeading(page);
+  await openSection(page, 'Nền & viền');
+
+  await page.locator('[aria-label^="Chọn token màu cho background"]').click();
+  const picker = page.locator('[data-token-picker]');
+  await picker.getByRole('button', { name: 'Màu tự chọn…' }).click();
+  await expect(picker.locator('[data-color-custom]')).toBeVisible();
+
+  const clipped = await picker.evaluate((el) =>
+    [el, ...el.children]
+      .filter((c) => c.scrollHeight > c.clientHeight + 1 && !/auto|scroll/.test(getComputedStyle(c).overflowY))
+      .map((c) => c.className),
+  );
+  expect(clipped).toEqual([]);
+
+  const list = picker.getByRole('listbox');
+  expect(await list.evaluate((el) => el.clientHeight)).toBeGreaterThanOrEqual(60);
+
+  // Bánh xe nằm trong phần nhìn thấy của popover ngay khi mở, không phải tự đi cuộn tìm.
+  const insidePicker = (el: Element) => {
+    const r = el.getBoundingClientRect();
+    const p = el.closest('[data-token-picker]')!.getBoundingClientRect();
+    return r.top >= p.top - 1 && r.bottom <= p.bottom + 1;
+  };
+  expect(await picker.locator('[data-color-custom] .react-colorful').evaluate(insidePicker)).toBe(true);
+
+  const nameInput = picker.getByPlaceholder('brand-500');
+  await nameInput.scrollIntoViewIfNeeded();
+  await expect(nameInput).toBeInViewport();
+  expect(await nameInput.evaluate(insidePicker)).toBe(true);
+
+  // Không còn chip "— gỡ": nút × ở nhãn đã làm việc đó.
+  await expect(picker.locator('[data-pick=""]')).toHaveCount(0);
+
+  // Hàng mã màu: [ô hex] [✓ Dùng màu này] [ống nhỏ giọt] — hai nút icon, tên nằm ở tooltip.
+  const hexRow = picker.getByLabel('Mã màu hex').locator('..');
+  const labels = await hexRow.locator(':scope > *').evaluateAll((els) =>
+    els.map((e) => e.getAttribute('aria-label')),
+  );
+  expect(labels).toEqual(['Mã màu hex', 'Dùng màu này', 'Chọn màu từ màn hình']);
+  const use = hexRow.getByRole('button', { name: 'Dùng màu này' });
+  expect((await use.innerText()).trim()).toBe('');
+  await use.hover();
+  await expect(page.getByRole('tooltip', { name: 'Dùng màu này' })).toBeAttached();
 });
