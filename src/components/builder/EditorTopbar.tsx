@@ -68,7 +68,9 @@ export function EditorTopbar({
   const redo = useEditor((s) => s.redo);
 
   return (
-    <header className={cn(ui.panel, 'flex shrink-0 flex-wrap items-center gap-2.5 py-2 pr-2.5 pl-2')}>
+    // `relative z-40`: bảng nổi của header (Chia sẻ…) là `z-30`, ngang hàng thanh khổ màn
+    // `z-30` của canvas đứng sau trong DOM — không nâng cả header thì thanh đó vẽ đè lên bảng.
+    <header className={cn(ui.panel, 'relative z-40 flex shrink-0 flex-wrap items-center gap-2.5 py-2 pr-2.5 pl-2')}>
       {onBack ? (
         <Button variant="ghost" size="md" icon="arrow-left" onClick={onBack}>
           {backLabel}

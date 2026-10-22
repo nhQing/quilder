@@ -363,3 +363,35 @@ test('trang xem nháp: nút giả lập width, và bản TRẦN vẫn render tr�
     expect(fallback, `?w=${bad} phải rơi về bản trần`).toMatch(NODE_ATTR);
   }
 });
+
+/*
+ * 22/10/2026 (ảnh user gửi): mở "Chia sẻ" thì nhãn "đang sửa lớp…", "Khổ màn", "Toàn trang" và
+ * ô % của thanh khổ màn VẼ ĐÈ lên bảng. Header không có z-index nên bảng `z-30` của nó ngang
+ * hàng với thanh khổ màn `z-30` đứng sau trong DOM — và cái đứng sau thắng. Kiểm bằng thứ
+ * người dùng bấm được: ở tâm mỗi nút của thanh khổ màn nằm dưới bảng, phần tử trên cùng
+ * phải thuộc về bảng.
+ */
+test('bảng "Chia sẻ" nằm TRÊN thanh khổ màn của canvas', async ({ page }) => {
+  await openEditor(page);
+  await page.getByRole('button', { name: 'Chia sẻ' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Chia sẻ trang' });
+  await expect(dialog).toBeVisible();
+
+  const covered = await dialog.evaluate((panel) => {
+    const box = panel.getBoundingClientRect();
+    const bar = document.querySelector('[data-screen-manage]')!.closest('.z-30')!;
+    const out: { text: string; onTop: boolean }[] = [];
+    for (const el of bar.querySelectorAll<HTMLElement>('button, [class*="rounded"]')) {
+      const r = el.getBoundingClientRect();
+      const x = r.left + r.width / 2;
+      const y = r.top + r.height / 2;
+      if (x < box.left || x > box.right || y < box.top || y > box.bottom) continue;
+      const top = document.elementFromPoint(x, y);
+      out.push({ text: el.textContent?.trim() ?? '', onTop: !!top && panel.contains(top) });
+    }
+    return out;
+  });
+  // Bố cục 1280px phải thật sự có chỗ chồng nhau, nếu không test này không kiểm gì cả.
+  expect(covered.length).toBeGreaterThan(0);
+  expect(covered.filter((c) => !c.onTop)).toEqual([]);
+});
