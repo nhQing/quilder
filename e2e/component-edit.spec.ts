@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 
 /**
  * Mở một component ra sửa TỪ pane trái.
@@ -207,14 +207,31 @@ test.describe('pane Component dẫn tới đúng chỗ', () => {
     await expect(page.locator('[data-stage-frame]').getByText(pick!.first, { exact: true })).toBeVisible();
   });
 
-  test('component chưa dùng trên trang → nói rõ ngay tại mục', async ({ page }) => {
-    await openEditor(page);
-    await openComponentSection(page);
-    const unused = left(page).locator('[data-component-item][data-uses=""]').first();
-    test.skip((await unused.count()) === 0, 'mọi component đều đang dùng trên trang chủ');
-    await unused.getByRole('button').first().click();
-    await expect(unused.getByRole('status')).toContainText('Chưa dùng trên trang này');
+  test('component chưa dùng trên trang → nói rõ ngay tại mục', async ({ page, request }) => {
+    // Seed trung tính dùng MỌI component trên trang chủ, nên tự tạo một cái chưa dùng.
+    const made = await request.post('/api/presets', { data: { name: 'E2E chưa dùng' } });
+    expect(made.ok(), await made.text()).toBe(true);
+    const { preset } = (await made.json()) as { preset: { id: string } };
+    try {
+      await openEditor(page);
+      await openComponentSection(page);
+      const unused = left(page).locator(`[data-component-item="${preset.id}"]`);
+      await expect(unused).toHaveAttribute('data-uses', '');
+      await checkUnused(unused);
+    } finally {
+      await request.delete(`/api/presets/${preset.id}`);
+    }
   });
+
+  async function checkUnused(unused: Locator) {
+    await unused.getByRole('button').first().click();
+    const note = unused.getByRole('status');
+    await expect(note).toContainText('Chưa dùng trên trang này');
+    // 22/10/2026: lời báo cũ là chữ xám dưới đáy thẻ, user tưởng bấm không ăn. Giờ nó phải
+    // nằm trong tầm nhìn và mang luôn nút Chèn.
+    await expect(note).toBeInViewport();
+    await expect(note.getByRole('button', { name: /^Chèn vào/ })).toBeVisible();
+  }
 
   test('Chèn khi không chọn gì → node vào cuối trang VÀ khung cuộn tới nó', async ({ page }) => {
     await openEditor(page);

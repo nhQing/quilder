@@ -37,7 +37,7 @@
  * Hợp đồng ở đây là `aria-expanded` + `aria-controls`.
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 
 import { cn } from '@/lib/builder/cn';
@@ -393,8 +393,11 @@ function ComponentList({
     if (ok && ops[0]?.op === 'insertNode') select(ops[0].node.id, { reveal: 'exact' });
   };
 
-  /** Component chưa dùng trên trang mà người dùng vừa bấm vào — để báo ngay tại mục đó. */
-  const [unused, setUnused] = useState<string | null>(null);
+  /**
+   * Component chưa dùng trên trang mà người dùng vừa bấm vào — để báo ngay tại mục đó.
+   * `tick` tăng mỗi lần bấm, để bấm lại cùng mục vẫn cuộn tới lời báo (xem `UnusedNote`).
+   */
+  const [unused, setUnused] = useState<{ id: string; tick: number } | null>(null);
 
   /**
    * Bấm vào một mục: tới chỗ component đó ĐANG DÙNG trên trang. Dùng nhiều chỗ thì mỗi lần
@@ -402,7 +405,7 @@ function ComponentList({
    */
   const locate = (preset: PresetSummary) => {
     const ids = instancesOf(doc, preset.id);
-    if (!ids.length) return setUnused(preset.id);
+    if (!ids.length) return setUnused((u) => ({ id: preset.id, tick: (u?.tick ?? 0) + 1 }));
     setUnused(null);
     const at = selectedId ? ids.indexOf(selectedId) : -1;
     select(ids[(at + 1) % ids.length]!, { reveal: true });
@@ -539,10 +542,13 @@ function ComponentList({
                     </Button>
                   )}
                 </span>
-                {unused === preset.id && (
-                  <p role="status" className="relative z-1 text-mini text-shell-muted">
-                    Chưa dùng trên trang này — bấm <span className="font-semibold text-shell-ink">Chèn</span> để thêm.
-                  </p>
+                {unused?.id === preset.id && (
+                  <UnusedNote
+                    key={unused.tick}
+                    target={targetNode?.name ?? targetNode?.type ?? 'trang'}
+                    disabled={saving}
+                    onInsert={() => void insert(preset, true)}
+                  />
                 )}
               </div>
               );
@@ -562,6 +568,49 @@ function ComponentList({
           </p>
         )}
       </div>
+    </div>
+  );
+}
+
+/**
+ * Lời báo "chưa dùng trên trang này", sau khi bấm tên một component.
+ *
+ * 22/10/2026 (ảnh user gửi, "nhấn vào comp mà chẳng có gì xảy ra"): bản trước là một dòng
+ * chữ `text-muted` cỡ micro nằm DƯỚI hàng nút, canvas không đổi gì — và với mục ở cuối
+ * danh sách nó còn rơi khỏi vùng cuộn. Giờ là một khối có nền, tự cuộn vào tầm nhìn, và
+ * mang luôn nút Chèn: câu trả lời cho "không có ở đây" là "đặt vào đây".
+ *
+ * `key={tick}` ở chỗ gọi: bấm lại cùng mục thì khối mount lại, nên effect cuộn chạy lại.
+ */
+function UnusedNote({
+  target,
+  disabled,
+  onInsert,
+}: {
+  target: string;
+  disabled: boolean;
+  onInsert: () => void;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    ref.current?.scrollIntoView({ block: 'nearest' });
+  }, []);
+  return (
+    <div
+      ref={ref}
+      role="status"
+      // Xếp dọc: pane trái hẹp, nút "Chèn vào <tên>" đứng cạnh chữ thì ép chữ thành một cột.
+      className="relative z-1 mt-1 flex flex-col items-start gap-1.5 rounded-sm bg-shell-warn-soft px-2 py-1.5 text-mini text-shell-ink"
+    >
+      <span className="flex items-center gap-1.5 leading-snug">
+        <Icon name="alert" size={14} className="shrink-0 text-shell-warn" />
+        Chưa dùng trên trang này.
+      </span>
+      <Button size="sm" icon="plus" disabled={disabled} onClick={onInsert} className="max-w-full">
+        <span className="truncate">
+          Chèn vào <span className="font-shell-mono">{target}</span>
+        </span>
+      </Button>
     </div>
   );
 }
