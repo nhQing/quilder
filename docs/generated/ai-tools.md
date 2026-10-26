@@ -1,6 +1,6 @@
 <!-- SINH TỰ ĐỘNG bởi scripts/gen-docs.ts từ src/lib/ai/tools.ts (TOOLS). Đừng sửa tay: chạy `pnpm docs:gen`. -->
 
-# Tool AI (40, trong đó 14 tool ghi)
+# Tool AI (41, trong đó 15 tool ghi)
 
 Phục vụ qua `GET/POST /api/ai/tool`; `mcp/server.mjs` thêm `screenshot_page` chạy tại chỗ. **Không có tool publish, rollback hay xoá** — e2e/mcp.spec.ts khoá điều đó.
 
@@ -25,6 +25,7 @@ Phục vụ qua `GET/POST /api/ai/tool`; `mcp/server.mjs` thêm `screenshot_page
 | `apply_component_ops` | **ghi** | `componentId`, `ops`, `prompt?`, `label?`, `dryRun?` | Áp một batch op lên cây node của một component. CÙNG bộ op và cùng validator với `apply_ops` trên trang. |
 | `create_page` | **ghi** | `title`, `slug?`, `collection?` | Tạo một trang MỚI với cây node trống, ở trạng thái bản nháp. |
 | `update_page` | **ghi** | `pageId`, `title?`, `slug?`, `collection?` | Đổi tiêu đề và/hoặc đường dẫn (slug) của một trang đã có. |
+| `set_page_seo` | **ghi** | `pageId`, `description?`, `ogImageId?`, `canonical?`, `noindex?` | Đặt mô tả (meta description), ảnh OG, canonical và noindex cho một trang. Tiêu đề trang đổi bằng update_page. |
 | `list_site_globals` | đọc | — | Liệt kê khoá trong `site.globals` kèm giá trị hiện tại: tên công ty, hotline, số giấy phép, link store, và mọi thứ khác người dùng khai ở trang Cài đặt. |
 | `create_component` | **ghi** | `name?`, `from?`, `category?`, `aiDescription?` | Tạo một component MỚI: cây trống (truyền `name`), hoặc bản sao của component đang có (truyền `from`). |
 | `set_translation` | **ghi** | `pageId`, `locale`, `nodeId`, `field`, `value?` | Ghi bản dịch cho MỘT đơn vị chữ của một trang, hoặc xoá nó bằng `value: null`. |

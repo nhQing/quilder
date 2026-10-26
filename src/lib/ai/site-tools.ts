@@ -30,6 +30,7 @@ import {
 } from '@/lib/builder/page-collection';
 import { renamePage } from '@/lib/builder/rename-page';
 import { setPageCollection } from '@/lib/builder/set-page-collection';
+import { setPageSeo, type PageSeoInput } from '@/lib/builder/set-page-seo';
 import { draftDiff, summarize } from '@/lib/builder/draft-diff';
 import { setTranslation } from '@/lib/builder/set-translation';
 import { prisma } from '@/lib/db';
@@ -248,6 +249,58 @@ const updatePageTool: ToolDef = {
       ...(wantsCollection ? { collection: nextCollection ?? null } : {}),
       previewUrl: `${ctx.origin}/preview/${r.page.id}`,
       note: r.note,
+    };
+  },
+};
+
+/**
+ * Mô tả, ảnh OG, canonical, noindex của một trang.
+ *
+ * ## Vì sao không gộp vào `update_page`
+ *
+ * Cùng lý do `PATCH /api/pages/[id]` tách nhánh SEO: tiêu đề/slug/collection ràng
+ * buộc lẫn nhau và đổi slug là đổi URL công khai; bốn cột SEO thì độc lập với cả
+ * ba. Gộp lại là để một lần sửa mô tả trông giống một lần đổi đường dẫn trong mắt
+ * model.
+ *
+ * ## Khác các tool ghi khác: nó ra site NGAY
+ *
+ * Bốn cột nằm trên `Page`, ngoài doc, nên không chờ Publish (xem `setPageSeo`).
+ * Mô tả tool phải nói thẳng điều đó — model quen với "chỉ ghi bản nháp".
+ */
+const setPageSeoTool: ToolDef = {
+  name: 'set_page_seo',
+  title: 'SEO của trang',
+  description:
+    'Đặt mô tả (meta description), ảnh OG, canonical và noindex cho một trang. Tiêu ' +
+    'đề trang đổi bằng update_page.\n\n' +
+    'KHÁC apply_ops: bốn cột này nằm trên hàng Page, không trong bản nháp, nên chúng ' +
+    'ra site THẬT NGAY, không chờ Publish.\n\n' +
+    'Chỉ truyền cột cần đổi; cột vắng mặt giữ nguyên. `null` (hoặc chuỗi rỗng) = gỡ.\n' +
+    '- description: tối đa 300 ký tự; nên 120–160 vì máy tìm kiếm cắt phần dư.\n' +
+    '- ogImageId: assetId từ upload_asset / list_assets. Bỏ trống thì dùng ảnh OG của site.\n' +
+    '- canonical: URL tuyệt đối http(s) hoặc đường dẫn bắt đầu bằng "/". Thường KHÔNG cần — ' +
+    'trang tự trỏ về chính nó.\n' +
+    '- noindex: true = chặn máy tìm kiếm. Chỉ đặt khi người dùng muốn trang không lên Google.',
+  input: z
+    .object({
+      pageId: z.string().min(1),
+      description: z.string().max(300).nullable().optional(),
+      ogImageId: z.string().max(60).nullable().optional(),
+      canonical: z.string().max(2000).nullable().optional(),
+      noindex: z.boolean().optional(),
+    })
+    .strict(),
+  readOnly: false,
+  async run(input: { pageId: string } & PageSeoInput, ctx: ToolContext) {
+    const { pageId, ...seo } = input;
+    const r = await setPageSeo({ pageId, input: seo, actorSub: ctx.session.sub });
+    if (!r.ok) return { ok: false, error: r.error };
+    return {
+      ok: true,
+      pageId,
+      seo: r.seo,
+      note: 'Đã ghi lên trang, có hiệu lực trên site ngay — không cần Publish.',
     };
   },
 };
@@ -548,6 +601,7 @@ const listLocalesTool: ToolDef = {
 export const SITE_TOOLS: ToolDef[] = [
   createPageTool,
   updatePageTool,
+  setPageSeoTool,
   listSiteGlobalsTool,
   createComponentTool,
   setTranslationTool,

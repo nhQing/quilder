@@ -1,6 +1,6 @@
 {
   "$comment": "SINH TỰ ĐỘNG bởi scripts/mcp-snapshot.ts. Đổi tool thì chạy `pnpm mcp:snapshot` và commit.",
-  "hash": "ec25ea7f49da5ddf",
+  "hash": "c5f0dbd4a709295e",
   "ops": "2d1a9a049f23",
   "writeTools": [
     "apply_component_ops",
@@ -12,6 +12,7 @@
     "create_taxonomy",
     "duplicate_component",
     "set_entry_locale",
+    "set_page_seo",
     "set_translation",
     "update_component",
     "update_entry",
@@ -193,6 +194,11 @@
       "name": "set_entry_locale",
       "readOnly": false,
       "schema": "9220e2ac6193"
+    },
+    {
+      "name": "set_page_seo",
+      "readOnly": false,
+      "schema": "ae4d42642dd4"
     },
     {
       "name": "set_translation",

@@ -54,8 +54,8 @@ rồi trỏ tới chúng bằng InlineNode bind (source:'site'). Đừng gõ gi�
 cây node — trang sẽ chỉ dùng được cho một dự án.
 Màu, khoảng cách, cỡ chữ, bo góc, thời lượng: dùng {"$token":"..."}, không dùng
 mã hex hay px.
-SEO của từng trang nằm trên hàng Page (title, description, ogImageId, canonical,
-noindex, jsonLd) — không nhét thẻ meta vào cây node.
+SEO của từng trang nằm trên hàng Page — không nhét thẻ meta vào cây node. Tiêu đề
+đổi bằng update_page; mô tả, ảnh OG, canonical, noindex bằng set_page_seo.
 
 KHI CLONE MỘT TRANG WEB
 Dùng prompt /clone_website hoặc tool clone_url. KHÔNG dựng tay hàng trăm node bằng

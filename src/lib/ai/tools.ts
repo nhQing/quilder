@@ -666,7 +666,7 @@ const describeSystem: ToolDef = {
         'Component phải nhận tham số động để nhiều trang dùng chung một cây với nội dung và giao diện khác nhau. Component chỉ chạy được ở một trang là component sai.',
         'Thành phần NHỎ cũng thành component: text, button, field, image, thẻ, huy hiệu. Đừng rải node lẻ giống nhau ra nhiều trang.',
         'KHÔNG fix cứng thứ thuộc cấu hình. Tên công ty, hotline, số giấy phép, link store: gọi list_site_globals rồi bind (source:"site"). Builder này chạy cho nhiều dự án.',
-        'SEO của trang nằm trên hàng Page (title, description, ogImageId, canonical, noindex, jsonLd) — không nhét thẻ meta vào cây node.',
+        'SEO của trang nằm trên hàng Page — không nhét thẻ meta vào cây node. Tiêu đề: update_page. Mô tả, ảnh OG, canonical, noindex: set_page_seo.',
         'Dùng { "$token": "..." } cho màu, khoảng cách, cỡ chữ, bo góc, thời lượng. Giá trị thô chỉ khi thật sự không có token.',
         'setStyle merge SÂU vào lớp đang có. Muốn xoá một key thì đặt nó bằng null.',
         'Node có `locked` là nội dung tuân thủ pháp lý — không sửa.',
