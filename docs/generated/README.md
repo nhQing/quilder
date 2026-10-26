@@ -8,4 +8,4 @@
 | Op | 15 | [ops.md](ops.md) |
 | Tool AI | 41 (15 ghi) | [ai-tools.md](ai-tools.md) |
 | Loại field | 18 | [field-kinds.md](field-kinds.md) |
-| Effect | 18 | [effects.md](effects.md) |
+| Effect | 19 | [effects.md](effects.md) |

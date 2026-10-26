@@ -1,6 +1,6 @@
 <!-- SINH TỰ ĐỘNG bởi scripts/gen-docs.ts từ src/lib/motion/effects (EFFECT_REGISTRY + manifest của từng effect). Đừng sửa tay: chạy `pnpm docs:gen`. -->
 
-# Effect (18)
+# Effect (19)
 
 | Key | Gắn vào | Chi phí | Xung đột | State ghi ra | Params |
 |---|---|---|---|---|---|
@@ -19,6 +19,7 @@
 | `parallax` | — | medium | `scrub-timeline` | — | `speed?`, `overscaleFactor?`, `scrub?` |
 | `rail-pin` | `Section` | medium | `image-sequence` | `rail-pin-ready` | `pinPart?`, `viewportPart?`, `tail?` |
 | `scroll-reveal` | — | light | — | `revealed` | `stagger?`, `delay?`, `rootMargin?`, `once?` |
+| `show-more` | — | light | — | `more-open` | `togglePart?`, `panelPart?`, `labelOpen?` |
 | `slider` | — | medium | `marquee`, `carousel` | `slider-ready`, `slider-begin`, `slider-end` | `preset?`, `slidesPerView?`, `spaceBetween?`, `centeredSlides?`, `grabCursor?`, `autoplay?`, `pauseOnHover?`, `disableOnInteraction?`, `reverseDirection?`, `direction?`, `breakpoints?`, `a11yLabel?`, `loop?`, `freeMode?`, `speedMs?`, `autoplayDelayMs?` |
 | `tilt` | — | light | `magnetic` | `tilt-active` | `max?`, `smoothingHover?`, `smoothingRest?` |
 | `video-lazy` | `Video` | medium | — | `playing`, `video-lazy-ready` | `minWidth?` |

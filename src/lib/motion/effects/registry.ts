@@ -68,6 +68,11 @@ export const CORE_EFFECTS: Record<string, Entry> = {
     // Đổi trạng thái, không phải chuyển động — cùng lý lẽ như nav-collapse.
     gates: { respectReducedMotion: false },
   },
+  'show-more': {
+    load: () => import('./show-more'),
+    // Đổi trạng thái theo cú bấm, không phải chuyển động.
+    gates: { respectReducedMotion: false },
+  },
   'nav-invert': {
     load: () => import('./nav-invert'),
     gates: { respectReducedMotion: false },

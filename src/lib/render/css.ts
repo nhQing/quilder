@@ -434,7 +434,9 @@ export function declarations(s: Partial<StyleProps>): Decl[] {
     push(out, 'letter-spacing', t.tracking && len(t.tracking));
     push(out, 'text-align', t.align);
     push(out, 'text-transform', t.transform);
-    push(out, 'text-wrap', t.wrap);
+    // "normal" trong schema nghĩa là ngắt dòng thường; giá trị CSS tương ứng là `wrap`
+    // (`text-wrap: normal` không hợp lệ, trình duyệt bỏ cả khai báo).
+    push(out, 'text-wrap', t.wrap === 'normal' ? 'wrap' : t.wrap);
     push(out, 'text-decoration', t.decoration);
     push(out, 'text-underline-offset', t.underlineOffset && len(t.underlineOffset));
     push(out, 'white-space', t.whiteSpace);

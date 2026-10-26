@@ -133,6 +133,23 @@ describe('R1 — Section 6 full-bleed strip', () => {
     expect(pretty.css).toContain('text-wrap: pretty');
   });
 
+  it('wrap "normal" phát text-wrap: wrap — "normal" không phải giá trị CSS hợp lệ', () => {
+    // Bản cũ phát `text-wrap: normal`, trình duyệt bỏ qua cả khai báo, và một
+    // `text-wrap: balance` của site (h1–h3) vẫn thắng: chọn "normal" không có tác dụng.
+    const normal = compileDoc({
+      ...doc,
+      nodes: {
+        ...doc.nodes,
+        s6head01: {
+          ...head,
+          style: { base: { ...head.style.base, typography: { wrap: 'normal' } } },
+        } as StackNode,
+      },
+    });
+    expect(normal.css).toContain('text-wrap: wrap');
+    expect(normal.css).not.toContain('text-wrap: normal');
+  });
+
   it('giữ background bind vào Neutral/11 chứ không phải surface', () => {
     expect(css).toContain('background-color: var(--mm-neutral-11)');
   });
