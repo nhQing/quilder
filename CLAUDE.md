@@ -42,4 +42,11 @@
 - "Xem thêm / Thu gọn": effect `show-more` (part more-toggle / more-panel).
 - SEO: `set_page_seo` (mô tả, ảnh OG, canonical, noindex — ra site NGAY), tiêu đề bằng
   `update_page`.
+- Trang chi tiết bài (`blogs/post/[slug]`, loại `news`, vai `entry`): clone một bài thật rồi
+  `update_page` đổi slug + `collection`, và GỠ noindex (clone luôn noindex). Chữ dùng
+  `{t:'bind', ref:{source:'collection', path}}` — đọc được cả khoá ảo `published_at`
+  (`format:'date'`), `taxonomy`, `author`. Thân bài: `part="entry:body"` trên khối chứa; ảnh
+  bìa / ảnh tác giả: `part="entry:cover"` / `"entry:author_photo"` trên node Image. Bài liên
+  quan: Instance `the-tin-live` lặp nguồn `related`, `part:"slide"` để effect `slider` thấy.
+- Link clone từ live mang tiền tố `/vi/…` → site ta trả 404. Đổi về đường dẫn không tiền tố.
 - Không publish; người dùng tự bấm Publish sau khi xem bản nháp.
