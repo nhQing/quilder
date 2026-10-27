@@ -643,6 +643,16 @@ export function entryBodies(
     } else if (f.t === 'text') {
       if (typeof raw !== 'string' || !raw.trim()) continue;
       bodies.set(f.key, { kind: 'plain', value: raw });
+    } else if (f.t === 'image') {
+      // Ảnh bìa cho node Image `part="entry:<field>"` — xem `EntryBody`.
+      const img = raw as { assetId?: unknown; alt?: unknown };
+      if (typeof img.assetId !== 'string' || !img.assetId) continue;
+      assetIds.add(img.assetId);
+      bodies.set(f.key, {
+        kind: 'image',
+        assetId: img.assetId,
+        alt: typeof img.alt === 'string' ? img.alt : '',
+      });
     }
   }
 

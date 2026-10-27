@@ -306,3 +306,21 @@ describe('previewBinding — vai relation', () => {
     expect(b.label).toBeTruthy();
   });
 });
+
+import { entryBodies } from './collection-page';
+import type { FieldDef } from '@/lib/collections/field-def';
+
+describe('entryBodies — field ảnh', () => {
+  const fields = [{ t: 'image', key: 'cover', label: 'Ảnh bìa' }] as unknown as FieldDef[];
+
+  it('ảnh có assetId thành ô cắm kind image, và assetId được nạp', () => {
+    const out = entryBodies(fields, { cover: { assetId: 'a1', alt: 'Bìa' } }, []);
+    expect(out.bodies.get('cover')).toEqual({ kind: 'image', assetId: 'a1', alt: 'Bìa' });
+    expect(out.assetIds).toContain('a1');
+  });
+
+  it('thiếu assetId thì bỏ qua, để ô ảnh giữ ảnh mẫu', () => {
+    const out = entryBodies(fields, { cover: { alt: 'Bìa' } }, []);
+    expect(out.bodies.has('cover')).toBe(false);
+  });
+});

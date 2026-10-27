@@ -277,7 +277,13 @@ export type EntryBody =
    * `entryBodies()` là chỗ duy nhất dựng ra biến thể này, và nó làm sạch trước khi
    * đặt vào. Xem docblock của `ArticleHtml`.
    */
-  | { kind: 'html'; value: string };
+  | { kind: 'html'; value: string }
+  /**
+   * Field `image` — chỉ cho node `Image` mang `part="entry:<field>"` (ảnh bìa của trang
+   * chi tiết). Binding `collection` chỉ thay được chữ, nên đây là đường DUY NHẤT để
+   * ảnh của bài đi vào template.
+   */
+  | { kind: 'image'; assetId: string; alt: string };
 
 /* ── Helpers ──────────────────────────────────────────────────────────── */
 
@@ -369,7 +375,8 @@ function common(node: Node, ctx: RenderContext) {
     // đây chứ không bắt tác giả tự đặt: quên nó nghĩa là bài viết render ra một khối
     // chữ cùng cỡ không bullet (reset.css làm phẳng mọi khối) — trông như dữ liệu
     // hỏng, không như một style thiếu.
-    ...(entryFieldOf(node.part) ? { 'data-mm-article': '' } : {}),
+    // Không cho Image: ô ảnh của entry là một tấm ảnh, không phải khối chữ bài viết.
+    ...(node.type !== 'Image' && entryFieldOf(node.part) ? { 'data-mm-article': '' } : {}),
     ...(node.htmlId ? { id: node.htmlId } : {}),
     ...(node.a11y?.role ? { role: node.a11y.role } : {}),
     ...(node.a11y?.label ? { 'aria-label': node.a11y.label } : {}),
@@ -407,7 +414,17 @@ function entrySlot(node: Node, ctx: RenderContext) {
       return <RichTextView value={body.value} scope={ctx.scope} id={node.id} />;
     case 'plain':
       return <>{body.value}</>;
+    case 'image':
+      // Ảnh không thay con của một khối — nó đi qua `entryImage` trên chính node Image.
+      return null;
   }
+}
+
+/** Ảnh của entry cho node Image `part="entry:<field>"`, nếu bài đang mở có. */
+function entryImage(node: Node, ctx: RenderContext) {
+  const key = entryFieldOf(node.part);
+  const body = key ? ctx.entryBody?.get(key) : undefined;
+  return body?.kind === 'image' ? body : null;
 }
 
 function Children({ node, ctx }: { node: Node; ctx: RenderContext }) {
@@ -721,7 +738,12 @@ export function NodeRenderer({ nodeId, ctx }: { nodeId: NodeId; ctx: RenderConte
     }
 
     case 'Image': {
-      const asset = node.assetId ? ctx.assets[node.assetId] : undefined;
+      // Ô ảnh của entry (`part="entry:cover"`): ảnh của bài thắng ảnh mẫu. Không có
+      // dữ liệu bài (builder, trang thường) thì giữ ảnh mẫu — cùng luật với `entrySlot`.
+      const fromEntry = entryImage(node, ctx);
+      const assetId = fromEntry?.assetId ?? node.assetId;
+      const alt = fromEntry ? fromEntry.alt : node.alt;
+      const asset = assetId ? ctx.assets[assetId] : undefined;
       if (!asset) return null;
 
       const ratio = baseOf(node.ratio, null);
@@ -735,7 +757,7 @@ export function NodeRenderer({ nodeId, ctx }: { nodeId: NodeId; ctx: RenderConte
           <Image
             {...common(node, ctx)}
             src={asset.url}
-            alt={node.decorative ? '' : node.alt}
+            alt={node.decorative ? '' : alt}
             width={asset.width}
             height={asset.height}
             priority={priority}
@@ -754,7 +776,7 @@ export function NodeRenderer({ nodeId, ctx }: { nodeId: NodeId; ctx: RenderConte
         >
           <Image
             src={asset.url}
-            alt={node.decorative ? '' : node.alt}
+            alt={node.decorative ? '' : alt}
             fill
             priority={priority}
             unoptimized={isVector(asset)}
