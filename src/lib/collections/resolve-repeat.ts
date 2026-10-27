@@ -64,7 +64,7 @@ export interface RepeatContext {
  * (`^[a-z][a-z0-9_]*$`) — `publishedAt` không phải khoá hợp lệ, nên ánh xạ tới nó
  * bị zod từ chối lúc lưu chứ không im lặng không có tác dụng.
  */
-function entryToItem(e: EntryRow): RepeatItem {
+export function entryToItem(e: EntryRow): RepeatItem {
   return {
     key: e.id,
     data: e.data,

@@ -165,6 +165,24 @@ export const VIRTUAL_KEYS: Record<string, VirtualKey> = {
 };
 
 /**
+ * `item.data` cộng các khoá ảo — thứ binding `collection` đọc trên trang chi tiết.
+ *
+ * Tiêu đề, "Đăng ngày …" và nhãn danh mục của trang chi tiết nằm NGOÀI mọi khối lặp,
+ * nên chúng đi qua binding chứ không qua `map`. Đọc thẳng `entry.data` thì ngày đăng và
+ * danh mục — cột và bảng nối — không bao giờ tới được. Cùng bảng `VIRTUAL_KEYS`, cùng
+ * luật `overrideData`, để thẻ tin và trang chi tiết không nói hai điều khác nhau.
+ */
+export function bindingData(item: RepeatItem): Record<string, unknown> {
+  const out: Record<string, unknown> = { ...item.data };
+  for (const [key, vk] of Object.entries(VIRTUAL_KEYS)) {
+    const v = vk.read(item);
+    if (v === undefined || v === null || v === '') continue;
+    if (vk.overrideData || out[key] === undefined || out[key] === null || out[key] === '') out[key] = v;
+  }
+  return out;
+}
+
+/**
  * Giá trị bất kỳ → `RichText`, hoặc `undefined` nếu không ánh xạ được.
  *
  * `undefined` là câu trả lời ĐÚNG cho chuỗi rỗng: một `RichText` rỗng ghi đè chữ của

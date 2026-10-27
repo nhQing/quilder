@@ -9,6 +9,7 @@ import { jsonForScript } from '@/lib/render/json-for-script';
 import { pickJsonLd } from '@/lib/render/entry-meta';
 import {
   articleJsonLd,
+  entryBindingData,
   entryBodies,
   entrySeo,
   relationStructuredData,
@@ -179,7 +180,7 @@ export async function PublishedPageView({
       page: { title: page.title, slug: page.slug },
       // Trang chi tiết: binding `collection` đọc entry đang mở, kể cả NGOÀI khối lặp
       // — tiêu đề h1 và ngày đăng nằm trong template, không nằm trong một thẻ lặp.
-      ...(entry ? { collection: entry.data } : {}),
+      ...(entry ? { collection: entryBindingData(entry) } : {}),
     },
     assets,
     repeatItems: resolved.items,

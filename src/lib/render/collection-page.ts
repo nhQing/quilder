@@ -33,11 +33,12 @@ import {
   relationTargets,
   type EntryRow,
 } from '@/lib/collections/queries';
-import { itemOverrides, type RepeatItem } from '@/lib/collections/repeat';
+import { bindingData, itemOverrides, type RepeatItem } from '@/lib/collections/repeat';
 import {
   expandRelations, MAX_RELATION_FANOUT, relationFields, relationIds, toRelationRef,
 } from '@/lib/collections/relation-expand';
 import {
+  entryToItem,
   resolveRepeat,
   resolveTaxonomyTree,
   type RepeatContext,
@@ -658,6 +659,12 @@ export function entryBodies(
 
   return { bodies, assetIds: [...assetIds] };
 }
+
+/**
+ * Thứ binding `collection` đọc trên trang chi tiết: field của bài cộng khoá ảo
+ * (`published_at`, `taxonomy`, `author`…) — xem `bindingData`.
+ */
+export const entryBindingData = (e: EntryRow) => bindingData(entryToItem(e));
 
 /* ── SEO của trang chi tiết ───────────────────────────────────────────── */
 

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { RepeatSpec } from '@/lib/doc/types';
-import { itemOverrides, toDateText, toRichText, type RepeatItem } from './repeat';
+import { bindingData, itemOverrides, toDateText, toRichText, type RepeatItem } from './repeat';
 
 const SPEC: RepeatSpec = {
   source: { kind: 'query', query: { typeKey: 'news', limit: 10 } },
@@ -214,5 +214,36 @@ describe('khoá ảo', () => {
     // Lấy nhầm bản trong `data` là mọi thẻ bấm ra 404.
     const item = { ...ITEM, slug: 'lai-suat-thang-8', data: { ...ITEM.data, slug: 'Lãi suất tháng 8' } };
     expect(itemOverrides(item, one('slug', 'href'), {}).n?.href).toBe('lai-suat-thang-8');
+  });
+});
+
+/*
+ * Trang chi tiết: binding `collection` đọc `bindingData(item)` thay vì `item.data`, nên
+ * h1, "Đăng ngày …" và nhãn danh mục — nằm NGOÀI khối lặp — đọc được cùng khoá ảo mà
+ * thẻ tin dùng trong `map`.
+ */
+describe('bindingData', () => {
+  const item: RepeatItem = {
+    ...ITEM,
+    publishedAt: '2026-09-25T03:00:00.000Z',
+    taxonomies: [{ key: 'san-pham', name: 'Sản phẩm' }],
+  };
+
+  it('có field của bài và khoá ảo', () => {
+    const d = bindingData(item);
+    expect(d.title).toBe('Lãi suất tháng 8');
+    expect(d.published_at).toBe('2026-09-25T03:00:00.000Z');
+    expect(d.taxonomy).toBe('Sản phẩm');
+    expect(d.slug).toBe('lai-suat-thang-8');
+  });
+
+  it('field cùng tên thắng khoá ảo khi overrideData = false (published_at)', () => {
+    const d = bindingData({ ...item, data: { ...item.data, published_at: 'Ngày gốc' } });
+    expect(d.published_at).toBe('Ngày gốc');
+  });
+
+  it('khoá ảo không có giá trị thì không đè field, không thêm khoá rỗng', () => {
+    const d = bindingData({ ...ITEM, taxonomies: [] });
+    expect('taxonomy' in d).toBe(false);
   });
 });

@@ -11,6 +11,7 @@ import { getLocales, listDraftTranslations } from '@/lib/i18n/queries';
 import { collectEffects, NodeRenderer, type RenderContext } from '@/lib/render/NodeRenderer';
 import { collectAssetIds, loadAssets } from '@/lib/render/page';
 import {
+  entryBindingData,
   entryBodies,
   parsePageCollection,
   previewBinding,
@@ -231,7 +232,7 @@ export default async function PreviewPage({
       // Globals live — xem nháp là thứ SẼ lên ở lần Publish tới (`draftSiteGlobals`).
       site: await draftSiteGlobals(),
       page: { title: page.title, slug: page.slug },
-      ...(binding.entry ? { collection: binding.entry.data } : {}),
+      ...(binding.entry ? { collection: entryBindingData(binding.entry) } : {}),
     },
     assets,
     repeatItems: resolved.items,
