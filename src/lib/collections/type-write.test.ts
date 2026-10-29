@@ -54,6 +54,17 @@ describe('createCollectionType — khoá dành riêng cho đường dẫn', () =
     }
   });
 
+  it('từ chối khoá "views" — trùng /api/public/v1/views/[viewKey], đường gọi của app', async () => {
+    const r = await createCollectionType({
+      key: 'views',
+      name: 'Views',
+      namePlural: 'Views',
+      actorEmail: 'a@b.com',
+      actorSub: 'sub',
+    });
+    expect(r).toMatchObject({ ok: false, status: 400 });
+  });
+
   it('tên sinh khoá dành riêng qua toSlug cũng bị chặn, không chỉ chuỗi gõ đúng y', async () => {
     // "Types" -> toSlug -> "types". Phép chặn nằm SAU toSlug, đúng nơi client
     // không kiểm soát được — client gửi `name`, server tự suy `key`.

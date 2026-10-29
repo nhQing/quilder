@@ -16,7 +16,7 @@ trọng ngang bảy mục trên.
 | **Chỉ nội dung đã đăng** | Một entry chỉ hiện khi `status = 'published'` **và** `publishedAt <= bây giờ` **và** chưa bị lưu trữ. Với `?locale=`, ba điều kiện đó đọc trên **bản dịch** — mục 8. |
 | **Không auth** | Không cần token. Namespace không đọc cookie, nên không có phiên và không có bề mặt CSRF. |
 | **Shape** | `{ "data": …, "meta": … }`. Field của entry nằm **phẳng** ngay trong object, **không** có lớp `attributes` lồng (Strapi v4 có, và chính Strapi v5 đã bỏ). |
-| **Lỗi** | `{ "error": "câu tiếng Việt", "code": "bad_param" }` kèm 400 hoặc 404. **Rẽ nhánh theo `code`**, đừng so khớp `error` — mục 6. |
+| **Lỗi** | `{ "error": "câu tiếng Việt", "code": "bad_param" }` kèm 400, 404 (hoặc 500 khi một view cấu hình lỗi). **Rẽ nhánh theo `code`**, đừng so khớp `error` — mục 6. |
 | **Mảng luôn là mảng** | Field hình dạng mảng chưa điền là `[]`, **không bao giờ** `null`. Field scalar chưa điền là `null`. Xem mục 3. |
 
 Khoá **dành riêng** trong mỗi entry: `id`, `slug`, `publishedAt`, `updatedAt`,
@@ -25,7 +25,7 @@ mọi client vỡ ở lần lưu đầu tiên.
 
 ---
 
-## 2. Bốn endpoint
+## 2. Các endpoint
 
 ### 2.1 `GET /api/public/v1/types` — cấu trúc mọi loại nội dung
 
@@ -67,7 +67,8 @@ Nó **không** có endpoint riêng: gọi endpoint danh sách và đọc `data[0
 | `locale` | ngôn ngữ gốc | Mục 8 — nó đổi cả phép lọc "đã đăng", không chỉ đổi chữ. |
 | `format` | `json` | `json` hoặc `html` — xem mục 4. |
 | `fields` | mọi field | Danh sách field cần, cách nhau bằng dấu phẩy. Cắt payload — xem dưới. |
-| `populate` | — | Danh sách field `relation` (chỉ `relation`), cách nhau bằng dấu phẩy. Tối đa 5. |
+| `populate` | — | Danh sách field `relation` (chỉ `relation`), cách nhau bằng dấu phẩy. Tối đa 5. Mỗi bản ghi đích ra **tóm tắt** `{ id, slug, title, publishedAt }`. |
+| `populate[field]` | — | Như `populate`, cộng thêm các field **của bản ghi đích** cần lấy: `populate[faqs]=title,answer`. Tối đa 10 field mỗi quan hệ — xem dưới. |
 
 ```bash
 curl -s "http://localhost:3001/api/public/v1/news?pageSize=5&taxonomy=tin-thi-truong&sort=publishedAt:desc"
@@ -105,6 +106,32 @@ curl -s "http://localhost:3001/api/public/v1/news?fields=id"
 
 `populate` một field mà `fields` không xin thì **400**: tự thêm vào là trả nhiều hơn
 bạn hỏi, bỏ qua là trả ít hơn — im lặng. Xin cả hai: `?fields=title,related&populate=related`.
+
+**`?populate[field]=a,b` — lấy vài field của bản ghi được liên kết.** Khi một bài trỏ tới
+bản ghi của loại khác (FAQ, sản phẩm, chuyên gia…), dạng phẳng `populate=faqs` chỉ cho
+tóm tắt. Dạng ngoặc cho thêm đúng các field bạn xin, đã qua cùng phép chiếu như field của
+bài (ảnh thành `{ url, width, … }`, `richtext` theo `format`, bản dịch theo `locale`):
+
+```bash
+curl -sg "http://localhost:3001/api/public/v1/news?fields=title,faqs&populate[faqs]=title,answer&format=html"
+```
+
+```jsonc
+{ "title": "Chứng chỉ quỹ mở là gì?",
+  "faqs": [
+    { "title": "Phí quản lý là bao nhiêu?", "answer": "0,5%/năm, <strong>không phí ẩn</strong>",
+      "id": "clx…", "slug": "phi-quan-ly-la-gi", "publishedAt": "2026-09-01T00:00:00.000Z" }
+  ], … }
+```
+
+- Bốn khoá tóm tắt luôn có và **thắng** field trùng tên.
+- Field xin được: `text`, `richtext`, `number`, `boolean`, `date`, `enum`, `image`, `file`,
+  `link`, `slug`. **Không** xin được `richdoc`/`html` (thân bài), `group`/`blocks`/`json`
+  (không có trần kích thước), `relation` (cấp thứ hai), `taxonomy`, `seo` — 400 kèm lý do.
+- Field không có ở loại đích, danh sách rỗng, hoặc cùng một quan hệ xin bằng cả hai dạng:
+  400.
+- Dùng `curl -g` (hoặc mã hoá `[` `]` thành `%5B` `%5D`): không có `-g`, curl hiểu ngoặc
+  vuông là mẫu và không gửi request.
 
 **Sai tham số thì 400 kèm câu giải thích và một `code`**, không im lặng bỏ qua:
 
@@ -154,6 +181,32 @@ curl -s "http://localhost:3001/api/public/v1/taxonomies/news"
 `parent` là **khoá** của danh mục cha, không phải id. `entryCount` chỉ đếm bài đã đăng
 và đã tới mốc — con số nói cho bạn có bao nhiêu bài **chưa** công bố cũng là một dạng
 rò dữ liệu. Loại không có danh mục nào trả `data: []`, không phải 404.
+
+### 2.5 `GET /api/public/v1/views/{key}[/{slug}]` — view đặt sẵn
+
+Một **view** là bộ tham số đầy đủ (`fields`, `populate[…]`, `sort`, `pageSize`, `filter`…)
+mà admin lưu dưới một khoá ngắn, ở builder → Kho dữ liệu → **View của API**. App chỉ gọi
+khoá; server áp bộ tham số đã lưu **trong cùng một lượt** (không redirect) rồi đi đúng
+endpoint danh sách / chi tiết của loại, nên mọi luật ở trên áp nguyên.
+
+```bash
+# view "mobile-news" = /news?fields=title,cover,faqs&populate[faqs]=title,answer&pageSize=20
+curl -s "http://localhost:3001/api/public/v1/views/mobile-news?page=2&locale=en"
+curl -s "http://localhost:3001/api/public/v1/views/mobile-news/chung-chi-quy-mo-la-gi"
+```
+
+- **App gửi thêm được gì** do từng view quyết, trong tập: `page`, `pageSize`, `locale`,
+  `taxonomy`, `sort`, `filter`, `format`. Tham số khác → **400** `bad_param`, không bị bỏ qua
+  im lặng.
+- `fields` và `populate` **không bao giờ** đổi được từ app: đó là phần view cố định.
+- `filter[…]` của app **cộng thêm** (AND) vào filter đã lưu, không thay — view không bị nới
+  ra. `sort` của app thay cả danh sách sort đã lưu. Tham số còn lại thay giá trị đã lưu.
+- Endpoint chi tiết dùng cùng `fields`/`populate` với danh sách, nên màn chi tiết nhận đúng
+  hình dạng màn danh sách đã nhận.
+- Khoá không có → **404** `unknown_view`. Bộ tham số đã lưu không còn hợp với cấu trúc loại
+  (field vừa bị xoá…) → **500** `view_invalid`: lỗi cấu hình, báo admin sửa view, không
+  phải sửa app.
+- Đổi khoá hoặc xoá view làm app đang gọi khoá đó nhận 404 ngay.
 
 ---
 
@@ -274,6 +327,8 @@ Bảo đảm của `format=html`:
 | `bad_param` | 400 | Tham số không hợp lệ. Sửa URL. |
 | `unknown_type` | 404 | Không có loại nội dung đó. Đọc lại `/types`. |
 | `not_found` | 404 | Không có nội dung đó (hoặc còn nháp, hoặc hẹn giờ chưa tới — API cố ý không phân biệt). |
+| `unknown_view` | 404 | Không có view đó (mục 2.5). |
+| `view_invalid` | 500 | View đã lưu không còn đọc được trên cấu trúc loại hiện tại. Lỗi cấu hình phía builder — báo admin. |
 
 `error` là câu cho **người đọc** và được phép đổi chữ bất cứ lúc nào; `code` là tập
 **đóng** và không đổi. Client so khớp chuỗi tiếng Việt sẽ rẽ nhánh sai đúng vào lần ai đó
@@ -417,7 +472,7 @@ thứ không tồn tại.
 | **Sắp theo field trong `data`** | Prisma không `orderBy` được theo đường dẫn trong JSONB. Sắp theo tên bài xấp xỉ được bằng `slug`, vì slug sinh từ tiêu đề. |
 | **Lọc theo field kiểu `slug`** | 400, có chủ đích: slug hiệu lực nằm ở **cột** `Entry.slug`, còn `data.slug` chỉ có khi biên tập viên gõ tay ô đó — nên một filter JSONB khớp *một số* bài và bỏ sót số còn lại. Một filter đúng một phần không ai phát hiện được. Lấy một bài theo slug là việc của endpoint chi tiết. |
 | **`populate` field `taxonomy`** | 400. Danh mục vốn đã đi kèm mỗi entry ở khoá `taxonomies` (`key` + `name`), nên không có gì để mở thêm. |
-| **`populate` sâu hơn một cấp** | Populate tuỳ ý sâu là cách chắc chắn nhất để một client làm sập DB bằng một URL. `populate` mở đúng một cấp và trả một **tóm tắt** (`id`, `slug`, `title`, `publishedAt`), không phải cả entry. Entry được trỏ tới cũng phải đã đăng **ở ngôn ngữ đang phục vụ**; nếu chưa, nó ra `null` (hoặc bị loại khỏi mảng). |
+| **`populate` sâu hơn một cấp** | Populate tuỳ ý sâu là cách chắc chắn nhất để một client làm sập DB bằng một URL. `populate` mở đúng một cấp và trả một **tóm tắt** (`id`, `slug`, `title`, `publishedAt`), cộng các field nhẹ bạn xin bằng `populate[field]=…` — không phải cả entry. Entry được trỏ tới cũng phải đã đăng **ở ngôn ngữ đang phục vụ**; nếu chưa, nó ra `null` (hoặc bị loại khỏi mảng). |
 | **`OR` trong filter** | v1 chỉ có `AND`. Chưa có yêu cầu thật nào cần. |
 | **Tìm kiếm toàn văn** | `filter[…][contains]` là tìm chuỗi con, không phải FTS. |
 | **Rate limit** | Chưa có. Trần payload có (`pageSize` 100, `populate` 5 và một cấp), nhưng không có trần theo IP. Nếu mở ra Internet cho một app thật thì nên đặt ở tầng trước (CDN/nginx), không ở route. |

@@ -60,7 +60,7 @@ import { applyEntryLocale } from './i18n';
 import { seoKeyOf } from './seo';
 import type { PublicErrorCode } from './public-headers';
 import { parsePublicParams, type PublicParams } from './public-params';
-import { collectAssetIds, toPublicData, type AssetTable } from './public-shape';
+import { collectAssetIds, toPublicData, type AssetTable, type ShapeOpts } from './public-shape';
 import { getCollectionTypes } from './queries';
 import { buildEntryFindArgs, localizedSlugWheres, publishWhere } from './query-build';
 
@@ -75,6 +75,8 @@ interface Shape {
   slugField: string | null;
   fields: FieldDef[];
   groups: GroupTable;
+  /** Cấu trúc của loại khác theo khoá — cho `populate[field]=…`, nơi field thuộc loại đích. */
+  schemaOf: (typeKey: string) => FieldDef[] | undefined;
 }
 
 /**
@@ -110,6 +112,7 @@ async function shapeOf(typeKey: string): Promise<Shape | null> {
     slugField: type.slugField,
     fields: type.schema,
     groups,
+    schemaOf: (k) => types.find((t) => t.key === k)?.schema,
   };
 }
 
@@ -220,6 +223,16 @@ export interface RelationSummary {
 }
 
 /**
+ * Một bản ghi đích đã tra: tóm tắt, cùng `data` đã phủ bản dịch để `populate[field]=…`
+ * chiếu field đã xin. `data` không bao giờ ra ngoài nguyên trạng — chỉ qua
+ * `toPublicData` với đúng danh sách field client đã xin.
+ */
+interface RelationHit {
+  summary: RelationSummary;
+  data: Record<string, unknown>;
+}
+
+/**
  * `populate` mở đúng MỘT cấp, và mở ra một TÓM TẮT chứ không phải cả entry.
  *
  * Hai trần khác nhau, cả hai đều cần. "Một cấp" chặn `populate=a.b.c` biến một URL
@@ -238,7 +251,7 @@ async function relationTable(
   populate: string[],
   now: Date,
   locale: string | undefined,
-): Promise<Record<string, RelationSummary>> {
+): Promise<Record<string, RelationHit>> {
   const relKeys = fields
     .filter((f): f is Extract<FieldDef, { t: 'relation' }> => f.t === 'relation')
     .filter((f) => populate.includes(f.key))
@@ -284,35 +297,92 @@ async function relationTable(
       return [
         r.id,
         {
-          id: r.id,
-          slug: localeSlug({ slug: r.slug, status: r.status, publishedAt: r.publishedAt }, r.locales, locale),
-          title: typeof raw === 'string' && raw.trim() ? raw : null,
-          publishedAt: (loc?.publishedAt ?? r.publishedAt)?.toISOString() ?? null,
-        } satisfies RelationSummary,
+          summary: {
+            id: r.id,
+            slug: localeSlug({ slug: r.slug, status: r.status, publishedAt: r.publishedAt }, r.locales, locale),
+            title: typeof raw === 'string' && raw.trim() ? raw : null,
+            publishedAt: (loc?.publishedAt ?? r.publishedAt)?.toISOString() ?? null,
+          },
+          data,
+        } satisfies RelationHit,
       ];
     }),
   );
 }
 
-/** Thay id bằng tóm tắt, tại chỗ, trên object đã chiếu. */
+/**
+ * Field đã xin của bản ghi đích, theo THỨ TỰ client xin — mỗi quan hệ một danh sách.
+ * Khoá không còn trong cấu trúc loại đích (field vừa bị xoá giữa hai lượt) thì bị bỏ.
+ */
+function populateDefs(shape: Shape, fields: FieldDef[], params: PublicParams): Map<string, FieldDef[]> {
+  const out = new Map<string, FieldDef[]>();
+  for (const f of fields) {
+    const asked = params.populateFields[f.key];
+    if (f.t !== 'relation' || !asked) continue;
+    const target = shape.schemaOf(f.typeKey) ?? [];
+    out.set(
+      f.key,
+      asked.map((k) => target.find((t) => t.key === k)).filter((t): t is FieldDef => t !== undefined),
+    );
+  }
+  return out;
+}
+
+/**
+ * Phần `data` của bản ghi đích mà `populate[field]=…` sẽ chiếu — đầu vào cho phép gom
+ * `assetId`. Gom trên phần ĐÃ CẮT, không trên cả `data`: client xin `question` thì ảnh
+ * trong thân bài đích là một lượt tra bảng `Asset` cho thứ không ai nhận.
+ */
+function populatedDatas(
+  datas: Record<string, unknown>[],
+  defs: Map<string, FieldDef[]>,
+  table: Record<string, RelationHit>,
+): Record<string, unknown>[] {
+  const out: Record<string, unknown>[] = [];
+  for (const d of datas) {
+    for (const [key, picked] of defs) {
+      const v = d[key];
+      for (const id of Array.isArray(v) ? v : [v]) {
+        const hit = typeof id === 'string' ? table[id] : undefined;
+        if (hit) out.push(pick(hit.data, picked.map((p) => p.key)));
+      }
+    }
+  }
+  return out;
+}
+
+/**
+ * Thay id bằng bản ghi đích, tại chỗ, trên object đã chiếu: tóm tắt, cộng field đã xin
+ * nếu quan hệ được xin bằng `populate[field]=…`.
+ *
+ * Khoá tóm tắt đặt SAU field nên thắng khi trùng tên — cùng luật "khoá hệ thống thắng
+ * khoá field" ở đầu file, vì cùng lý do: `id` và `slug` là thứ client dùng để gọi lại.
+ */
 function applyPopulate(
   out: Record<string, unknown>,
   data: Record<string, unknown>,
   fields: FieldDef[],
   populate: string[],
-  table: Record<string, RelationSummary>,
+  table: Record<string, RelationHit>,
+  defs: Map<string, FieldDef[]>,
+  shaping: { groups: GroupTable; opts: ShapeOpts },
 ): void {
   for (const f of fields) {
     if (f.t !== 'relation' || !populate.includes(f.key)) continue;
+    const picked = defs.get(f.key);
+    const render = (id: unknown) => {
+      const hit = typeof id === 'string' ? table[id] : undefined;
+      if (!hit) return undefined;
+      if (!picked) return hit.summary;
+      return { ...toPublicData(hit.data, picked, shaping.groups, shaping.opts), ...hit.summary };
+    };
     const v = data[f.key];
     if (f.cardinality === 'many') {
       // Id trỏ tới bài đã gỡ bị LOẠI khỏi mảng, không thành `null`: một mảng có lỗ
       // buộc mọi client phải lọc, và bản quên lọc sẽ vỡ ở dòng render đầu tiên.
-      out[f.key] = Array.isArray(v)
-        ? v.map((id) => (typeof id === 'string' ? table[id] : undefined)).filter(Boolean)
-        : [];
+      out[f.key] = Array.isArray(v) ? v.map(render).filter(Boolean) : [];
     } else {
-      out[f.key] = typeof v === 'string' ? (table[v] ?? null) : null;
+      out[f.key] = render(v) ?? null;
     }
   }
 }
@@ -338,7 +408,7 @@ export async function readPublicList(
     return { ok: false, status: 404, error: `Không có loại nội dung "${typeKey}"`, code: 'unknown_type' };
   }
 
-  const parsed = parsePublicParams(sp, typeKey, shape.fields);
+  const parsed = parsePublicParams(sp, typeKey, shape.fields, shape.schemaOf);
   if (!parsed.ok) return { ok: false, status: 400, error: parsed.error, code: 'bad_param' };
   const { params } = parsed;
 
@@ -374,9 +444,12 @@ export async function readPublicList(
   const outFields = fieldsOf(shape, params);
   const datas = (rows as Row[]).map((r) => dataOf(r, params, seoKeyOf(shape.fields)));
 
-  const [assets, relations, iframeHosts] = await Promise.all([
-    assetsFor(datas),
-    relationTable(datas, outFields, params.populate, now, params.locale),
+  // Bản ghi đích TRƯỚC bảng asset: ảnh của field đích đã xin phải vào CÙNG lượt tra
+  // `Asset`. Không có `populate` thì `relationTable` trả ngay, không truy vấn nào.
+  const relations = await relationTable(datas, outFields, params.populate, now, params.locale);
+  const defs = populateDefs(shape, outFields, params);
+  const [assets, iframeHosts] = await Promise.all([
+    assetsFor([...datas, ...populatedDatas(datas, defs, relations)]),
     allowedEmbedHostnames(),
   ]);
 
@@ -384,12 +457,12 @@ export async function readPublicList(
     ok: true,
     payload: {
       data: (rows as Row[]).map((r, i) => {
-        const out = toPublicData(datas[i]!, outFields, shape.groups, {
-          assets,
-          format: params.format,
-          iframeHosts,
+        const opts: ShapeOpts = { assets, format: params.format, iframeHosts };
+        const out = toPublicData(datas[i]!, outFields, shape.groups, opts);
+        applyPopulate(out, datas[i]!, outFields, params.populate, relations, defs, {
+          groups: shape.groups,
+          opts,
         });
-        applyPopulate(out, datas[i]!, outFields, params.populate, relations);
         // Field nằm PHẲNG ngay trong object, không có lớp `attributes` — chính
         // Strapi v5 đã bỏ lớp đó, và bắt chước nó là bắt chước một quyết định đã
         // bị chính tác giả huỷ.
@@ -420,7 +493,7 @@ export async function readPublicOne(
   // Dùng lại đúng bộ đọc tham số của danh sách: `format`, `locale`, `populate` và
   // `fields` phải có nghĩa GIỐNG HỆT ở hai endpoint, và một bản đọc riêng ở đây là chỗ
   // để chúng lệch nhau. Phần phân trang của kết quả bị bỏ qua — vô hại.
-  const parsed = parsePublicParams(sp, typeKey, shape.fields);
+  const parsed = parsePublicParams(sp, typeKey, shape.fields, shape.schemaOf);
   if (!parsed.ok) return { ok: false, status: 400, error: parsed.error, code: 'bad_param' };
   const { params } = parsed;
 
@@ -453,14 +526,16 @@ export async function readPublicOne(
   const outFields = fieldsOf(shape, params);
   const data = dataOf(row, params, seoKeyOf(shape.fields));
 
-  const [assets, relations, iframeHosts] = await Promise.all([
-    assetsFor([data]),
-    relationTable([data], outFields, params.populate, now, params.locale),
+  const relations = await relationTable([data], outFields, params.populate, now, params.locale);
+  const defs = populateDefs(shape, outFields, params);
+  const [assets, iframeHosts] = await Promise.all([
+    assetsFor([data, ...populatedDatas([data], defs, relations)]),
     allowedEmbedHostnames(),
   ]);
 
-  const out = toPublicData(data, outFields, shape.groups, { assets, format: params.format, iframeHosts });
-  applyPopulate(out, data, outFields, params.populate, relations);
+  const opts: ShapeOpts = { assets, format: params.format, iframeHosts };
+  const out = toPublicData(data, outFields, shape.groups, opts);
+  applyPopulate(out, data, outFields, params.populate, relations, defs, { groups: shape.groups, opts });
 
   return { ok: true, payload: { data: { ...out, ...systemKeys(row, params.locale) } } };
 }

@@ -78,7 +78,7 @@ export function jsonPublic(
  *  - `not_found`    — 404, không có nội dung đó (hoặc còn nháp, hoặc hẹn giờ chưa tới
  *                     — API cố ý không phân biệt ba ca này).
  */
-export type PublicErrorCode = 'bad_param' | 'unknown_type' | 'not_found';
+export type PublicErrorCode = 'bad_param' | 'unknown_type' | 'not_found' | 'unknown_view' | 'view_invalid';
 
 /**
  * Lỗi cũng phải mang CORS.

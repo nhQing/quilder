@@ -31,6 +31,30 @@ export const MAX_PAGE_SIZE = 100;
 const DEFAULT_PAGE_SIZE = 20;
 /** Trần `populate`: sâu MỘT cấp, và không quá ngần này field. */
 export const MAX_POPULATE = 5;
+/** Trần số field xin cho MỘT quan hệ ở dạng `populate[field]=a,b`. */
+export const MAX_POPULATE_FIELDS = 10;
+
+/**
+ * Kiểu field của bản ghi ĐÍCH xin được qua `populate[field]=…`.
+ *
+ * Danh sách trắng, không phải danh sách đen: kiểu field mới thêm vào `FieldDef` mặc
+ * định KHÔNG đi qua đây cho tới khi có người cân nó. Bị loại có lý do:
+ *
+ *  - `richdoc`, `html`: thân bài, vài chục KB mỗi cái — đúng thứ mà "tóm tắt" của
+ *    `populate` tồn tại để không kéo theo một danh sách 100 bài.
+ *  - `group`, `blocks`, `json`: không có trần kích thước.
+ *  - `relation`: cấp thứ hai, tức một cây join từ một URL.
+ *  - `taxonomy`: không sống trong `data` (xem `toPublicData`).
+ *  - `seo`: dữ liệu cho thẻ meta của trang đích, không phải nội dung để hiện kèm.
+ *
+ * `richtext` ĐƯỢC nhận: nó là một dòng chữ có định dạng (câu trả lời FAQ, mô tả ngắn),
+ * không có tầng khối.
+ */
+export const POPULATE_FIELD_TYPES: ReadonlySet<FieldDef['t']> = new Set([
+  'text', 'richtext', 'number', 'boolean', 'date', 'enum', 'image', 'file', 'link', 'slug',
+]);
+
+const POPULATE_RE = /^populate\[([a-z][a-z0-9_]*)\]$/;
 
 const OPS: readonly FilterOp[] = ['eq', 'ne', 'gt', 'gte', 'lt', 'lte', 'contains'];
 
@@ -59,6 +83,12 @@ export interface PublicParams {
   locale?: string;
   format: 'json' | 'html';
   populate: string[];
+  /**
+   * Field của bản ghi ĐÍCH mà client xin, theo khoá quan hệ — chỉ có cho quan hệ xin
+   * bằng dạng `populate[field]=a,b`. Quan hệ xin bằng dạng phẳng `populate=field`
+   * vắng mặt ở đây và ra tóm tắt như cũ.
+   */
+  populateFields: Record<string, string[]>;
   /**
    * `undefined` = mọi field của schema (không có `?fields=`).
    *
@@ -94,10 +124,16 @@ function coerce(f: FieldDef, raw: string): string | number | boolean {
   return raw;
 }
 
+/**
+ * `targetFields` tra cấu trúc của loại ĐÍCH theo khoá — cần cho dạng
+ * `populate[field]=a,b`, nơi tên field thuộc về loại khác loại đang đọc. Vắng nó thì
+ * dạng ấy bị 400 thay vì đi qua không kiểm.
+ */
 export function parsePublicParams(
   sp: URLSearchParams,
   typeKey: string,
   fields: FieldDef[],
+  targetFields?: (typeKey: string) => FieldDef[] | undefined,
 ): ParamsResult {
   const byKey = new Map(fields.map((f) => [f.key, f]));
 
@@ -167,6 +203,51 @@ export function parsePublicParams(
 
   // ── populate: CHỈ field relation, sâu MỘT cấp
   const populate = (sp.get('populate') ?? '').split(',').map((s) => s.trim()).filter(Boolean);
+
+  /*
+   * Dạng `populate[field]=a,b`: field của bản ghi đích, ngoài tóm tắt.
+   *
+   * Trước khi có nhánh này, `populate[author]=name` không khớp khoá nào và bị BỎ QUA —
+   * 200, trả id trần, đúng cái "nhận rồi im lặng" mà file này từ chối ở mọi chỗ khác.
+   */
+  const populateFields: Record<string, string[]> = {};
+  for (const [key, value] of sp.entries()) {
+    const m = POPULATE_RE.exec(key);
+    if (!m) continue;
+    const rel = m[1]!;
+    const def = byKey.get(rel);
+    if (!def || def.t !== 'relation') {
+      return { ok: false, error: `Không populate được "${rel}" — chỉ field relation` };
+    }
+    if (populate.includes(rel) || rel in populateFields) {
+      return { ok: false, error: `"${rel}" được xin populate hai lần — chọn một dạng` };
+    }
+    const asked = value.split(',').map((s) => s.trim()).filter(Boolean);
+    if (!asked.length) {
+      return { ok: false, error: `populate[${rel}] cần ít nhất một field; muốn tóm tắt thì dùng populate=${rel}` };
+    }
+    if (asked.length > MAX_POPULATE_FIELDS) {
+      return { ok: false, error: `populate[${rel}] tối đa ${MAX_POPULATE_FIELDS} field` };
+    }
+    const targetSchema = targetFields?.(def.typeKey);
+    if (!targetSchema) {
+      return { ok: false, error: `Không tra được cấu trúc loại "${def.typeKey}" của "${rel}"` };
+    }
+    const targetByKey = new Map(targetSchema.map((f) => [f.key, f]));
+    for (const k of asked) {
+      const tf = targetByKey.get(k);
+      if (!tf) return { ok: false, error: `Loại "${def.typeKey}" không có field "${k}"` };
+      if (!POPULATE_FIELD_TYPES.has(tf.t)) {
+        return {
+          ok: false,
+          error: `Field "${k}" của "${def.typeKey}" là ${tf.t} — không xin được qua populate`,
+        };
+      }
+    }
+    populateFields[rel] = [...new Set(asked)];
+    populate.push(rel);
+  }
+
   if (populate.length > MAX_POPULATE) {
     return { ok: false, error: `populate tối đa ${MAX_POPULATE} field` };
   }
@@ -254,6 +335,7 @@ export function parsePublicParams(
       locale,
       format,
       populate,
+      populateFields,
       fields: sparse,
       taxonomyKey,
     },

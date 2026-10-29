@@ -66,6 +66,9 @@
   danh mục rơi về tên gốc khi chưa dịch. Tên dịch đặt ở builder (Kho dữ liệu → Danh mục) hoặc
   `set_taxonomy_locale` (cần token có quyền đăng bản dịch — lên site ngay). Trang clone tĩnh
   (thẻ bài là chữ gõ cứng) thì không đổi theo ngôn ngữ: phải dựng bằng khối lặp.
+- API công khai lấy field của bản ghi được liên kết bằng `populate[field]=a,b` (một cấp, chỉ
+  field nhẹ); app gọi bộ tham số dài qua view đặt sẵn `/api/public/v1/views/<khoá>` — admin
+  tạo ở Kho dữ liệu → View của API, AI không có tool ghi view. Xem `docs/API-PUBLIC.md` §2.5.
 - Chạy thử local với dữ liệu MaiMoney cần `QUILDER_PROJECT=maimoney`, nếu không header/menu
   của gói dự án không nạp và trông như "chưa dịch".
 - Không publish; người dùng tự bấm Publish sau khi xem bản nháp.

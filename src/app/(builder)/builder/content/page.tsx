@@ -16,6 +16,7 @@
  * nhìn đầu tiên. Xem docblock `BuilderNav` cho cả cặp.
  */
 
+import { getSession } from '@/lib/auth/guard';
 import { prisma } from '@/lib/db';
 import { getCollectionTypes } from '@/lib/collections/queries';
 import { CollectionTypeGrid } from '@/components/builder/CollectionTypeGrid';
@@ -24,7 +25,8 @@ import { PageShell } from '@/components/builder/ui/Page';
 export const dynamic = 'force-dynamic';
 
 export default async function ContentPage() {
-  const [types, groups, draftCounts, scheduledCounts] = await Promise.all([
+  const [session, types, groups, draftCounts, scheduledCounts] = await Promise.all([
+    getSession(),
     getCollectionTypes(),
     prisma.fieldGroupDef.findMany({
       // Cùng quy ước với `getCollectionTypes`: thứ tự người dùng đặt, `createdAt`
@@ -57,6 +59,7 @@ export default async function ContentPage() {
     <PageShell width="wide">
       {/* Đầu trang nằm trong `CollectionTypeGrid`: nút Sắp xếp ở đó dùng chung state với lưới. */}
       <CollectionTypeGrid
+        canManageViews={session?.role === 'admin'}
         types={types.map((t) => ({
           key: t.key, name: t.name, namePlural: t.namePlural, icon: t.icon,
           singleton: t.singleton, entryCount: t.entryCount,

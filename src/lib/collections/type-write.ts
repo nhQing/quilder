@@ -29,8 +29,12 @@ import { isUniqueCollision } from './unique-retry';
  * sẽ không bao giờ mở được bảng entry của nó — ví dụ `/builder/content/groups`
  * luôn trỏ vào màn cấu trúc nhóm, không bao giờ vào bảng entry của loại
  * `groups`. Chặn ở đây, lúc tạo, rẻ hơn nhiều so với đổi hình dạng URL sau này.
+ *
+ * `views` cùng lý do, ở ba chỗ một lúc: `/builder/content/views` (màn quản lý view),
+ * `/api/collections/views` và `/api/public/v1/views/[viewKey]` — chỗ cuối là đường gọi
+ * của app, nên một loại tên `views` sẽ không bao giờ gọi được qua API công khai.
  */
-const RESERVED_TYPE_KEYS = new Set(['types', 'taxonomies', 'groups']);
+const RESERVED_TYPE_KEYS = new Set(['types', 'taxonomies', 'groups', 'views']);
 
 export async function createCollectionType(args: {
   key: string;

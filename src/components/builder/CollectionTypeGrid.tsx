@@ -41,7 +41,16 @@ export interface GroupCard {
   key: string; name: string; icon: string | null; fieldCount: number; usedBy: number;
 }
 
-export function CollectionTypeGrid({ types, groups }: { types: TypeCard[]; groups: GroupCard[] }) {
+export function CollectionTypeGrid({
+  types,
+  groups,
+  canManageViews = false,
+}: {
+  types: TypeCard[];
+  groups: GroupCard[];
+  /** Admin thấy lối vào màn View của API; người khác không — route đó chỉ cho admin. */
+  canManageViews?: boolean;
+}) {
   const router = useRouter();
   const [newOpen, setNewOpen] = useState(false);
   const [name, setName] = useState('');
@@ -187,15 +196,22 @@ export function CollectionTypeGrid({ types, groups }: { types: TypeCard[]; group
         title="Kho dữ liệu"
         description="Bản ghi có cấu trúc như tin tức, FAQ, sống độc lập với trang. Đăng bài không cần publish release."
         actions={
-          canSort && (
-            <Button
-              variant={sorting ? 'primary' : 'secondary'}
-              icon={sorting ? 'check' : 'sliders'}
-              onClick={() => setSorting((v) => !v)}
-            >
-              {sorting ? 'Xong' : 'Sắp xếp'}
-            </Button>
-          )
+          <>
+            {canManageViews && (
+              <ButtonLink href="/builder/content/views" icon="link">
+                View của API
+              </ButtonLink>
+            )}
+            {canSort && (
+              <Button
+                variant={sorting ? 'primary' : 'secondary'}
+                icon={sorting ? 'check' : 'sliders'}
+                onClick={() => setSorting((v) => !v)}
+              >
+                {sorting ? 'Xong' : 'Sắp xếp'}
+              </Button>
+            )}
+          </>
         }
       />
 

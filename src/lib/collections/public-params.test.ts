@@ -185,3 +185,72 @@ describe('parsePublicParams', () => {
     expect(r.ok && r.params.query.filter).toHaveLength(2);
   });
 });
+
+describe('parsePublicParams — populate[field]=… chọn field của bản ghi đích', () => {
+  const TEAM: FieldDef[] = [
+    { t: 'text', key: 'name', label: 'Tên' },
+    { t: 'number', key: 'price', label: 'Giá' },
+    { t: 'image', key: 'photo', label: 'Ảnh' },
+    { t: 'richtext', key: 'bio', label: 'Tiểu sử' },
+    { t: 'richdoc', key: 'body', label: 'Bài' },
+    { t: 'relation', key: 'boss', label: 'Sếp', typeKey: 'team', cardinality: 'one' },
+  ];
+  const target = (k: string) => (k === 'team' ? TEAM : undefined);
+  const q = (qs: string) => parsePublicParams(new URLSearchParams(qs), 'news', FIELDS, target);
+
+  it('nhận danh sách field của loại ĐÍCH, giữ thứ tự đã xin', () => {
+    const r = q('populate[author]=photo,name');
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.params.populate).toEqual(['author']);
+    expect(r.params.populateFields).toEqual({ author: ['photo', 'name'] });
+  });
+
+  it('dạng phẳng cũ vẫn chạy và không mang danh sách field', () => {
+    const r = q('populate=author');
+    expect(r.ok && r.params.populateFields).toEqual({});
+  });
+
+  it('field không có ở loại đích bị 400, kèm tên loại đích', () => {
+    const r = q('populate[author]=nam');
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.error).toContain('"nam"');
+    expect(r.error).toContain('team');
+  });
+
+  it('richtext nhận được; richdoc bị từ chối vì là thân bài', () => {
+    expect(q('populate[author]=bio').ok).toBe(true);
+    expect(q('populate[author]=body').ok).toBe(false);
+  });
+
+  it('không mở cấp thứ hai: field relation của bản ghi đích bị từ chối', () => {
+    expect(q('populate[author]=boss').ok).toBe(false);
+  });
+
+  it('khoá ngoặc phải là field relation của loại đang đọc', () => {
+    expect(q('populate[title]=name').ok).toBe(false);
+    expect(q('populate[nope]=name').ok).toBe(false);
+  });
+
+  it('một field xin bằng cả hai dạng là mâu thuẫn', () => {
+    expect(q('populate=author&populate[author]=name').ok).toBe(false);
+  });
+
+  it('danh sách field rỗng bị 400 — không lặng lẽ thành tóm tắt', () => {
+    expect(q('populate[author]=').ok).toBe(false);
+  });
+
+  it('quá 10 field cho một quan hệ bị từ chối', () => {
+    expect(q(`populate[author]=${Array(11).fill('name').join(',')}`).ok).toBe(false);
+  });
+
+  it('vẫn phải nằm trong fields khi client đã xin fields', () => {
+    expect(q('fields=title&populate[author]=name').ok).toBe(false);
+    expect(q('fields=title,author&populate[author]=name').ok).toBe(true);
+  });
+
+  it('không có bảng tra loại đích thì dạng ngoặc bị từ chối, không bỏ qua', () => {
+    expect(p('populate[author]=name').ok).toBe(false);
+  });
+});

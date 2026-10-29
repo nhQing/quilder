@@ -196,12 +196,18 @@ export interface PublicAsset {
   alt: string | null;
 }
 
-/** Tóm tắt một entry được \`?populate=\` mở ra. Một cấp, không sâu hơn. */
+/**
+ * Tóm tắt một entry được \`?populate=\` mở ra. Một cấp, không sâu hơn.
+ *
+ * Xin bằng \`?populate[field]=a,b\` thì object có thêm đúng các field đó của loại đích —
+ * kiểu của chúng là kiểu field của loại đích, nên ở đây để mở.
+ */
 export interface RelationSummary {
   id: string;
   slug: string;
   title: string | null;
   publishedAt: string | null;
+  [field: string]: unknown;
 }
 
 /** Chưa \`populate\` là id; đã \`populate\` là tóm tắt. */
@@ -272,7 +278,7 @@ export interface OneResponse<T> {
 /** Lỗi. Rẽ nhánh theo \`code\` (tập đóng), KHÔNG theo câu tiếng Việt trong \`error\`. */
 export interface PublicError {
   error: string;
-  code: 'bad_param' | 'unknown_type' | 'not_found';
+  code: 'bad_param' | 'unknown_type' | 'not_found' | 'unknown_view' | 'view_invalid';
 }
 
 /** Hình dạng khi gọi \`?format=html\`: cây chữ thành chuỗi HTML. */

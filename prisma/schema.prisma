@@ -1326,3 +1326,29 @@ model AuditLog {
 
   @@index([targetId, createdAt])
 }
+
+/**
+ * View của API công khai: một đường gọi ngắn `/api/public/v1/views/<key>` mà server tự
+ * bung ra một query đầy đủ (`query`) trên loại `typeKey`. Chỉ admin tạo và sửa.
+ *
+ * Xem `src/lib/collections/api-view.ts` cho luật gộp tham số của client.
+ */
+model ApiView {
+  id        String   @id @default(cuid())
+  /**
+   * Đoạn URL mà app gọi. Đổi nó là làm chết mọi bản app đang chạy — màn quản lý cảnh
+   * báo điều đó, nhưng không khoá: admin là người duy nhất ghi được bảng này.
+   */
+  key       String   @unique
+  name      String
+  typeKey   String
+  /** Query string chuẩn hoá (không có `?`), ví dụ `fields=title,faq&populate[faq]=question`. */
+  query     String   @default("")
+  /** Nhóm tham số client được gửi kèm — tập con của `VIEW_CLIENT_PARAMS`. */
+  allow     String[] @default([])
+  /** Ghi chú cho người đọc màn quản lý: app nào gọi, màn nào. Không ra API. */
+  note      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  updatedBy String?
+}
