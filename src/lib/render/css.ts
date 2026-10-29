@@ -664,12 +664,17 @@ export function compileDoc(doc: Doc, components?: ComponentTrees): CompiledCss {
   }
 
   // 3b — state do effect điều khiển (kết quả của R1: header.is-collapsed/is-inverted)
+  //
+  // Cờ trên chính node HOẶC trên một tổ tiên đều áp: effect gắn ở node cha (header,
+  // một bước của `steps`) ghi cờ một lần, và các node bên trong style theo nó mà
+  // không cần effect ghi cờ xuống từng con. Hai dạng cùng độ ưu tiên (0,2,0).
   for (const n of nodes) {
     const states = n.style.states;
     if (!states) continue;
     for (const name of Object.keys(states).sort()) {
       const layer = states[name];
-      if (layer) parts.push(rule(sel(n.id, `[data-${name}="true"]`), declarations(layer), '  '));
+      const flag = `[data-${name}="true"]`;
+      if (layer) parts.push(rule(`${sel(n.id, flag)}, ${flag} ${sel(n.id)}`, declarations(layer), '  '));
     }
   }
 
@@ -728,9 +733,15 @@ export function compileDoc(doc: Doc, components?: ComponentTrees): CompiledCss {
       if (!states) continue;
       for (const name of Object.keys(states).sort()) {
         const layer = states[name];
+        const flag = `[data-${name}="true"]`;
         if (layer) {
+          // Dạng tổ tiên dùng scope MỘT compound — xem `componentCustomScope`.
           parts.push(
-            rule(selIn(componentId, cn.id, `[data-${name}="true"]`), declarations(layer), '  '),
+            rule(
+              `${selIn(componentId, cn.id, flag)}, ${flag} ${componentCustomScope(componentId, cn.id)}`,
+              declarations(layer),
+              '  ',
+            ),
           );
         }
       }

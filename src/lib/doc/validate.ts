@@ -715,17 +715,25 @@ export async function validateOps(
         if (typeof op.target === 'string') break;
         const state = op.target.state;
 
-        // Effect đang gắn: cái đã có trong doc, CỘNG cái được attach bởi một op
-        // đứng trước trong cùng batch. Không cộng phần thứ hai thì "gắn effect rồi
-        // style theo state của nó" — batch tự nhiên nhất — bị từ chối.
-        const attached = new Set((doc.nodes[op.nodeId]?.effects ?? []).map((e) => e.effect));
+        // Effect đang gắn trên node HOẶC một tổ tiên: `css.ts` phát state cho cả
+        // dạng cờ-trên-tổ-tiên, nên node bên trong style được theo state mà effect
+        // của node cha ghi. Cộng cả effect được attach bởi một op đứng trước trong
+        // cùng batch — không cộng thì "gắn effect rồi style theo state của nó",
+        // batch tự nhiên nhất, bị từ chối.
+        const chain: string[] = [];
+        for (let id: string | null | undefined = op.nodeId; id && !chain.includes(id); ) {
+          chain.push(id);
+          id = doc.nodes[id]?.parentId;
+        }
+        const attached = new Set<string>();
+        for (const id of chain) for (const e of doc.nodes[id]?.effects ?? []) attached.add(e.effect);
         const inBatch = new Set<string>();
         for (const earlier of ops.slice(0, index)) {
-          if (earlier.op === 'attachEffect' && earlier.nodeId === op.nodeId) {
+          if (earlier.op === 'attachEffect' && chain.includes(earlier.nodeId)) {
             inBatch.add(earlier.attachment.effect);
           }
-          if (earlier.op === 'detachEffect' && earlier.nodeId === op.nodeId) {
-            const gone = (doc.nodes[op.nodeId]?.effects ?? [])
+          if (earlier.op === 'detachEffect' && chain.includes(earlier.nodeId)) {
+            const gone = (doc.nodes[earlier.nodeId]?.effects ?? [])
               .find((e) => e.id === earlier.instanceId)?.effect;
             if (gone) attached.delete(gone);
           }
@@ -735,7 +743,7 @@ export async function validateOps(
         if (!keys.length) {
           add(
             'state-no-effect',
-            `Node ${op.nodeId} không gắn effect nào, nên không có state "${state}". ` +
+            `Node ${op.nodeId} và các tổ tiên không gắn effect nào, nên không có state "${state}". ` +
               'State đến từ effect: gắn effect trước (attachEffect), rồi style theo ' +
               'state mà nó khai trong statesWritten.',
           );
@@ -776,7 +784,7 @@ export async function validateOps(
 
         add(
           'unknown-state',
-          `Effect trên node ${op.nodeId} không ghi state "${state}". ` +
+          `Effect trên node ${op.nodeId} và các tổ tiên không ghi state "${state}". ` +
             (allowed.size
               ? `State hợp lệ: ${[...allowed].sort().join(', ')}.`
               : `${keys.join(', ')} không ghi state nào.`),

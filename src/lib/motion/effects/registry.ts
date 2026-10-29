@@ -73,6 +73,11 @@ export const CORE_EFFECTS: Record<string, Entry> = {
     // Đổi trạng thái theo cú bấm, không phải chuyển động.
     gates: { respectReducedMotion: false },
   },
+  steps: {
+    load: () => import('./steps'),
+    // Đổi trạng thái theo cú bấm, không phải chuyển động.
+    gates: { respectReducedMotion: false },
+  },
   'nav-invert': {
     load: () => import('./nav-invert'),
     gates: { respectReducedMotion: false },

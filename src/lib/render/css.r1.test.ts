@@ -127,6 +127,8 @@ describe('R1 — tái tạo .header__pill bằng generated CSS', () => {
 
   it('state collapsed compile ra selector data-attribute', () => {
     expect(css).toContain('[data-n="pill0001"][data-collapsed="true"]');
+    // Cờ nằm trên tổ tiên cũng áp: effect gắn ở node cha ghi cờ một lần cho cả cây con.
+    expect(css).toContain('[data-collapsed="true"] [data-n="pill0001"]');
     expect(css).toContain('background-color: var(--mm-pill-bg-collapsed)');
     expect(css).toContain('pointer-events: auto');
   });

@@ -1,6 +1,6 @@
 <!-- SINH TỰ ĐỘNG bởi scripts/gen-docs.ts từ src/lib/motion/effects (EFFECT_REGISTRY + manifest của từng effect). Đừng sửa tay: chạy `pnpm docs:gen`. -->
 
-# Effect (19)
+# Effect (20)
 
 | Key | Gắn vào | Chi phí | Xung đột | State ghi ra | Params |
 |---|---|---|---|---|---|
@@ -21,5 +21,6 @@
 | `scroll-reveal` | — | light | — | `revealed` | `stagger?`, `delay?`, `rootMargin?`, `once?` |
 | `show-more` | — | light | — | `more-open` | `togglePart?`, `panelPart?`, `labelOpen?` |
 | `slider` | — | medium | `marquee`, `carousel` | `slider-ready`, `slider-begin`, `slider-end` | `preset?`, `slidesPerView?`, `spaceBetween?`, `centeredSlides?`, `grabCursor?`, `autoplay?`, `pauseOnHover?`, `disableOnInteraction?`, `reverseDirection?`, `direction?`, `breakpoints?`, `a11yLabel?`, `loop?`, `freeMode?`, `speedMs?`, `autoplayDelayMs?` |
+| `steps` | — | light | — | `step-active`, `step-inactive` | `stepPart?`, `mediaPart?`, `initial?` |
 | `tilt` | — | light | `magnetic` | `tilt-active` | `max?`, `smoothingHover?`, `smoothingRest?` |
 | `video-lazy` | `Video` | medium | — | `playing`, `video-lazy-ready` | `minWidth?` |
