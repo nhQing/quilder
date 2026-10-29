@@ -40,6 +40,19 @@
 - Dải trượt: effect `slider` (part viewport/track/slide/prev/next). Mũi tên của maimoney.com
   không bao giờ mờ ở hai đầu dải.
 - "Xem thêm / Thu gọn": effect `show-more` (part more-toggle / more-panel).
+- Hiện dần khi cuộn (framer `whileInView` của maimoney.com): `scroll-reveal` với `delay` riêng,
+  `rootMargin: "0px 0px 0px 0px"` (live kích hoạt ngay khi ló vào), và customCss
+  `html[data-reveal-ready="true"] & { opacity: 0; transform: … }` +
+  `html[data-reveal-ready="true"] &[data-revealed="true"] { opacity: 1; transform: none; transition: … }`
+  — transition đặt ở trạng thái HIỆN để lúc tải trang không lóe mờ đi. Nhịp đo được: section
+  `translateY(10px)` 0.6s, phần tử ±30px 1s, cả hai `cubic-bezier(0, 0, 0.58, 1)`; dải tin
+  `translateX(80%)` 1s. Đo bằng getComputedStyle — live chạy opacity bằng WAAPI, style nội dòng
+  không đổi giữa chừng.
+- Clone chép luôn trạng thái ẨN ban đầu của framer (`opacity: 0` + `transform` trong customCss)
+  → khối đó vô hình trên trang ta. Quét sau mỗi lần clone: phần tử có chữ mà opacity < 1.
+- Danh sách bước bấm chọn + ảnh đổi theo bước: effect `steps` (part step / step-media), state
+  `step-active` / `step-inactive`. State của effect áp cho cả cây con của node mang cờ, nên style
+  node bên trong (vòng số, tiêu đề, khung mô tả) theo state đó được.
 - SEO: `set_page_seo` (mô tả, ảnh OG, canonical, noindex — ra site NGAY), tiêu đề bằng
   `update_page`.
 - Trang chi tiết bài (`blogs/post/[slug]`, loại `news`, vai `entry`): clone một bài thật rồi
