@@ -10,6 +10,7 @@ import { notFound } from 'next/navigation';
 
 import { prisma } from '@/lib/db';
 import { getTypeShape } from '@/lib/collections/admin-queries';
+import { listAllLocales } from '@/lib/i18n/queries';
 import { TaxonomyManager } from '@/components/builder/TaxonomyManager';
 import { PageHeader, PageShell } from '@/components/builder/ui/Page';
 
@@ -24,6 +25,9 @@ export default async function TaxonomyPage({
 
   const shape = await getTypeShape(typeKey);
   if (!shape) notFound();
+
+  // Kể cả ngôn ngữ chưa bật: dịch sẵn trước khi công bố là nhịp làm việc thật.
+  const locales = (await listAllLocales()).filter((l) => !l.isDefault);
 
   const grouped = await prisma.entryTaxonomy.groupBy({
     by: ['taxonomyId'],
@@ -49,6 +53,7 @@ export default async function TaxonomyPage({
         typeName={shape.type.namePlural}
         taxonomies={shape.taxonomies}
         counts={counts}
+        locales={locales.map((l) => ({ code: l.code, label: l.label }))}
       />
     </PageShell>
   );

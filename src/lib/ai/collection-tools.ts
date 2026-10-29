@@ -20,6 +20,8 @@ import 'server-only';
  *
  *   create_entry      CÓ             — tạo bản nháp, người bấm Đăng
  *   create_taxonomy   CÓ             — danh mục là cấu trúc, không phải nội dung công khai
+ *   set_taxonomy_locale CÓ, CÓ ĐIỀU KIỆN — tên dịch lên site NGAY (không có lớp nháp),
+ *                                      nên gác bằng cùng cờ `canPublishLocale`
  *   update_entry      CÓ, CÓ ĐIỀU KIỆN — `data` chỉ sửa được khi entry đang `draft`;
  *                                      `i18n` thì không bị chặn, xem dưới
  *   set_entry_locale  CÓ, CÓ ĐIỀU KIỆN — đăng bản DỊCH cần token mang cờ
@@ -72,7 +74,7 @@ import { entryLocaleState } from '@/lib/collections/entry-locale-read';
 import { canPublishLocale } from '@/lib/auth/service-token';
 import { loadGroupTable } from '@/lib/collections/group-table';
 import { getCollectionTypes } from '@/lib/collections/queries';
-import { createTaxonomy } from '@/lib/collections/taxonomy-write';
+import { createTaxonomy, setTaxonomyLocaleName } from '@/lib/collections/taxonomy-write';
 import { prisma } from '@/lib/db';
 import { resolveRepeat } from '@/lib/collections/resolve-repeat';
 import { zRepeatSpec } from '@/lib/doc/schema';
@@ -304,7 +306,9 @@ const listTaxonomiesTool: ToolDef = {
   description:
     'Danh mục của một loại nội dung, kèm id và số bài mỗi mục.\n\n' +
     'GỌI TRƯỚC `create_entry` khi loại đó có field `taxonomy`: field ấy nhận id ' +
-    'cuid, không nhận tên. Chưa có mục cần dùng thì gọi `create_taxonomy`.',
+    'cuid, không nhận tên. Chưa có mục cần dùng thì gọi `create_taxonomy`.\n\n' +
+    '`i18n` là tên theo ngôn ngữ không mặc định (`{ en: { name } }`); đặt bằng ' +
+    '`set_taxonomy_locale`.',
   input: z.object({ typeKey: z.string().min(1) }).strict(),
   readOnly: true,
   async run(input: { typeKey: string }) {
@@ -317,7 +321,7 @@ const listTaxonomiesTool: ToolDef = {
     const rows = await prisma.taxonomy.findMany({
       where: { typeKey: input.typeKey },
       orderBy: [{ order: 'asc' }, { name: 'asc' }],
-      select: { id: true, key: true, name: true, parentId: true },
+      select: { id: true, key: true, name: true, parentId: true, i18n: true },
     });
 
     // Một `groupBy` chứ không `_count` trên quan hệ: `_count` đếm cả entry đã lưu
@@ -363,6 +367,51 @@ const createTaxonomyTool: ToolDef = {
     });
     if (!r.ok) return { ok: false, error: r.error };
     return { ok: true, taxonomyId: r.taxonomy.id, key: r.taxonomy.key };
+  },
+};
+
+/**
+ * Tên danh mục theo ngôn ngữ.
+ *
+ * Cửa quyền là `canPublishLocale`, KHÔNG phải không điều kiện như `create_taxonomy`:
+ * danh mục mới chưa ai thấy (mặc định `draft`), còn tên dịch thì hiện trên tab và huy
+ * hiệu ở `/en` ngay lần ghi — nó không có lớp nháp nào để người duyệt chặn lại. Đó
+ * đúng là việc "đăng bản dịch" mà cờ này tồn tại để gác.
+ */
+const setTaxonomyLocaleTool: ToolDef = {
+  name: 'set_taxonomy_locale',
+  title: 'Dịch tên danh mục',
+  description:
+    'Đặt tên của một danh mục ở một ngôn ngữ không mặc định (tab danh mục và huy hiệu ' +
+    'trên thẻ ở `/en`…). `name: null` gỡ bản dịch; chưa dịch thì site hiện tên gốc.\n\n' +
+    'LÊN SITE NGAY — không có bản nháp. Cần token được cấp quyền đăng bản dịch. Lấy ' +
+    '`taxonomyId` từ `list_taxonomies`, mã ngôn ngữ từ `list_locales`.',
+  input: z
+    .object({
+      taxonomyId: z.string().min(1),
+      locale: z.string().min(2).max(10),
+      name: z.string().max(120).nullable(),
+    })
+    .strict(),
+  readOnly: false,
+  async run(input: { taxonomyId: string; locale: string; name: string | null }, ctx: ToolContext) {
+    if (!(await canPublishLocale(ctx.session))) {
+      return {
+        ok: false,
+        error:
+          'Token này không có quyền đăng bản dịch, và tên danh mục dịch lên site ngay. ' +
+          'Người dùng đặt tên ở builder (Kho dữ liệu → Danh mục) — hoặc cấp token mới có ' +
+          'tích "Cho phép đăng bản dịch" ở /builder/claude.',
+      };
+    }
+    const r = await setTaxonomyLocaleName({
+      id: input.taxonomyId,
+      locale: input.locale,
+      name: input.name,
+      actorSub: ctx.session.sub,
+    });
+    if (!r.ok) return { ok: false, error: r.error };
+    return { ok: true, i18n: r.i18n };
   },
 };
 
@@ -678,6 +727,7 @@ export const COLLECTION_TOOLS: ToolDef[] = [
   resolveRepeatTool,
   listTaxonomiesTool,
   createTaxonomyTool,
+  setTaxonomyLocaleTool,
   createEntryTool,
   updateEntryTool,
   setEntryLocaleTool,

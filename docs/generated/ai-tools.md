@@ -1,6 +1,6 @@
 <!-- SINH TỰ ĐỘNG bởi scripts/gen-docs.ts từ src/lib/ai/tools.ts (TOOLS). Đừng sửa tay: chạy `pnpm docs:gen`. -->
 
-# Tool AI (41, trong đó 15 tool ghi)
+# Tool AI (42, trong đó 16 tool ghi)
 
 Phục vụ qua `GET/POST /api/ai/tool`; `mcp/server.mjs` thêm `screenshot_page` chạy tại chỗ. **Không có tool publish, rollback hay xoá** — e2e/mcp.spec.ts khoá điều đó.
 
@@ -42,6 +42,7 @@ Phục vụ qua `GET/POST /api/ai/tool`; `mcp/server.mjs` thêm `screenshot_page
 | `resolve_repeat` | đọc | `repeat?`, `entryId?` | Entry mà một cấu hình lặp (RepeatSpec) sẽ render, đọc ĐÚNG đường mà site đọc. Đây là cách duy nhất trả lời "vì sao danh sách của tôi trống": thường là bài còn nháp, mốc đăng còn ở tương lai, hoặc điều kiện danh mục cần một bài đang mở mà trang danh sách không có. Gọi tool này TRƯỚC khi kết luận cấu hình sai. Lấy RepeatSpec từ trường "repeat" của một node Instance qua get_node. |
 | `list_taxonomies` | đọc | `typeKey` | Danh mục của một loại nội dung, kèm id và số bài mỗi mục. |
 | `create_taxonomy` | **ghi** | `typeKey`, `name`, `parentId?` | Tạo một danh mục mới cho một loại nội dung. |
+| `set_taxonomy_locale` | **ghi** | `taxonomyId`, `locale`, `name` | Đặt tên của một danh mục ở một ngôn ngữ không mặc định (tab danh mục và huy hiệu trên thẻ ở `/en`…). `name: null` gỡ bản dịch; chưa dịch thì site hiện tên gốc. |
 | `create_entry` | **ghi** | `typeKey`, `data?`, `taxonomyIds?` | Tạo một entry MỚI cho một loại nội dung, ở trạng thái BẢN NHÁP. |
 | `update_entry` | **ghi** | `entryId`, `data?`, `taxonomyIds?`, `i18n?` | Sửa một entry ĐANG Ở TRẠNG THÁI NHÁP. |
 | `set_entry_locale` | **ghi** | `entryId`, `locale`, `slug?`, `status?`, `publishedAt?` | Đặt đường dẫn riêng và trạng thái đăng của MỘT ngôn ngữ cho một bài. |

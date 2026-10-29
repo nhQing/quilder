@@ -53,6 +53,7 @@ import { prisma } from '@/lib/db';
 import { allowedEmbedHostnames } from '@/lib/render/embed-origins';
 import { collectionTag, TYPES_TAG } from './cache';
 import { localeSlug, type EntryLocaleRow } from './entry-locale';
+import { taxonomyName } from './taxonomy-locale';
 import type { FieldDef, GroupTable } from './field-def';
 import { loadGroupTable } from './group-table';
 import { applyEntryLocale } from './i18n';
@@ -149,7 +150,7 @@ const SELECT = {
   id: true, slug: true, status: true, data: true, i18n: true,
   publishedAt: true, updatedAt: true,
   locales: { select: { locale: true, slug: true, status: true, publishedAt: true } },
-  taxonomies: { select: { taxonomy: { select: { key: true, name: true } } } },
+  taxonomies: { select: { taxonomy: { select: { key: true, name: true, i18n: true } } } },
 } as const;
 
 type Row = {
@@ -157,7 +158,7 @@ type Row = {
   data: unknown; i18n: unknown;
   publishedAt: Date | null; updatedAt: Date;
   locales: EntryLocaleRow[];
-  taxonomies: { taxonomy: { key: string; name: string } }[];
+  taxonomies: { taxonomy: { key: string; name: string; i18n: unknown } }[];
 };
 
 /** Chỉ giữ những field client đã xin — xem `PublicParams.fields`. */
@@ -204,7 +205,8 @@ function systemKeys(row: Row, locale: string | undefined) {
     slug: localeSlug({ slug: row.slug, status: row.status, publishedAt: row.publishedAt }, row.locales, locale),
     publishedAt: at?.toISOString() ?? null,
     updatedAt: row.updatedAt.toISOString(),
-    taxonomies: row.taxonomies.map((t) => t.taxonomy),
+    // Tên theo `?locale=` như `data`; cột `i18n` không ra ngoài.
+    taxonomies: row.taxonomies.map((t) => ({ key: t.taxonomy.key, name: taxonomyName(t.taxonomy, locale) })),
   };
 }
 

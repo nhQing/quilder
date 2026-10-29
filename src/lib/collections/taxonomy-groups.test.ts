@@ -13,7 +13,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
  */
 
 const state = vi.hoisted(() => ({
-  taxonomies: [] as { id: string; key: string; name: string }[],
+  taxonomies: [] as { id: string; key: string; name: string; i18n?: unknown }[],
+  /** Hàng `entry.findMany` trả về — rỗng ở mọi test trừ nhóm ngôn ngữ. */
+  entries: [] as unknown[],
   counts: [] as { taxonomyId: string; _count: { entryId: number } }[],
   /** `where` mà `taxonomy.findMany` nhận — để kiểm bộ lọc `published`. */
   lastTaxonomyWhere: null as unknown,
@@ -28,7 +30,10 @@ vi.mock('@/lib/db', () => ({
       }),
     },
     entryTaxonomy: { groupBy: vi.fn(async () => state.counts) },
-    entry: { findMany: vi.fn(async () => []) },
+    entry: { findMany: vi.fn(async () => state.entries) },
+    // Nhánh có `locale` đọc khoá field `seo` của mọi loại (`seoKeysFor`).
+    collectionType: { findMany: vi.fn(async () => []) },
+    fieldGroupDef: { findMany: vi.fn(async () => []) },
   },
 }));
 
@@ -51,6 +56,7 @@ beforeEach(() => {
     // t3 không có hàng nào — đúng hình dạng `groupBy` trả về cho một danh mục 0 bài.
   ];
   state.lastTaxonomyWhere = null;
+  state.entries = [];
 });
 
 const keys = (gs: { taxonomy: { key: string } }[]) => gs.map((g) => g.taxonomy.key);
@@ -108,5 +114,42 @@ describe('taxonomyGroups — thứ tự', () => {
     // mọi chữ có dấu rơi xuống cuối, và danh sách trông như chưa được sắp.
     const gs = await taxonomyGroups('faq', 5, undefined, { sort: { field: 'name', dir: 'asc' } });
     expect(keys(gs)).toEqual(['chung', 'phi', 'uu-dai']);
+  });
+});
+
+describe('taxonomyGroups — tên danh mục theo ngôn ngữ', () => {
+  beforeEach(() => {
+    state.taxonomies = [
+      { id: 't1', key: 'dau-tu', name: 'Đầu tư', i18n: { en: { name: 'Investing' } } },
+      { id: 't2', key: 'san-pham', name: 'Sản phẩm', i18n: {} },
+    ];
+    state.entries = [
+      {
+        id: 'e1', slug: 'bai-1', typeKey: 'news', data: {}, i18n: {},
+        status: 'published', publishedAt: new Date('2026-09-01'), updatedAt: new Date('2026-09-01'),
+        taxonomies: [
+          { taxonomyId: 't1', taxonomy: { key: 'dau-tu', name: 'Đầu tư', order: 0, i18n: { en: { name: 'Investing' } } } },
+        ],
+        author: { email: 'a@x', name: null, avatarAssetId: null, lockedAt: null },
+        locales: [{ locale: 'en', slug: null, status: 'published', publishedAt: new Date('2026-09-01') }],
+      },
+    ];
+  });
+
+  it('/en đọc tên đã dịch cho cả tab danh mục lẫn huy hiệu trên thẻ', async () => {
+    const gs = await taxonomyGroups('news', 5, 'en');
+    expect(gs.map((g) => g.taxonomy.name)).toEqual(['Investing', 'Sản phẩm']);
+    expect(gs[0]!.entries[0]!.taxonomies.map((t) => t.name)).toEqual(['Investing']);
+  });
+
+  it('ngôn ngữ mặc định giữ tên gốc', async () => {
+    const gs = await taxonomyGroups('news', 5);
+    expect(gs.map((g) => g.taxonomy.name)).toEqual(['Đầu tư', 'Sản phẩm']);
+    expect(gs[0]!.entries[0]!.taxonomies.map((t) => t.name)).toEqual(['Đầu tư']);
+  });
+
+  it('không lộ cột i18n ra kết quả — người dựng map field `name`, không phải bảng dịch', async () => {
+    const gs = await taxonomyGroups('news', 5, 'en');
+    expect(gs[0]!.taxonomy).toEqual({ id: 't1', key: 'dau-tu', name: 'Investing' });
   });
 });

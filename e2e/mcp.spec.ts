@@ -293,6 +293,10 @@ test.describe('AI chỉ chạm bản nháp', () => {
         // Ghi CẤU TRÚC danh mục, không phải nội dung. Không có `delete_taxonomy`:
         // xoá một mục là gỡ liên kết của mọi bài đang gắn nó, và không có đường lùi.
         'create_taxonomy',
+
+        // Tên dịch của danh mục lên site ngay (không có lớp nháp), nên tool tự gác
+        // bằng cùng cờ `canPublishLocale` như đăng bản dịch của entry.
+        'set_taxonomy_locale',
       ].sort(),
     );
 

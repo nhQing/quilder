@@ -1186,6 +1186,15 @@ model Taxonomy {
   key     String
   name    String
   /**
+   * Tên theo ngôn ngữ không mặc định: `{ "en": { "name": "Investing" } }`.
+   *
+   * Lớp phủ lên `name`, cùng khuôn với `Entry.i18n`. Chỉ phủ TÊN — `key` là bất biến
+   * và là đoạn URL của mọi ngôn ngữ. Chưa dịch thì người đọc thấy `name` (xem
+   * `taxonomy-locale.ts`). Ghi qua `setTaxonomyLocaleName`, nơi kiểm khoá locale
+   * có trong bảng `Locale`.
+   */
+  i18n    Json   @default("{}")
+  /**
    * `SetNull` chứ không `Cascade`: xoá một danh mục cha không được xoá theo cả
    * nhánh con cùng mọi liên kết của chúng. Con thành gốc là thứ sửa được bằng một
    * lần kéo; dữ liệu đã mất thì không.

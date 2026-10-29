@@ -14,6 +14,7 @@ import { toSlug } from '@/lib/builder/create-page';
 // tự chọn tag, không còn một chỗ nào để đọc và thấy đang thiếu tag nào.
 import { revalidateCollection } from './cache';
 import { isUniqueCollision } from './unique-retry';
+import { setTaxonomyName, translatedName, type TaxonomyI18n } from './taxonomy-locale';
 
 export async function createTaxonomy(args: {
   typeKey: string;
@@ -145,6 +146,65 @@ export async function setTaxonomyStatus(args: {
 
   revalidateCollection(tax.typeKey);
   return { ok: true, status: next };
+}
+
+/** Trần tên danh mục — cùng con số với `create_taxonomy`. */
+const MAX_NAME = 120;
+
+/**
+ * Đặt (hoặc gỡ, khi `name` rỗng/`null`) tên của một danh mục ở một ngôn ngữ.
+ *
+ * Khoá locale phải có trong bảng `Locale` — cùng luật với `Entry.i18n`: khoá tự do
+ * nghĩa là cột này phình bằng những ngôn ngữ site không bao giờ phục vụ. Ngôn ngữ
+ * mặc định bị từ chối vì tên gốc nằm ở cột `name`; ghi nó vào `i18n` là tạo ra một
+ * tên thứ hai mà không đường đọc nào dùng.
+ */
+export async function setTaxonomyLocaleName(args: {
+  id: string;
+  locale: string;
+  name: string | null;
+  actorSub: string;
+}): Promise<{ ok: true; i18n: TaxonomyI18n } | { ok: false; status: number; error: string }> {
+  if (args.name !== null && args.name.trim().length > MAX_NAME) {
+    return { ok: false, status: 400, error: `Tên danh mục dài quá ${MAX_NAME} ký tự` };
+  }
+
+  const tax = await prisma.taxonomy.findUnique({
+    where: { id: args.id },
+    select: { id: true, typeKey: true, key: true, i18n: true },
+  });
+  if (!tax) return { ok: false, status: 404, error: 'Không có danh mục này' };
+
+  const loc = await prisma.locale.findUnique({
+    where: { code: args.locale },
+    select: { code: true, isDefault: true },
+  });
+  if (!loc) return { ok: false, status: 400, error: `Không có ngôn ngữ '${args.locale}'` };
+  if (loc.isDefault) {
+    return { ok: false, status: 400, error: 'Ngôn ngữ mặc định dùng tên gốc của danh mục — sửa ở đó' };
+  }
+
+  const next = setTaxonomyName(tax.i18n, args.locale, args.name);
+  const before = translatedName(tax.i18n, args.locale);
+  const after = next[args.locale]?.name ?? null;
+  // Không ghi khi không đổi gì — cùng lý do với `setTaxonomyStatus`.
+  if (before === after) return { ok: true, i18n: next };
+
+  await prisma.$transaction(async (tx) => {
+    await tx.taxonomy.update({ where: { id: args.id }, data: { i18n: next } });
+    await tx.auditLog.create({
+      data: {
+        userId: args.actorSub,
+        action: after === null ? 'taxonomy.locale.clear' : 'taxonomy.locale.set',
+        targetType: 'Taxonomy',
+        targetId: args.id,
+        meta: { typeKey: tax.typeKey, key: tax.key, locale: args.locale, from: before, to: after },
+      },
+    });
+  });
+
+  revalidateCollection(tax.typeKey);
+  return { ok: true, i18n: next };
 }
 
 export async function deleteTaxonomy(args: {

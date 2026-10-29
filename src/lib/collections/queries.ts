@@ -46,6 +46,7 @@ import {
   buildEntryFindArgs, localizedSlugWheres, MAX_QUERY_LIMIT, publishWhere, type QueryContext,
 } from './query-build';
 import { localeSlug, type EntryLocaleRow } from './entry-locale';
+import { taxonomyName } from './taxonomy-locale';
 import type { TaxonomyFilter, TaxonomySort } from '@/lib/doc/types';
 import { loadGroupTable } from './group-table';
 
@@ -89,7 +90,7 @@ const SELECT = {
    * cột nữa của một bảng vài chục hàng không thêm một lượt đọc nào. Không lấy thì
    * huy hiệu danh mục phải đọc lần hai, mỗi bài một lần.
    */
-  taxonomies: { select: { taxonomyId: true, taxonomy: { select: { key: true, name: true, order: true } } } },
+  taxonomies: { select: { taxonomyId: true, taxonomy: { select: { key: true, name: true, order: true, i18n: true } } } },
   /*
    * Tác giả, join qua khoá ngoại `createdBy → User.email`.
    *
@@ -112,7 +113,8 @@ type RawEntry = {
   id: string; slug: string; typeKey: string;
   data: unknown; i18n: unknown;
   status: string; publishedAt: Date | null; updatedAt: Date;
-  taxonomies: { taxonomyId: string; taxonomy: { key: string; name: string; order: number } }[];
+  /** `i18n` tuỳ chọn: màn quản trị (`admin-queries.ts`) không chọn nó và luôn hiện tên gốc. */
+  taxonomies: { taxonomyId: string; taxonomy: { key: string; name: string; order: number; i18n?: unknown } }[];
   author: { email: string; name: string | null; avatarAssetId: string | null; lockedAt: Date | null };
   locales: EntryLocaleRow[];
 };
@@ -128,10 +130,14 @@ type RawEntry = {
  * `order` rồi `name`: cùng một luật với mọi chỗ khác đang liệt kê danh mục
  * (`previewBinding`, `taxonomyGroups`), nên thứ tự người dựng kéo trong trang
  * quản trị là thứ tự hiện ra trên site.
+ *
+ * `locale` đổi TÊN sang bản dịch (huy hiệu trên thẻ ở `/en`), không đổi `key`.
  */
-export function sortedTaxonomies(rows: RawEntry['taxonomies']) {
+export function sortedTaxonomies(rows: RawEntry['taxonomies'], locale?: string) {
   return rows
-    .map((t) => ({ id: t.taxonomyId, key: t.taxonomy.key, name: t.taxonomy.name, order: t.taxonomy.order }))
+    .map((t) => ({
+      id: t.taxonomyId, key: t.taxonomy.key, name: taxonomyName(t.taxonomy, locale), order: t.taxonomy.order,
+    }))
     .sort((a, b) => a.order - b.order || a.name.localeCompare(b.name, 'vi'))
     .map(({ id, key, name }) => ({ id, key, name }));
 }
@@ -159,7 +165,7 @@ async function seoKeysFor(locale: string | undefined): Promise<SeoKeys> {
 
 function toRow(e: RawEntry, locale: string | undefined, seoKeys: SeoKeys): EntryRow {
   const data = (e.data ?? {}) as Record<string, unknown>;
-  const taxonomies = sortedTaxonomies(e.taxonomies);
+  const taxonomies = sortedTaxonomies(e.taxonomies, locale);
   return {
     id: e.id,
     /*
@@ -527,7 +533,7 @@ export async function taxonomyGroups(
       ...(opts.filter?.published ? { status: 'published' } : {}),
     },
     orderBy: [{ order: 'asc' }, { name: 'asc' }],
-    select: { id: true, key: true, name: true },
+    select: { id: true, key: true, name: true, i18n: true },
   });
   if (!taxonomies.length) return [];
 
@@ -586,7 +592,9 @@ export async function taxonomyGroups(
   }
 
   const groups: TaxonomyGroup[] = taxonomies.map((t) => ({
-    taxonomy: t,
+    // Tên của ngôn ngữ đang phục vụ, KHÔNG kèm cột `i18n`: khối lặp map field `name`,
+    // và một bảng dịch lọt vào `data` của item là thứ người dựng sẽ thử map tới.
+    taxonomy: { id: t.id, key: t.key, name: taxonomyName(t, locale) },
     entries: byTax.get(t.id) ?? [],
     entryCount: countById.get(t.id) ?? 0,
   }));

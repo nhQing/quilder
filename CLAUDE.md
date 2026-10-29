@@ -62,4 +62,10 @@
   bìa / ảnh tác giả: `part="entry:cover"` / `"entry:author_photo"` trên node Image. Bài liên
   quan: Instance `the-tin-live` lặp nguồn `related`, `part:"slide"` để effect `slider` thấy.
 - Link clone từ live mang tiền tố `/vi/…` → site ta trả 404. Đổi về đường dẫn không tiền tố.
+- Trang `/en`: bài chỉ hiện khi bản tiếng Anh đã ĐĂNG (không rơi về tiếng Việt), còn tên
+  danh mục rơi về tên gốc khi chưa dịch. Tên dịch đặt ở builder (Kho dữ liệu → Danh mục) hoặc
+  `set_taxonomy_locale` (cần token có quyền đăng bản dịch — lên site ngay). Trang clone tĩnh
+  (thẻ bài là chữ gõ cứng) thì không đổi theo ngôn ngữ: phải dựng bằng khối lặp.
+- Chạy thử local với dữ liệu MaiMoney cần `QUILDER_PROJECT=maimoney`, nếu không header/menu
+  của gói dự án không nạp và trông như "chưa dịch".
 - Không publish; người dùng tự bấm Publish sau khi xem bản nháp.

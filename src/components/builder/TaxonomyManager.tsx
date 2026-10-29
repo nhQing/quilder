@@ -15,12 +15,19 @@
  * Một hộp xác nhận không nói hậu quả thì chỉ dạy người ta bấm Đồng ý mà không đọc.
  * Số bài lấy từ `counts` — server đã đếm, nên câu nói ra là con số thật chứ không
  * phải một lời cảnh báo chung chung.
+ *
+ * ## Tên theo ngôn ngữ
+ *
+ * Mỗi ngôn ngữ không mặc định có một ô tên ngay dưới hàng. Lưu khi rời ô (hoặc
+ * Enter), không có nút Lưu: ô trống = gỡ bản dịch, site hiện tên gốc. Tên dịch lên
+ * site NGAY — danh mục không có lớp nháp.
  */
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 import { cn } from '@/lib/builder/cn';
+import { translatedName } from '@/lib/collections/taxonomy-locale';
 import { focusRing, ui } from '@/lib/builder/ui';
 
 import { Badge } from './ui/Badge';
@@ -37,6 +44,14 @@ export interface TaxonomyRow {
   parentId: string | null;
   /** draft | published. Xem `Taxonomy.status`. */
   status: string;
+  /** `{ en: { name } }` — xem `Taxonomy.i18n`. */
+  i18n?: unknown;
+}
+
+/** Ngôn ngữ KHÔNG mặc định — mỗi cái một ô tên dưới mỗi hàng. */
+export interface TaxonomyLocale {
+  code: string;
+  label: string;
 }
 
 export function TaxonomyManager(props: {
@@ -44,6 +59,7 @@ export function TaxonomyManager(props: {
   typeName: string;
   taxonomies: TaxonomyRow[];
   counts: Record<string, number>;
+  locales: TaxonomyLocale[];
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -97,6 +113,26 @@ export function TaxonomyManager(props: {
     setBusy(false);
     if (!res.ok || !json.ok) {
       setError(json.error ?? 'Không đổi được trạng thái');
+      return;
+    }
+    router.refresh();
+  }
+
+  /** Ghi tên của một ngôn ngữ. Ô trống gửi `null` = gỡ bản dịch. */
+  async function saveLocaleName(t: TaxonomyRow, locale: string, value: string) {
+    const next = value.trim();
+    if (next === (translatedName(t.i18n, locale) ?? '')) return;
+    setBusy(true);
+    setError(null);
+    const res = await fetch(`/api/collections/taxonomies/${t.id}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ locale, name: next || null }),
+    });
+    const json = (await res.json()) as { ok?: boolean; error?: string };
+    setBusy(false);
+    if (!res.ok || !json.ok) {
+      setError(json.error ?? 'Không lưu được tên dịch');
       return;
     }
     router.refresh();
@@ -172,6 +208,20 @@ export function TaxonomyManager(props: {
             Xoá
           </Button>
         </div>
+
+        {props.locales.map((l) => (
+          <LocaleNameField
+            // Khoá theo giá trị đã lưu: lưu xong `router.refresh()` trả tên mới, và ô
+            // phải nhận nó thay vì giữ chữ người vừa gõ (đã chuẩn hoá ở server).
+            key={`${l.code}:${translatedName(t.i18n, l.code) ?? ''}`}
+            label={`Tên ${l.label} của “${t.name}”`}
+            code={l.code}
+            initial={translatedName(t.i18n, l.code) ?? ''}
+            placeholder={t.name}
+            busy={busy}
+            onSave={(v) => void saveLocaleName(t, l.code, v)}
+          />
+        ))}
       </div>
     );
   }
@@ -264,6 +314,46 @@ export function TaxonomyManager(props: {
         confirmLabel="Xoá danh mục"
         cancelLabel="Giữ lại"
         busy={busy}
+      />
+    </div>
+  );
+}
+
+/**
+ * Ô tên của một ngôn ngữ. Giữ chữ đang gõ ở state riêng của ô; lưu khi rời ô hoặc
+ * Enter. Placeholder là tên gốc — đúng thứ site hiện khi ô trống.
+ */
+function LocaleNameField({
+  label, code, initial, placeholder, busy, onSave,
+}: {
+  label: string;
+  code: string;
+  initial: string;
+  placeholder: string;
+  busy: boolean;
+  onSave: (value: string) => void;
+}) {
+  const [value, setValue] = useState(initial);
+  return (
+    <div className="flex basis-full items-center gap-2">
+      <span className="w-8 font-shell-mono text-mini text-shell-muted uppercase">{code}</span>
+      <TextField
+        size="sm"
+        label={label}
+        hideLabel
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onBlur={() => onSave(value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            onSave(value);
+          }
+        }}
+        placeholder={placeholder}
+        disabled={busy}
+        maxLength={120}
+        wrapperClassName="w-64 max-w-full"
       />
     </div>
   );
