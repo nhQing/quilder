@@ -53,6 +53,9 @@ export function init(): Lenis | null {
     syncTouch: false,
     touchMultiplier: 1.6,
     wheelMultiplier: 1,
+    // Khung có thanh cuộn riêng (overflow auto/scroll) tự cuộn bằng bánh xe; chạm đáy
+    // thì trang cuộn tiếp. Không có cờ này Lenis nuốt bánh xe và cuộn cả window.
+    allowNestedScroll: true,
     autoRaf: false,
   });
 
