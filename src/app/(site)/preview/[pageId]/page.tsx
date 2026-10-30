@@ -17,6 +17,7 @@ import {
   previewBinding,
   repeatAssetIds,
   resolveAllRepeats,
+  taxonomyBindingData,
   typeShape,
 } from '@/lib/render/collection-page';
 import { allowedEmbedHostnames } from '@/lib/render/embed-origins';
@@ -233,6 +234,9 @@ export default async function PreviewPage({
       site: await draftSiteGlobals(),
       page: { title: page.title, slug: page.slug },
       ...(binding.entry ? { collection: entryBindingData(binding.entry) } : {}),
+      ...(!binding.entry && binding.taxonomy
+        ? { collection: taxonomyBindingData(binding.taxonomy, locale) }
+        : {}),
     },
     assets,
     repeatItems: resolved.items,

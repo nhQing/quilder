@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
 import type { RepeatSpec } from '@/lib/doc/types';
-import { bindingData, itemOverrides, toDateText, toRichText, type RepeatItem } from './repeat';
+import {
+  bindingData,
+  itemOverrides,
+  taxonomyBindingData,
+  toDateText,
+  toRichText,
+  type RepeatItem,
+} from './repeat';
 
 const SPEC: RepeatSpec = {
   source: { kind: 'query', query: { typeKey: 'news', limit: 10 } },
@@ -245,5 +252,30 @@ describe('bindingData', () => {
   it('khoá ảo không có giá trị thì không đè field, không thêm khoá rỗng', () => {
     const d = bindingData({ ...ITEM, taxonomies: [] });
     expect('taxonomy' in d).toBe(false);
+  });
+});
+
+/*
+ * Trang danh mục (`blogs/[category]`): tiêu đề lớn là TÊN danh mục đang mở. Nó nằm ngoài
+ * mọi khối lặp, nên đi qua binding `collection` với cùng khoá `taxonomy` mà nhãn trên thẻ
+ * tin dùng — một khoá cho một ý, ở cả trang chi tiết lẫn trang danh mục.
+ */
+describe('taxonomyBindingData', () => {
+  const tax = { key: 'tin-tuc-mai-money', name: 'Tin Tức MaiMoney', i18n: { en: { name: 'MaiMoney News' } } };
+
+  it('tên và khoá của danh mục đang mở', () => {
+    expect(taxonomyBindingData(tax, undefined)).toEqual({
+      taxonomy: 'Tin Tức MaiMoney',
+      taxonomies: 'Tin Tức MaiMoney',
+      taxonomy_key: 'tin-tuc-mai-money',
+    });
+  });
+
+  it('trang /en đọc tên đã dịch', () => {
+    expect(taxonomyBindingData(tax, 'en').taxonomy).toBe('MaiMoney News');
+  });
+
+  it('chưa dịch thì rơi về tên gốc', () => {
+    expect(taxonomyBindingData({ key: 'dau-tu', name: 'Đầu tư' }, 'en').taxonomy).toBe('Đầu tư');
   });
 });

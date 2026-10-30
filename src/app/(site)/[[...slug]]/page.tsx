@@ -113,7 +113,7 @@ async function resolveTarget(slug: string, locale: string | undefined): Promise<
     // entry ngay dưới: một trang trống trông như hỏng, và Google index nó trước khi
     // có ai kịp nhìn thấy.
     if (!tax) return null;
-    return { page: tpl.page, entry: null, ...bases, urlTaxonomyId: tax.id, typeKey };
+    return { page: tpl.page, entry: null, ...bases, urlTaxonomyId: tax.id, taxonomy: tax, typeKey };
   }
 
   /*

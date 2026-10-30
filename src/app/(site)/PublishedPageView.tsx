@@ -15,6 +15,7 @@ import {
   relationStructuredData,
   repeatAssetIds,
   resolveAllRepeats,
+  taxonomyBindingData,
   typeShape,
 } from '@/lib/render/collection-page';
 import { loadAssets, type PublishedPage } from '@/lib/render/page';
@@ -44,6 +45,8 @@ export interface Target {
   taxonomyBase?: string;
   /** Danh mục lấy từ URL, trên trang `param:'taxonomy'`. */
   urlTaxonomyId?: string;
+  /** Chính danh mục đó — tiêu đề trang danh mục đọc tên nó qua binding `collection`. */
+  taxonomy?: { key: string; name: string; i18n?: unknown };
   /** Bản ghi đích lấy từ URL, trên trang `param:'relation'`. */
   urlRelationId?: string;
   /**
@@ -181,6 +184,10 @@ export async function PublishedPageView({
       // Trang chi tiết: binding `collection` đọc entry đang mở, kể cả NGOÀI khối lặp
       // — tiêu đề h1 và ngày đăng nằm trong template, không nằm trong một thẻ lặp.
       ...(entry ? { collection: entryBindingData(entry) } : {}),
+      // Trang danh mục: không có bài đang mở, binding `collection` đọc danh mục từ URL.
+      ...(!entry && target.taxonomy
+        ? { collection: taxonomyBindingData(target.taxonomy, localeCode) }
+        : {}),
     },
     assets,
     repeatItems: resolved.items,

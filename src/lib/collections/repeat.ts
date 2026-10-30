@@ -14,6 +14,7 @@
 
 import type { ContentOverride, NodeId, RepeatSpec, RichText } from '@/lib/doc/types';
 import { isRelationRef } from './relation-expand';
+import { taxonomyName } from './taxonomy-locale';
 
 export interface RepeatItem {
   /** Khoá React, và là id entry khi item là một entry. */
@@ -180,6 +181,21 @@ export function bindingData(item: RepeatItem): Record<string, unknown> {
     if (vk.overrideData || out[key] === undefined || out[key] === null || out[key] === '') out[key] = v;
   }
   return out;
+}
+
+/**
+ * Thứ binding `collection` đọc trên trang DANH MỤC (`param: 'taxonomy'`).
+ *
+ * Tiêu đề lớn "Tin Tức MaiMoney" nằm ngoài mọi khối lặp, nên trước đây không có cách
+ * nào hiện tên danh mục đang mở. Dùng lại đúng khoá ảo `taxonomy` / `taxonomies` của
+ * thẻ tin, để một node `bind` viết cho trang chi tiết vẫn đọc đúng ở đây.
+ */
+export function taxonomyBindingData(
+  t: { key: string; name: string; i18n?: unknown },
+  locale: string | undefined,
+): Record<string, unknown> {
+  const name = taxonomyName(t, locale);
+  return { taxonomy: name, taxonomies: name, taxonomy_key: t.key };
 }
 
 /**

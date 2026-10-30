@@ -61,6 +61,12 @@
   (`format:'date'`), `taxonomy`, `author`. Thân bài: `part="entry:body"` trên khối chứa; ảnh
   bìa / ảnh tác giả: `part="entry:cover"` / `"entry:author_photo"` trên node Image. Bài liên
   quan: Instance `the-tin-live` lặp nguồn `related`, `part:"slide"` để effect `slider` thấy.
+- Trang danh mục (`blogs/[category]`, loại `news`, vai `taxonomy`, id cmvumtdqa003mpc01pb8rg4l8):
+  tiêu đề là `{t:'bind', ref:{source:'collection', path:'taxonomy'}}` (tên danh mục trên URL,
+  theo ngôn ngữ); lưới bài là Instance `the-tin-live` lặp nguồn `query` với
+  `filter:[{k:'taxonomy', from:'url'}]`. Dải danh mục đầu trang (/blogs và trang danh mục) là
+  Instance component `muc-danh-muc-dai-tin-tuc` lặp nguồn `taxonomy` (`minEntries: 1`) — đừng
+  gõ cứng mục: khoá danh mục là bất biến, suy từ tên lúc tạo, nên link gõ tay dễ 404.
 - Link clone từ live mang tiền tố `/vi/…` → site ta trả 404. Đổi về đường dẫn không tiền tố.
 - Trang `/en`: bài chỉ hiện khi bản tiếng Anh đã ĐĂNG (không rơi về tiếng Việt), còn tên
   danh mục rơi về tên gốc khi chưa dịch. Tên dịch đặt ở builder (Kho dữ liệu → Danh mục) hoặc

@@ -61,3 +61,19 @@ describe('resolveTarget — vai relation', () => {
     expect(src).not.toContain('urlTaxonomyId: undefined');
   });
 });
+
+/*
+ * Trang danh mục `param:'taxonomy'`: tiêu đề "Tin Tức MaiMoney" là binding `collection`
+ * nằm ngoài khối lặp. Thiếu hai dây dưới đây thì nó im lặng ra chữ dự phòng ở mọi danh mục.
+ */
+describe('resolveTarget — vai taxonomy mang tên danh mục xuống binding', () => {
+  const src = [readFileSync(PAGE, 'utf8'), readFileSync(VIEW, 'utf8')].join('\n');
+
+  it('nhánh taxonomy trả cả danh mục, không chỉ id', () => {
+    expect(src).toContain('urlTaxonomyId: tax.id, taxonomy: tax,');
+  });
+
+  it('scope.collection đọc danh mục khi trang không có bài', () => {
+    expect(src).toContain('taxonomyBindingData(target.taxonomy, localeCode)');
+  });
+});

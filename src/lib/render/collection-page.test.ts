@@ -132,6 +132,29 @@ describe('resolveAllRepeats — FAQ theo danh mục', () => {
     expect(byTax?.get('t2')?.map((i) => i.key)).toEqual(['e2']);
   });
 
+  /*
+   * Bộ lọc và thứ tự của cấp ngoài phải đi tới trang, không chỉ tới API công khai.
+   * Thiếu chúng thì dải danh mục ở /blogs hiện cả mục 0 bài, bấm vào là trang trống.
+   */
+  it('cấp ngoài áp `filter.minEntries` và `sort` khai trên khối lặp', async () => {
+    const doc = faqDoc();
+    (doc.nodes.outer as { repeat: { source: object } }).repeat.source = {
+      kind: 'taxonomy',
+      typeKey: 'faq',
+      filter: { minEntries: 2 },
+    };
+    const filtered = await resolveAllRepeats(doc, {});
+    expect(filtered.groups.get('outer')?.map((g) => g.taxonomyId)).toEqual(['t1']);
+
+    (doc.nodes.outer as { repeat: { source: object } }).repeat.source = {
+      kind: 'taxonomy',
+      typeKey: 'faq',
+      sort: { field: 'count', dir: 'asc' },
+    };
+    const sorted = await resolveAllRepeats(doc, {});
+    expect(sorted.groups.get('outer')?.map((g) => g.taxonomyId)).toEqual(['t2', 't1']);
+  });
+
   it('cấp trong KHÔNG có mặt trong `items` — nó không được resolve lượt riêng', async () => {
     // Nếu một ngày nào đó nó xuất hiện ở đây, nghĩa là ai đó đã cho `group-entries`
     // đi qua `resolveRepeat`, và phép đếm ở test đầu tiên sẽ là 4 chứ không phải 2.

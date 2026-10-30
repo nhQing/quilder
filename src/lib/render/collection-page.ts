@@ -33,7 +33,7 @@ import {
   relationTargets,
   type EntryRow,
 } from '@/lib/collections/queries';
-import { bindingData, itemOverrides, type RepeatItem } from '@/lib/collections/repeat';
+import { bindingData, itemOverrides, taxonomyBindingData, type RepeatItem } from '@/lib/collections/repeat';
 import {
   expandRelations, MAX_RELATION_FANOUT, relationFields, relationIds, toRelationRef,
 } from '@/lib/collections/relation-expand';
@@ -167,7 +167,7 @@ export const taxonomyByKey = (typeKey: string, key: string) =>
     async () =>
       prisma.taxonomy.findUnique({
         where: { typeKey_key: { typeKey, key } },
-        select: { id: true, key: true, name: true },
+        select: { id: true, key: true, name: true, i18n: true },
       }),
     ['taxonomy-by-key', typeKey, key],
     { tags: [collectionTag(typeKey)], revalidate: 3600 },
@@ -255,6 +255,8 @@ export interface PreviewBinding {
   taxonomyBase?: string;
   entry?: EntryRow;
   urlTaxonomyId?: string;
+  /** Danh mục đang xem thử — binding `collection` của trang danh mục đọc tên nó. */
+  taxonomy?: { key: string; name: string; i18n?: unknown };
   /** Bản ghi đích của vai `relation`, trên trang danh mục kiểu mới. */
   urlRelationId?: string;
   /** Chữ cho dải xem trước: "đang xem với: Lãi suất tháng 8". `null` = trang thường. */
@@ -307,10 +309,10 @@ export async function previewBinding(args: {
       : await prisma.taxonomy.findFirst({
           where: { typeKey: col.typeKey },
           orderBy: [{ order: 'asc' }, { name: 'asc' }],
-          select: { id: true, key: true, name: true },
+          select: { id: true, key: true, name: true, i18n: true },
         });
     return tax
-      ? { ...bases, urlTaxonomyId: tax.id, label: `danh mục "${tax.name}"` }
+      ? { ...bases, urlTaxonomyId: tax.id, taxonomy: tax, label: `danh mục "${tax.name}"` }
       : { ...bases, label: 'chưa có danh mục nào để xem thử' };
   }
 
@@ -426,7 +428,12 @@ async function resolveEach(
         const innerSource = inner?.repeat!.source;
         const limit = innerSource && innerSource.kind === 'group-entries' ? innerSource.limit : 1;
 
-        const tree = await resolveTaxonomyTree(spec.source.typeKey, limit, ctx.locale);
+        // Cùng `filter` / `sort` mà `resolveRepeat` (API công khai) truyền: thiếu chúng
+        // thì dải danh mục trên trang hiện cả mục 0 bài mà khối lặp đã khai loại ra.
+        const tree = await resolveTaxonomyTree(spec.source.typeKey, limit, ctx.locale, {
+          filter: spec.source.filter,
+          sort: spec.source.sort,
+        });
         out.groups.set(n.id, tree.groups);
         if (inner) out.groupEntries.set(inner.id, tree.entriesByTaxonomy);
         return;
@@ -665,6 +672,7 @@ export function entryBodies(
  * (`published_at`, `taxonomy`, `author`…) — xem `bindingData`.
  */
 export const entryBindingData = (e: EntryRow) => bindingData(entryToItem(e));
+export { taxonomyBindingData };
 
 /* ── SEO của trang chi tiết ───────────────────────────────────────────── */
 

@@ -50,6 +50,10 @@ describe('preview — ngữ cảnh đi xuống resolveAllRepeats', () => {
    * `undefined` tường minh ở chỗ đáng lẽ là một id chính là hình dạng của lỗi: nó đọc
    * như "cố ý không lọc", trong khi thứ đang xảy ra là "quên truyền".
    */
+  it('trang danh mục: binding collection đọc tên danh mục đang xem thử', () => {
+    expect(src).toContain('taxonomyBindingData(binding.taxonomy, locale)');
+  });
+
   it('không chỗ nào truyền undefined tường minh cho hai ô ấy', () => {
     expect(src).not.toContain('urlRelationId: undefined');
     expect(src).not.toContain('urlTaxonomyId: undefined');
