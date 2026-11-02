@@ -1,7 +1,9 @@
 import { expect, test } from '@playwright/test';
 
 /**
- * Lát 5 của giao diện v2 — thẻ "đang chạy", `Xem` bản cũ, `Lùi một bước`.
+ * Lát 5 của giao diện v2 — dòng "đang chạy", `Xem` bản cũ, `Lùi một bước`. Thẻ tối riêng
+ * của bản đang chạy bỏ ngày 02/11/2026 (lặp y dòng đầu danh sách); dấu `data-active-release`
+ * và nút `Lùi một bước` giờ nằm trên dòng đang chạy của dòng thời gian.
  *
  * Spec này KHÔNG lùi bản. Lùi đổi thứ khách đang xem, và một e2e đổi release đang
  * chạy của chủ dự án là hỏng nặng hơn mọi thứ nó kiểm được. Nút lùi chỉ được khẳng
@@ -10,7 +12,7 @@ import { expect, test } from '@playwright/test';
  * Route xem lại thì đọc-thuần nên chạy thật được: release là bất biến.
  */
 
-test('thẻ "đang chạy" tách khỏi danh sách, và nói đủ bản nào đang chạy', async ({ page }) => {
+test('dòng "đang chạy" nói đủ bản nào đang chạy', async ({ page }) => {
   await page.goto('/builder/releases');
 
   const card = page.locator('[data-active-release]');

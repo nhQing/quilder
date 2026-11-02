@@ -17,12 +17,11 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 import { cn } from '@/lib/builder/cn';
-import { focusRing, ui, type Tone } from '@/lib/builder/ui';
+import { ui, type Tone } from '@/lib/builder/ui';
 import { when } from '@/lib/when';
 
 import { Badge } from './ui/Badge';
 import { Button, ButtonLink } from './ui/Button';
-import { Icon } from './ui/Icon';
 import { EmptyState } from './ui/Page';
 import { ConfirmDialog, Consequence, Dialog, Toast, ToastRegion } from './ui/Overlay';
 
@@ -99,9 +98,11 @@ function slugList(slugs: string[]): string {
   return slugs.length > 3 ? `${shown.join(', ')} và ${slugs.length - 3} trang khác` : shown.join(', ');
 }
 
-export function ReleaseTimeline({ releases, canPublish }: {
+export function ReleaseTimeline({ releases, canPublish, pendingCount }: {
   releases: ReleaseRow[];
   canPublish: boolean;
+  /** Số trang có bản nháp chưa lên site (`pendingWork()`). 0 = không có gì để publish. */
+  pendingCount: number;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
@@ -177,7 +178,12 @@ export function ReleaseTimeline({ releases, canPublish }: {
     }
   };
 
-  const publishAllButton = canPublish ? (
+  /*
+   * Chỉ hiện khi CÒN thứ để đẩy. Trước 02/11/2026 nút đứng đó cả khi mọi trang đã lên
+   * site — bấm vào chỉ tạo thêm một release giống hệt bản đang chạy, và người dùng hỏi
+   * "không có gì publish sao vẫn hiện".
+   */
+  const publishAllButton = canPublish && pendingCount > 0 ? (
     <Button
       variant="primary"
       icon="upload"
@@ -271,93 +277,15 @@ export function ReleaseTimeline({ releases, canPublish }: {
 
   return (
     <div className="flex flex-col gap-6">
-      {/*
-        Thẻ "đang chạy" tách khỏi danh sách.
-
-        Nhãn nhỏ trong danh sách trả lời được "bản nào đang chạy" nhưng chỉ khi người
-        đọc quét hết danh sách. Câu hỏi đầu tiên của người mở màn này lại đúng là câu
-        đó, nên nó xứng đáng một thẻ riêng ở trên cùng — cùng lý do bảng điều khiển
-        tách "Việc hôm nay" ra khỏi danh sách trang. Đây là thẻ `shell-hero` duy nhất
-        của màn.
-      */}
-      {active && (
-        <section
-          data-active-release={active.id}
-          aria-label="Bản đang chạy"
-          className="flex flex-wrap items-center gap-5 rounded-lg bg-shell-hero p-5 text-shell-on-hero shadow-shell-card"
-        >
-          <span aria-hidden className="grid size-13 shrink-0 place-items-center rounded-md bg-shell-on-hero/12">
-            <Icon name="globe" size={24} />
-          </span>
-          <div className="flex min-w-0 flex-[1_1_18rem] flex-col gap-1.5">
-            <div className="flex flex-wrap items-center gap-2.5">
-              <span className="text-section font-semibold text-balance">{active.label}</span>
-              <Badge tone="ok" dot>
-                đang chạy
-              </Badge>
-            </div>
-            <span className="text-small text-shell-hero-muted">
-              {stamp(active.createdAt)} · <span className="font-shell-mono">{active.createdBy}</span> ·{' '}
-              {active.pageCount} trang
-              {active.changedPages.length > 0 && (
-                <>
-                  {' · '}
-                  {active.changedPages
-                    .slice(0, 3)
-                    .map((p) => `${KIND_LABEL[p.kind].text} /${p.slug}`)
-                    .join(', ')}
-                  {active.changedPages.length > 3 && ` và ${active.changedPages.length - 3} trang khác`}
-                </>
-              )}
-            </span>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2">
-            <a
-              href={`/preview/release/${active.id}`}
-              target="_blank"
-              rel="noreferrer"
-              className={cn(
-                'inline-flex h-control-md items-center gap-2 rounded-md bg-shell-on-hero px-3.5 text-small font-semibold text-shell-hero transition-[filter] hover:brightness-95',
-                focusRing,
-              )}
-            >
-              Xem
-              <Icon name="external" size={16} />
-            </a>
-
-            {/*
-              `Lùi một bước` — đường thoát nhanh khi vừa publish nhầm.
-
-              Nó không làm gì mà nút "Đưa site về bản này" ở dòng dưới không làm
-              được; thứ nó tiết kiệm là phải TÌM đúng dòng trong một danh sách 30
-              bản, đúng lúc đang cuống. Vắng mặt khi bản đang chạy là bản đầu tiên —
-              không có bước nào để lùi, và một nút tối ở đó chỉ gợi ra một câu hỏi.
-            */}
-            {canPublish && oneStepBack && (
-              <Button
-                variant="secondary"
-                size="md"
-                icon="undo"
-                data-one-step-back=""
-                disabled={busy !== null}
-                loading={busy === oneStepBack.id}
-                onClick={() => setRollbackTarget(oneStepBack)}
-                title={`Đưa site về "${oneStepBack.label}"`}
-              >
-                {busy === oneStepBack.id ? 'Đang lùi…' : 'Lùi một bước'}
-              </Button>
-            )}
-          </div>
-        </section>
+      {publishAllButton && (
+        <div className={cn(ui.card, 'flex flex-wrap items-center gap-3 px-5 py-3.5')}>
+          <p className="min-w-0 flex-[1_1_22rem] text-small text-shell-muted">
+            {pendingCount} trang có bản nháp chưa lên site. Nút Publish trong từng trang chỉ đẩy
+            trang đó; nút bên phải đẩy bản nháp của mọi trang.
+          </p>
+          {publishAllButton}
+        </div>
       )}
-
-      <div className={cn(ui.card, 'flex flex-wrap items-center gap-3 px-5 py-3.5')}>
-        <p className="min-w-0 flex-[1_1_22rem] text-small text-shell-muted">
-          Nút Publish trong từng trang chỉ đẩy trang đó. Nút bên phải đẩy bản nháp của mọi trang.
-        </p>
-        {publishAllButton}
-      </div>
 
       <section aria-labelledby="releases-timeline" className="flex flex-col gap-3.5">
         <h2 id="releases-timeline" className="text-section font-semibold">
@@ -365,9 +293,10 @@ export function ReleaseTimeline({ releases, canPublish }: {
         </h2>
 
         {/*
-          Bản đang chạy CÓ MẶT trong dòng thời gian dù đã có thẻ riêng ở trên: thẻ trả
-          lời "bản nào", dòng thời gian trả lời "nó đứng ở đâu" — sau một lần lùi, bản
-          đang chạy có thể nằm giữa danh sách, và đó là thứ phải nhìn thấy được.
+          Bản đang chạy chỉ đánh dấu TRONG dòng thời gian (viền xanh, nhãn "đang chạy").
+          Trước 02/11/2026 nó còn một thẻ tối riêng ở đầu màn — lặp y nguyên dòng đầu danh
+          sách, và vì tên release là tên lần publish ("Publish /blogs/[category]") nên thẻ
+          đọc như thể chỉ một trang đang chạy. `Lùi một bước` chuyển xuống dòng này.
 
           Chấm và đường dọc là pseudo-element, không phải `<span>`: nhãn release là
           `<span>` ĐẦU TIÊN của mỗi dòng, và đó là chỗ e2e đọc nhãn bản sẽ lùi về.
@@ -376,6 +305,7 @@ export function ReleaseTimeline({ releases, canPublish }: {
           {shown.map((release) => (
             <li
               key={release.id}
+              data-active-release={release.isActive ? release.id : undefined}
               className={cn(
                 ui.card,
                 'relative flex flex-wrap items-center gap-x-4 gap-y-3 p-4',
@@ -452,6 +382,27 @@ export function ReleaseTimeline({ releases, canPublish }: {
                 >
                   Xem
                 </ButtonLink>
+
+                {/*
+                  `Lùi một bước` — đường thoát nhanh khi vừa publish nhầm, trên dòng
+                  đang chạy. Nó không làm gì mà "Đưa site về bản này" ở dòng dưới không
+                  làm được; thứ nó tiết kiệm là phải TÌM đúng dòng đúng lúc đang cuống.
+                  Vắng mặt khi bản đang chạy là bản đầu tiên — không có bước nào để lùi.
+                */}
+                {release.isActive && canPublish && oneStepBack && (
+                  <Button
+                    variant="secondary"
+                    size="md"
+                    icon="undo"
+                    data-one-step-back=""
+                    disabled={busy !== null}
+                    loading={busy === oneStepBack.id}
+                    onClick={() => setRollbackTarget(oneStepBack)}
+                    title={`Đưa site về "${oneStepBack.label}"`}
+                  >
+                    {busy === oneStepBack.id ? 'Đang lùi…' : 'Lùi một bước'}
+                  </Button>
+                )}
 
                 {!release.isActive && canPublish && (
                   <Button

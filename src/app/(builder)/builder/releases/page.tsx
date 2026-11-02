@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 
 import { getSession } from '@/lib/auth/guard';
 import { can } from '@/lib/auth/session';
+import { pendingWork } from '@/lib/builder/pending-work';
 import { listReleaseTimeline } from '@/lib/builder/queries';
 import { ROLLBACK_KEEP_RELEASES, ROLLBACK_WINDOW_TEXT } from '@/lib/builder/rollback-window';
 import { PageHeader, PageShell } from '@/components/builder/ui/Page';
@@ -24,7 +25,11 @@ export default async function ReleasesPage() {
   if (!session) redirect('/builder/login?next=/builder/releases');
 
   // Dư hơn cửa sổ rollback một đoạn, để bản vừa ra khỏi cửa sổ vẫn thấy được kèm nhãn.
-  const releases = await listReleaseTimeline(ROLLBACK_KEEP_RELEASES + 20);
+  // `pendingWork()`: nút "Publish toàn site" chỉ hiện khi còn trang có bản nháp chưa lên.
+  const [releases, pending] = await Promise.all([
+    listReleaseTimeline(ROLLBACK_KEEP_RELEASES + 20),
+    pendingWork(),
+  ]);
 
   const rows: ReleaseRow[] = releases.map((r) => ({
     id: r.id,
@@ -68,7 +73,11 @@ export default async function ReleasesPage() {
       */}
       <PendingWork key={rows.find((r) => r.isActive)?.id ?? 'none'} />
 
-      <ReleaseTimeline releases={rows} canPublish={can(session.role, 'publish')} />
+      <ReleaseTimeline
+        releases={rows}
+        canPublish={can(session.role, 'publish')}
+        pendingCount={pending.length}
+      />
     </PageShell>
   );
 }

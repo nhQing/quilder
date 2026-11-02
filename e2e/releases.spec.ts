@@ -49,10 +49,10 @@ test.describe('lịch sử publish', () => {
      */
     await expect(page.locator('ol > li').getByText('đang chạy')).toHaveCount(1);
 
-    // Thẻ đầu trang (lát 5) trỏ đúng bản mà API gọi là đang chạy. Nó lặp lại nhãn
-    // trong danh sách một cách CỐ Ý — xem docblock của `ReleaseTimeline` — nên chỗ
-    // này kiểm danh tính, không kiểm số lượng.
-    await expect(page.locator('[data-active-release]')).toHaveAttribute(
+    // Dòng đang chạy trỏ đúng bản mà API gọi là đang chạy — và là dòng DUY NHẤT mang
+    // dấu đó: thẻ tối riêng ở đầu màn (lặp y dòng đầu danh sách) đã bỏ 02/11/2026.
+    await expect(page.locator('[data-active-release]')).toHaveCount(1);
+    await expect(page.locator('ol > li[data-active-release]')).toHaveAttribute(
       'data-active-release',
       active.id,
     );
@@ -133,6 +133,13 @@ test.describe('lịch sử publish', () => {
       await expect(page.getByText(/Đã publish \d+ trang/)).toBeVisible({ timeout: 30_000 });
 
       await expect(row).toHaveCount(0, { timeout: 15_000 });
+      // Hết trang chờ thì nút cũng đi: bấm nữa chỉ tạo một release giống hệt bản đang chạy.
+      // Kiểm theo API vì e2e khác chạy song song có thể vừa để lại bản nháp mới.
+      const left = (await (await request.get('/api/pages/pending')).json()).pages.length;
+      if (left === 0) {
+        await page.reload();
+        await expect(page.getByRole('button', { name: 'Publish toàn site' })).toHaveCount(0);
+      }
     } finally {
       await request.post('/api/ops', {
         data: { pageId: target.id, label: 'e2e dọn', ops: [{ op: 'removeNode', nodeId: 'e2ependingrefresh' }] },
