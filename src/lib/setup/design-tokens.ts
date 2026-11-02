@@ -16,7 +16,7 @@
  * một giá trị); token một giá trị của dự án thì nên là token tự tạo trong DB.
  */
 
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import type { PrismaClient } from '@prisma/client';
@@ -56,6 +56,22 @@ export function categorize(name: string): { category: string; group: string | nu
 }
 
 export async function importDesignTokens(prisma: PrismaClient): Promise<TokenImportResult> {
+  /*
+   * Gói được khai mà thư mục gói không có thì DỪNG, trước khi chạm DB.
+   *
+   * `projectFile` trả null cả khi gói vắng, và bước deprecated bên dưới sẽ coi mọi token
+   * của gói là "đã biến mất khỏi CSS". Đúng cái đã xảy ra 22/10/2026: stage `bootstrap`
+   * của Dockerfile không chép `projects/`, deploy v1.2.0 đánh dấu deprecated toàn bộ token
+   * của gói maimoney — không một dòng lỗi.
+   */
+  const pack = process.env.QUILDER_PROJECT?.trim();
+  if (pack && !existsSync(join(process.cwd(), 'projects', pack))) {
+    throw new Error(
+      `QUILDER_PROJECT="${pack}" nhưng không có thư mục projects/${pack} — dừng để không ` +
+        'đánh dấu deprecated mọi token của gói. Chép gói vào (Docker: stage bootstrap) rồi chạy lại.',
+    );
+  }
+
   const css = readFileSync(join(process.cwd(), TOKENS_CSS), 'utf8');
 
   /*
@@ -98,14 +114,18 @@ export async function importDesignTokens(prisma: PrismaClient): Promise<TokenImp
      *
      * `baseValue` cũng được cập nhật theo file: nó là "giá trị gốc trong
      * tokens.css", nên khi file đổi thì đích của nút "về mặc định" phải đổi theo.
+     *
+     * `deprecated: false` ở CẢ hai nhánh: token có mặt trong CSS thì đang sống. Thiếu dòng
+     * này thì một lần chạy lỗi (gói vắng) đánh dấu deprecated, và mọi lần chạy đúng sau
+     * đó vẫn để nó kẹt ở deprecated — đã xảy ra 22/10/2026.
      */
     const frozen = existing?.baseValue != null;
     await prisma.token.upsert({
       where: { name },
       create: { name, value, category, group, aiDescription: comment },
       update: frozen
-        ? { category, group, aiDescription: comment, baseValue: value }
-        : { value, category, group, aiDescription: comment },
+        ? { category, group, aiDescription: comment, baseValue: value, deprecated: false }
+        : { value, category, group, aiDescription: comment, deprecated: false },
     });
 
     if (!existing) created += 1;

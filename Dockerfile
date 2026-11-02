@@ -100,11 +100,21 @@ ENTRYPOINT ["./node_modules/.bin/prisma", "migrate", "deploy", "--schema", "./pr
 # `prisma/seed.ts` import kiểu từ `src/lib/doc/types` (tsx bỏ import kiểu, nhưng
 # đường dẫn vẫn phải phân giải được), và `scripts/create-user.ts` import
 # `hashPassword` từ `src/lib/auth/password` — cái này là RUNTIME, không phải kiểu.
+#
+# ## Vì sao cần `projects` và QUILDER_PROJECT
+#
+# `import-tokens.ts` gộp `styles/tokens.css` của gói vào danh sách token, và đánh dấu
+# deprecated mọi token tĩnh KHÔNG có trong danh sách đó. Thiếu gói ở đây thì mỗi lần
+# deploy đánh dấu deprecated toàn bộ token của gói (đã xảy ra 22/10/2026, v1.2.0).
+# Gói cũng mang script chuyển đổi một lần (`projects/<gói>/scripts/`) chạy bằng image này.
 FROM migrate AS bootstrap
 WORKDIR /app
 COPY tsconfig.json ./
 COPY src ./src
 COPY scripts ./scripts
+COPY projects ./projects
+ARG QUILDER_PROJECT=""
+ENV QUILDER_PROJECT=$QUILDER_PROJECT
 COPY --chmod=0755 scripts/bootstrap.sh ./bootstrap.sh
 ENTRYPOINT ["sh", "./bootstrap.sh"]
 
