@@ -42,10 +42,10 @@ import type { ThemeChoice } from '@/components/builder/ThemeToggle';
 export async function generateMetadata(): Promise<Metadata> {
   // Favicon của tab builder: dùng chung của web, hoặc file riêng — xem
   // `lib/builder/branding.ts`. `undefined` khi chưa có: Next khi đó không phát thẻ nào.
-  const { favicon } = await getBuilderBranding();
+  const { favicon, title } = await getBuilderBranding();
   const icon = favicon ? [{ url: favicon.url, type: favicon.mime }] : undefined;
   return {
-    title: 'Quilder',
+    title,
     // Builder không bao giờ được index. Middleware sẽ đặt thêm X-Robots-Tag ở
     // Plan 3; đây là lớp thứ nhất.
     robots: { index: false, follow: false },
@@ -91,6 +91,7 @@ export default async function BuilderLayout({ children }: { children: React.Reac
             isWriter={session?.role === 'admin' || session?.role === 'editor'}
             signedIn={Boolean(session)}
             logoUrl={branding.logoUrl}
+            title={branding.title}
           />
           <div className="flex min-w-0 flex-1 flex-col">{children}</div>
         </div>

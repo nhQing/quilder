@@ -25,6 +25,7 @@ import 'server-only';
 import { unstable_cache } from 'next/cache';
 
 import { FAVICON_MIMES } from '@/lib/assets/favicon-mimes';
+import { builderTitle, DEFAULT_BUILDER_TITLE } from '@/lib/builder/builder-title';
 import { prisma } from '@/lib/db';
 
 /** Tag revalidate — đường ghi nhận diện builder (`updateSiteSettings`) phải gọi nó. */
@@ -35,14 +36,17 @@ export interface BuilderBranding {
   logoUrl: string | null;
   /** Favicon của tab builder, `null` = không khai. */
   favicon: { url: string; mime: string } | null;
+  /** Tên builder — xem `builderTitle`. */
+  title: string;
 }
 
-const DEFAULT: BuilderBranding = { logoUrl: null, favicon: null };
+const DEFAULT: BuilderBranding = { logoUrl: null, favicon: null, title: DEFAULT_BUILDER_TITLE };
 
 const load = unstable_cache(
   async (): Promise<BuilderBranding> => {
     const site = await prisma.site.findFirst({
       select: {
+        name: true,
         faviconAssetId: true,
         builderLogoAssetId: true,
         builderFaviconAssetId: true,
@@ -65,9 +69,11 @@ const load = unstable_cache(
     const logo = site.builderLogoAssetId ? byId.get(site.builderLogoAssetId) : undefined;
     const icon = faviconId ? byId.get(faviconId) : undefined;
 
+    const logoUrl = logo?.mime.startsWith('image/') ? logo.url : null;
     return {
-      logoUrl: logo?.mime.startsWith('image/') ? logo.url : null,
+      logoUrl,
       favicon: icon && FAVICON_MIMES.has(icon.mime) ? { url: icon.url, mime: icon.mime } : null,
+      title: builderTitle({ siteName: site.name, hasLogo: logoUrl !== null }),
     };
   },
   ['builder-branding'],

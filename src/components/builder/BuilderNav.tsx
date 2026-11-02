@@ -134,6 +134,7 @@ export function BuilderNav({
   isWriter = false,
   signedIn,
   logoUrl = null,
+  title = 'Quilder',
 }: {
   theme: ThemeChoice;
   isAdmin: boolean;
@@ -142,6 +143,8 @@ export function BuilderNav({
   signedIn: boolean;
   /** Logo riêng của builder (Cài đặt → Nhận diện builder). `null` = logo Quilder. */
   logoUrl?: string | null;
+  /** Tên builder — `builderTitle`: "<Tên site> builder" khi có logo riêng, còn lại Quilder. */
+  title?: string;
 }) {
   const pathname = usePathname() ?? '';
 
@@ -189,22 +192,40 @@ export function BuilderNav({
         // khỏi vùng cuộn ngang của thanh và kéo CẢ TRANG tràn ngang ở bề rộng điện thoại.
         'max-md:relative max-md:items-center max-md:overflow-x-auto',
         'md:sticky md:top-[var(--shell-gutter)] md:h-[calc(100svh-var(--shell-nav))] md:flex-col md:overflow-y-auto',
-        rail ? 'md:w-[var(--shell-rail)] md:items-center md:px-3.5 md:py-4' : 'md:w-[var(--shell-sidebar)] md:gap-6 md:px-4 md:py-5',
+        // Logo cách menu 24px ở cả hai dạng; rail từng chỉ có `gap-1` nên logo dính sát mục đầu.
+        'md:gap-6',
+        rail ? 'md:w-[var(--shell-rail)] md:items-center md:px-3.5 md:py-4' : 'md:w-[var(--shell-sidebar)] md:px-4 md:py-5',
       )}
     >
       <Link
         href="/builder"
-        aria-label="Quilder"
-        title={rail ? 'Quilder' : undefined}
-        className={cn('flex shrink-0 items-center gap-3 rounded-md text-shell-ink', focusRing, !rail && 'md:px-2')}
+        aria-label={title}
+        title={rail ? title : undefined}
+        className={cn(
+          'flex shrink-0 items-center gap-3 rounded-md text-shell-ink',
+          focusRing,
+          !rail && 'md:px-2',
+          // Logo riêng rộng 120px: tên không còn chỗ đứng BÊN CẠNH trong thanh 15,5rem, nên
+          // xuống dòng dưới logo.
+          logoUrl && !rail && 'md:flex-col md:items-start md:gap-2',
+        )}
       >
         {logoUrl ? (
-          /* Logo riêng trên ô TRẮNG viền mảnh: không biết trước nó màu gì, nên không đặt
-             nó lên nền accent (logo xanh sẽ chìm) hay nền tối của theme tối. */
-          <span className="grid size-11 shrink-0 place-items-center overflow-hidden rounded-md border border-shell-line bg-white p-1">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={logoUrl} alt="" className="max-h-full max-w-full object-contain" />
-          </span>
+          /* Logo riêng trên nền TRẮNG viền mảnh: không biết trước nó màu gì, nên không đặt
+             nó lên nền accent (logo xanh sẽ chìm) hay nền tối của theme tối.
+             Thanh mở rộng: RỘNG 120px, cao tự động (26/10/2026 — user). Thanh thu gọn và
+             điện thoại: ô vuông 44px như các mục menu. */
+          rail ? (
+            <span className="grid size-11 shrink-0 place-items-center overflow-hidden rounded-md border border-shell-line bg-white p-1">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={logoUrl} alt="" className="max-h-full max-w-full object-contain" />
+            </span>
+          ) : (
+            <span className="grid shrink-0 place-items-center overflow-hidden rounded-md border border-shell-line bg-white p-1 max-md:size-11 md:p-1.5">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={logoUrl} alt="" className="block max-h-full max-w-full object-contain md:h-auto md:w-[120px] md:max-w-none" />
+            </span>
+          )
         ) : (
           <span className="grid size-11 shrink-0 place-items-center rounded-md bg-shell-accent">
             {/* Logo một màu trắng của Quilder (public/brand). SVG tĩnh: next/image
@@ -213,12 +234,15 @@ export function BuilderNav({
             <img src="/brand/quilder-symbol-white.svg" alt="" className="h-auto w-8" />
           </span>
         )}
-        {!rail && (
-          <span className="flex flex-col leading-tight max-md:hidden">
-            <b className="text-card font-bold">Quilder</b>
-            <span className="text-small text-shell-muted">Builder</span>
-          </span>
-        )}
+        {!rail &&
+          (logoUrl ? (
+            <b className="text-small leading-tight font-semibold max-md:hidden">{title}</b>
+          ) : (
+            <span className="flex flex-col leading-tight max-md:hidden">
+              <b className="text-card font-bold">Quilder</b>
+              <span className="text-small text-shell-muted">Builder</span>
+            </span>
+          ))}
       </Link>
 
       <div className={cn('flex gap-1 max-md:flex-row md:flex-col', rail && 'md:items-center md:gap-2')}>

@@ -25,7 +25,7 @@ function safeNext(raw: string | null): string {
   return raw;
 }
 
-export function LoginForm() {
+export function LoginForm({ title }: { title: string }) {
   const params = useSearchParams();
   const next = safeNext(params.get('next'));
 
@@ -70,7 +70,7 @@ export function LoginForm() {
   return (
     <form onSubmit={submit} className="flex flex-col gap-5">
       <div className="flex flex-col gap-1.5">
-        <p className={ui.eyebrow}>Quilder</p>
+        <p className={ui.eyebrow}>{title}</p>
         <h1 className="text-page font-bold text-balance">Đăng nhập</h1>
       </div>
 

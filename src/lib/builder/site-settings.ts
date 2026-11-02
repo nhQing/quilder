@@ -326,8 +326,8 @@ export async function updateSiteSettings(args: {
   }
 
   // Nhận diện builder — kể cả khi chỉ favicon của WEB đổi: tab builder đang dùng chung
-  // nó thì cũng phải đổi theo.
-  if (logoGiven || builderIconGiven || useSiteGiven || faviconGiven) {
+  // nó thì cũng phải đổi theo. Tên site cũng vậy: tên builder là "<Tên site> builder".
+  if (logoGiven || builderIconGiven || useSiteGiven || faviconGiven || (name !== undefined && name.trim() !== site.name)) {
     revalidateTag(BUILDER_BRANDING_TAG);
   }
 

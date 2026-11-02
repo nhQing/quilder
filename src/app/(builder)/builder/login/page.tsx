@@ -1,6 +1,7 @@
 import { Suspense } from 'react';
 import { redirect } from 'next/navigation';
 
+import { getBuilderBranding } from '@/lib/builder/branding';
 import { prisma } from '@/lib/db';
 import { AuthScreen } from './AuthScreen';
 import { LoginForm } from './LoginForm';
@@ -35,10 +36,11 @@ async function needsSetup(): Promise<boolean> {
  */
 export default async function LoginPage() {
   if (await needsSetup()) redirect('/builder/setup');
+  const { title } = await getBuilderBranding();
   return (
     <AuthScreen>
       <Suspense>
-        <LoginForm />
+        <LoginForm title={title} />
       </Suspense>
     </AuthScreen>
   );

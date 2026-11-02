@@ -29,7 +29,7 @@ const FEATURES: { icon: IconName; text: string }[] = [
 
 export async function AuthScreen({ children }: { children: React.ReactNode }) {
   // Logo riêng của builder (màn Cài đặt → Nhận diện builder), nếu đã đặt.
-  const { logoUrl } = await getBuilderBranding();
+  const { logoUrl, title } = await getBuilderBranding();
 
   return (
     <main className="flex min-w-0 flex-1 flex-wrap gap-5">
@@ -39,11 +39,13 @@ export async function AuthScreen({ children }: { children: React.ReactNode }) {
       >
         <div className="flex items-center gap-3.5">
           {logoUrl ? (
-            /* Logo riêng nằm trên một ô TRẮNG: không biết trước nó màu gì, và một logo
-               tối trên nền xanh thương hiệu là một logo không ai thấy. */
-            <span className="grid h-14 max-w-48 place-items-center rounded-md bg-white px-2.5 py-1.5">
+            /* Logo riêng: RỘNG 120px, cao tự động (26/10/2026 — user). Bản trước ép nó vào
+               ô cao cố định 56px rộng tối đa 192px, nên logo vuông bị kéo thành ô ngang với
+               khoảng trắng lệch. Vẫn có nền TRẮNG sát quanh logo: không biết trước nó màu
+               gì, và một logo tối trên nền xanh thương hiệu là một logo không ai thấy. */
+            <span className="shrink-0 rounded-md bg-white p-2">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={logoUrl} alt="Logo" className="max-h-full w-auto max-w-full object-contain" />
+              <img src={logoUrl} alt="Logo" className="block h-auto w-[120px]" />
             </span>
           ) : (
             /* Wordmark Quilder một màu trắng (public/brand). SVG tĩnh: next/image không tối
@@ -51,10 +53,11 @@ export async function AuthScreen({ children }: { children: React.ReactNode }) {
             // eslint-disable-next-line @next/next/no-img-element
             <img src="/brand/quilder-wordmark-white.svg" alt="Quilder" className="h-12 w-auto" />
           )}
-          {/* Logo riêng là của DỰ ÁN; tên công cụ đứng cạnh để người đăng nhập biết đây là
-              trình dựng trang, không phải site. Logo mặc định đã mang chữ Quilder. */}
+          {/* Logo riêng là của DỰ ÁN; tên đứng cạnh ("<Tên site> builder") để người đăng
+              nhập biết đây là trình dựng trang, không phải site. Logo mặc định đã mang chữ
+              Quilder. */}
           {logoUrl && (
-            <span className="border-l border-current/35 pl-3 text-ui font-medium opacity-85">Quilder</span>
+            <span className="border-l border-current/35 pl-3 text-ui font-medium opacity-85">{title}</span>
           )}
         </div>
 

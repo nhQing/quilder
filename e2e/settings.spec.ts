@@ -8,6 +8,59 @@ import { expect, test } from '@playwright/test';
  * sửa màu và tra biến của chúng đi cùng.
  */
 test.describe('cài đặt chung', () => {
+  /*
+   * Nhận diện builder (26/10/2026): đặt logo riêng thì tên builder là "<Tên site> builder"
+   * — trước đó chữ "Quilder" viết cứng cạnh logo của dự án — và logo rộng 120px, cao tự
+   * động thay vì bị ép vào ô cao cố định. Chưa đặt logo riêng thì vẫn là Quilder.
+   */
+  test('nhận diện builder: logo riêng thì tên là "<Tên site> builder", logo rộng 120px', async ({
+    page,
+    request,
+    browser,
+  }) => {
+    const tool = async (name: string, input: unknown) => {
+      const res = await request.post('/api/ai/tool', { data: { tool: name, input } });
+      expect(res.ok(), `tool ${name}: ${await res.text()}`).toBe(true);
+      return (await res.json()).result;
+    };
+    const { site } = await tool('list_pages', {});
+    const { assets } = await tool('list_assets', { limit: 50 });
+    const logo = (assets as { id: string; mime: string }[]).find((a) => a.mime.startsWith('image/'));
+    expect(logo, 'site e2e không có ảnh nào để làm logo').toBeTruthy();
+
+    // Mặc định: chưa có logo riêng → Quilder.
+    await page.goto('/builder');
+    await expect(page.getByRole('link', { name: 'Quilder', exact: true })).toBeVisible();
+
+    try {
+      const res = await request.patch('/api/settings', {
+        data: { name: 'E2E Thương hiệu', builderLogoAssetId: logo!.id },
+      });
+      expect(res.ok(), await res.text()).toBe(true);
+
+      await page.reload();
+      const brand = page.getByRole('link', { name: 'E2E Thương hiệu builder', exact: true });
+      await expect(brand).toContainText('E2E Thương hiệu builder');
+      const navLogo = brand.locator('img');
+      await expect(navLogo).toBeVisible();
+      expect(Math.round(await navLogo.evaluate((el) => el.getBoundingClientRect().width))).toBe(120);
+
+      // Màn đăng nhập: context KHÔNG có phiên.
+      const anon = await browser.newContext({ storageState: { cookies: [], origins: [] } });
+      try {
+        const login = await anon.newPage();
+        await login.goto(new URL('/builder/login', page.url()).toString());
+        await expect(login.getByText('E2E Thương hiệu builder', { exact: true })).toHaveCount(2);
+        const loginLogo = login.getByRole('img', { name: 'Logo' });
+        expect(Math.round(await loginLogo.evaluate((el) => el.getBoundingClientRect().width))).toBe(120);
+      } finally {
+        await anon.close();
+      }
+    } finally {
+      await request.patch('/api/settings', { data: { name: site.name, builderLogoAssetId: null } });
+    }
+  });
+
   test('trả lời được ngôn ngữ mặc định', async ({ page }) => {
     await page.goto('/builder/settings');
 
