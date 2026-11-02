@@ -137,6 +137,7 @@ export function PageDelete({
   title,
   releaseCount,
   onRestored,
+  onPurged,
 }: {
   pageId: string;
   slug: string;
@@ -145,6 +146,8 @@ export function PageDelete({
   releaseCount: number;
   /** Gọi sau khi khôi phục xong — chỗ hiện toast. */
   onRestored?: () => void;
+  /** Gọi sau khi xoá hẳn xong — lưới gỡ thẻ ngay, không chờ `router.refresh()`. */
+  onPurged?: () => void;
 }) {
   const { busy, error, setError, call } = usePageDeleteCall(pageId);
   const [open, setOpen] = useState(false);
@@ -165,7 +168,9 @@ export function PageDelete({
 
   async function purge() {
     if (busy !== null || typed !== expected) return;
-    if (await call(PURGE)) setOpen(false);
+    if (!(await call(PURGE))) return;
+    setOpen(false);
+    onPurged?.();
   }
 
   return (

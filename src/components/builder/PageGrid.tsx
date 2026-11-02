@@ -25,7 +25,7 @@
  *
  * ## Vì sao toast nằm ở lưới, không ở thẻ
  *
- * Lưu trữ xong thì thẻ biến mất ngay ở lượt `router.refresh()` kế tiếp — toast đặt
+ * Lưu trữ xong thì thẻ biến mất ngay (xem `moved` trong `PageGrid`) — toast đặt
  * trong thẻ sẽ biến mất cùng nó, trước khi ai kịp đọc.
  *
  * ## Thẻ vừa bấm báo "đang mở"
@@ -126,8 +126,8 @@ interface ToastItem {
 }
 
 export function PageGrid({
-  pages,
-  archived,
+  pages: allPages,
+  archived: allArchived,
   types,
 }: {
   pages: PageCardData[];
@@ -144,6 +144,23 @@ export function PageGrid({
     setToasts((all) => [...all.slice(-2), { id, title, description }]);
   }, []);
   const dismiss = useCallback((id: number) => setToasts((all) => all.filter((t) => t.id !== id)), []);
+
+  /*
+   * Trang vừa lưu trữ / khôi phục / xoá hẳn ở client, theo chỗ nó vừa đến.
+   *
+   * `router.refresh()` dựng lại CẢ màn này ở server (trang, component, release, cài
+   * đặt…) — trên server thật mất vài giây, và suốt lúc đó thẻ vẫn đứng ở chỗ cũ dù dialog
+   * đã đóng. Lỗi 02/11/2026: người dùng xoá hẳn một trang, thấy thẻ còn đó, phải F5. Thẻ
+   * rời chỗ cũ NGAY khi server báo xong; chỗ mới thì đợi dữ liệu thật của lượt refresh.
+   * Thao tác sau ghi đè thao tác trước, nên lưu trữ rồi khôi phục lại vẫn hiện đúng.
+   */
+  const [moved, setMoved] = useState<ReadonlyMap<string, 'live' | 'archived' | 'gone'>>(new Map());
+  const move = useCallback(
+    (id: string, to: 'live' | 'archived' | 'gone') => setMoved((m) => new Map(m).set(id, to)),
+    [],
+  );
+  const pages = allPages.filter((p) => (moved.get(p.id) ?? 'live') === 'live');
+  const archived = allArchived.filter((p) => (moved.get(p.id) ?? 'archived') === 'archived');
 
   const count = (s: PageStatus) => pages.filter((p) => p.status === s).length;
   const tabs = [
@@ -183,16 +200,23 @@ export function PageGrid({
                 key={p.id}
                 page={p}
                 index={i}
-                onRestored={() => notify(`Đã khôi phục /${p.slug}`, 'Trang đã về lại danh sách và bảng định tuyến.')}
+                onRestored={() => {
+                  move(p.id, 'live');
+                  notify(`Đã khôi phục /${p.slug}`, 'Trang đã về lại danh sách và bảng định tuyến.');
+                }}
+                onPurged={() => {
+                  move(p.id, 'gone');
+                  notify(`Đã xoá hẳn /${p.slug}`);
+                }}
               />
             ))}
           </div>
         </>
       ) : shown.length > 0 ? (
         <div className="grid grid-cols-[repeat(auto-fill,minmax(250px,1fr))] gap-5">
-          {hero && <PageCard page={hero} index={0} hero types={types} notify={notify} />}
+          {hero && <PageCard page={hero} index={0} hero types={types} notify={notify} move={move} />}
           {rest.map((p, i) => (
-            <PageCard key={p.id} page={p} index={i} types={types} notify={notify} />
+            <PageCard key={p.id} page={p} index={i} types={types} notify={notify} move={move} />
           ))}
         </div>
       ) : active === 'all' ? (
@@ -249,12 +273,14 @@ function PageCard({
   hero,
   types,
   notify,
+  move,
 }: {
   page: PageCardData;
   index: number;
   hero?: boolean;
   types: { key: string; name: string }[];
   notify: (title: string, description?: string) => void;
+  move: (id: string, to: 'archived') => void;
 }) {
   const [dialog, setDialog] = useState<DialogKind | null>(null);
   const menu = useRef<HTMLDivElement>(null);
@@ -441,7 +467,10 @@ function PageCard({
       <PageArchiveDialog
         open={dialog === 'archive'}
         onClose={closeDialog}
-        onArchived={() => notify(`Đã lưu trữ /${page.slug}`, 'Khôi phục được ở tab Lưu trữ.')}
+        onArchived={() => {
+          move(page.id, 'archived');
+          notify(`Đã lưu trữ /${page.slug}`, 'Khôi phục được ở tab Lưu trữ.');
+        }}
         pageId={page.id}
         slug={page.slug}
         title={page.title}
@@ -490,10 +519,12 @@ function ArchivedCard({
   page,
   index,
   onRestored,
+  onPurged,
 }: {
   page: ArchivedCardData;
   index: number;
   onRestored: () => void;
+  onPurged: () => void;
 }) {
   return (
     <article className={cn(ui.card, 'flex min-w-0 flex-col gap-3.5 p-5')}>
@@ -519,6 +550,7 @@ function ArchivedCard({
           title={page.title}
           releaseCount={page.releaseCount}
           onRestored={onRestored}
+          onPurged={onPurged}
         />
       </div>
     </article>
