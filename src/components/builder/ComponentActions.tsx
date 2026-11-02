@@ -367,9 +367,8 @@ export function ComponentActions({
       </div>
       {builtin && (
         <p className={ui.hint}>
-          Component có sẵn không xoá được: lần chạy{' '}
-          <code className="font-shell-mono">extract-presets.ts</code> sau sẽ tạo lại nó. Nhân bản
-          rồi sửa bản sao.
+          Component có sẵn của hệ thống không xoá được, vì lần nạp lại bộ component có sẵn sẽ
+          tạo lại nó. Muốn đổi thì nhân bản rồi sửa bản sao.
         </p>
       )}
       <Note note={note} />

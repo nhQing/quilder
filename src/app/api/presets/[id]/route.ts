@@ -154,8 +154,8 @@ export async function DELETE(
     return NextResponse.json(
       {
         error:
-          `"${preset.name}" được trích tự động từ trang thật; xoá đi thì lần chạy `
-          + 'extract-presets.ts sau sẽ tạo lại. Nhân bản rồi sửa bản sao thì hơn.',
+          `"${preset.name}" là component có sẵn của hệ thống; xoá đi thì lần nạp lại bộ `
+          + 'component có sẵn sẽ tạo lại nó. Nhân bản rồi sửa bản sao thì hơn.',
       },
       { status: 409 },
     );

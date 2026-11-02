@@ -150,9 +150,13 @@ export function ComponentEditorShell({
 
       <ComponentNotice>
         {component.builtin && (
-          <Badge tone="warn" className="ml-auto" title="Chạy lại scripts/extract-presets.ts sẽ ghi đè mọi thay đổi ở đây.">
+          <Badge
+            tone="warn"
+            className="ml-auto"
+            title="Nếu đội kỹ thuật nạp lại bộ component có sẵn, bản gốc sẽ thay chỗ các chỉnh sửa ở đây. Muốn chắc chắn giữ thì nhân bản rồi sửa bản sao."
+          >
             <Icon name="alert" size={14} />
-            trích tự động — chạy lại extract-presets là GHI ĐÈ
+            component có sẵn — nhân bản nếu muốn giữ chỉnh sửa
           </Badge>
         )}
       </ComponentNotice>

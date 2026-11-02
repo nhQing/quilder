@@ -76,7 +76,8 @@ export default async function ComponentsPage() {
         chưa có gì và cần một đường đi.
 
         Hai đường thật, cả hai đều dùng được trên server: nút ngay phía trên, và tool
-        MCP. Script trích chỉ còn được nhắc như một ghi chú cho máy dev.
+        MCP. Script trích không được nhắc trên màn: người quản trị không chạy được nó, và
+        tên file script là thứ họ không cần biết (bỏ 02/11/2026).
       */}
       {cards.length ? (
         <ComponentLibrary items={cards} />
@@ -90,14 +91,6 @@ export default async function ComponentsPage() {
               tạo một cái trống, hoặc nhờ AI dựng qua MCP bằng tool{' '}
               <code className="font-shell-mono">create_component</code>.
             </>
-          }
-          action={
-            <p className="max-w-[52ch] text-mini text-shell-muted">
-              Trên máy dev còn một đường nữa:{' '}
-              <code className="font-shell-mono">pnpm exec tsx scripts/extract-presets.ts</code>{' '}
-              trích component từ trang thật. Lệnh đó cần mã nguồn nên không chạy được trên
-              server.
-            </p>
           }
         />
       )}

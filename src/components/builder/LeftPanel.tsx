@@ -530,15 +530,15 @@ function ComponentList({
                       onClick={() => onEdit(preset.id)}
                       title={
                         preset.builtin
-                          ? 'Component trích tự động: chạy lại scripts/extract-presets.ts sẽ GHI ĐÈ mọi thay đổi ở đây. '
-                            + 'Muốn giữ thì nhân bản rồi sửa bản sao.'
+                          ? 'Component có sẵn của hệ thống: nếu đội kỹ thuật nạp lại bộ component có sẵn, '
+                            + 'bản gốc sẽ thay chỗ các chỉnh sửa. Muốn chắc chắn giữ thì nhân bản rồi sửa bản sao.'
                           : 'Sửa cây node của component. Thay đổi áp cho MỌI trang đang dùng nó.'
                       }
                       className={cn('ml-auto', preset.builtin && 'text-shell-warn')}
                     >
                       Sửa
                       {/* Icon cảnh báo là hình; tên trợ năng phải nói được điều đó bằng chữ. */}
-                      {preset.builtin && <span className="sr-only"> (trích tự động)</span>}
+                      {preset.builtin && <span className="sr-only"> (component có sẵn)</span>}
                     </Button>
                   )}
                 </span>

@@ -193,10 +193,10 @@ export default async function ComponentDetail({
         >
           <Icon name="info" size={18} className="mt-0.5 shrink-0 text-shell-warn" />
           <p>
-            Component này được <strong className="font-semibold">trích tự động</strong> từ trang
-            thật. Chạy lại <code className="font-shell-mono">extract-presets.ts</code> sẽ ghi đè
-            mọi chỉnh sửa ở đây. Muốn giữ thay đổi thì{' '}
-            <strong className="font-semibold">Nhân bản</strong> rồi sửa bản sao.
+            Đây là <strong className="font-semibold">component có sẵn</strong> của hệ thống. Bạn
+            sửa được, nhưng nếu đội kỹ thuật nạp lại bộ component có sẵn thì bản gốc sẽ thay chỗ
+            các chỉnh sửa này. Publish hay cập nhật phiên bản không làm việc đó. Muốn chắc chắn
+            giữ thay đổi thì <strong className="font-semibold">Nhân bản</strong> rồi sửa bản sao.
           </p>
         </div>
       )}

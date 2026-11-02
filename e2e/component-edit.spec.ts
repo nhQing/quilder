@@ -39,10 +39,10 @@ test.describe('mở component ra sửa từ pane trái', () => {
     await expect(left(page).getByRole('button', { name: 'Bản sao' }).first()).toBeVisible();
     await expect(left(page).getByRole('button', { name: /^Sửa/ }).first()).toBeVisible();
 
-    // Component builtin phải CẢNH BÁO: chạy lại extract-presets là ghi đè. Dấu cảnh báo
+    // Component builtin phải CẢNH BÁO: nạp lại bộ có sẵn sẽ thay bản sửa. Dấu cảnh báo
     // là icon, nên tên trợ năng nói nó bằng chữ.
-    const warn = left(page).getByRole('button', { name: /^Sửa \(trích tự động\)/ }).first();
-    await expect(warn).toHaveAttribute('title', /GHI ĐÈ/);
+    const warn = left(page).getByRole('button', { name: /^Sửa \(component có sẵn\)/ }).first();
+    await expect(warn).toHaveAttribute('title', /bản gốc sẽ thay chỗ/);
   });
 
   test('bấm Sửa vào chế độ component, và cây node là cây CỦA component', async ({ page }) => {

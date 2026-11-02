@@ -62,8 +62,8 @@ test.describe('thư viện component', () => {
     expect(await rows.count()).toBeGreaterThan(10);
 
     // Builtin: cảnh báo phải nói rõ hậu quả, không chỉ dán nhãn.
-    await expect(page.getByText(/trích tự động/)).toBeVisible();
-    await expect(page.getByText(/sẽ ghi đè/)).toBeVisible();
+    await expect(page.getByText(/component có sẵn/).first()).toBeVisible();
+    await expect(page.getByText(/bản gốc sẽ thay chỗ/)).toBeVisible();
   });
 
   test('xem trước dựng đúng component, không phải một khung rỗng', async ({ page, request }) => {
