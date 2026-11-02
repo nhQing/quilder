@@ -349,20 +349,39 @@ const createTaxonomyTool: ToolDef = {
     'Gọi `list_taxonomies` TRƯỚC: hai mục gần trùng tên ("Tin thị trường" và ' +
     '"Thị trường") chia đôi nội dung của cùng một chủ đề, và không có gì báo.\n\n' +
     'Danh mục là CẤU TRÚC, không phải nội dung công khai — nhưng nó hiện trong form ' +
-    'nhập của mọi bài, nên đừng tạo mục rác để thử.',
+    'nhập của mọi bài, nên đừng tạo mục rác để thử.\n\n' +
+    '`key` là đoạn URL của trang danh mục và KHÔNG đổi được sau khi tạo. Bỏ trống = suy ' +
+    'từ tên (trùng thì thêm hậu tố). Chỉ đặt khi phải giữ URL của một site đang chạy; ' +
+    'khoá đặt tay mà trùng thì bị từ chối.',
   input: z
     .object({
       typeKey: z.string().min(1),
       name: z.string().min(1).max(120),
       parentId: z.string().min(1).optional().describe('Id danh mục cha, cùng loại nội dung.'),
+      key: z
+        .string()
+        .min(1)
+        .max(80)
+        .optional()
+        .describe('Khoá/đoạn URL đặt tay, ví dụ "maimoney-dau-tu". Bất biến sau khi tạo.'),
+      order: z
+        .number()
+        .int()
+        .optional()
+        .describe('Thứ tự, nhỏ đứng trước. Nhãn trên thẻ tin là danh mục ĐẦU TIÊN theo thứ tự này.'),
     })
     .strict(),
   readOnly: false,
-  async run(input: { typeKey: string; name: string; parentId?: string }, ctx: ToolContext) {
+  async run(
+    input: { typeKey: string; name: string; parentId?: string; key?: string; order?: number },
+    ctx: ToolContext,
+  ) {
     const r = await createTaxonomy({
       typeKey: input.typeKey,
       name: input.name,
       parentId: input.parentId,
+      key: input.key,
+      order: input.order,
       actorSub: ctx.session.sub,
     });
     if (!r.ok) return { ok: false, error: r.error };

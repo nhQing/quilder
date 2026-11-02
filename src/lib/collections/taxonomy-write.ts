@@ -20,10 +20,22 @@ export async function createTaxonomy(args: {
   typeKey: string;
   name: string;
   parentId?: string;
+  /**
+   * Khoá đặt tay — đoạn URL của trang danh mục, dùng NGUYÊN VĂN. Cho việc chuyển một
+   * site đang chạy sang, nơi khoá cũ khác tên (`maimoney-dau-tu` cho "Đầu Tư"). Trùng thì
+   * từ chối chứ không thêm hậu tố: hậu tố âm thầm là đúng thứ URL lệch mà ô này tồn tại
+   * để tránh.
+   */
+  key?: string;
+  /** Thứ tự; nhỏ đứng trước — và nhãn trên thẻ tin là danh mục ĐẦU TIÊN theo thứ tự này. */
+  order?: number;
   actorSub: string;
 }): Promise<{ ok: true; taxonomy: { id: string; key: string } } | { ok: false; status: number; error: string }> {
   const name = args.name.trim();
   if (!name) return { ok: false, status: 400, error: 'Thiếu tên danh mục' };
+  if (args.key !== undefined && (!args.key || toSlug(args.key) !== args.key)) {
+    return { ok: false, status: 400, error: `Khoá "${args.key}" không phải dạng đường dẫn (chữ thường, số, gạch nối)` };
+  }
 
   const type = await prisma.collectionType.findUnique({ where: { key: args.typeKey }, select: { id: true } });
   if (!type) return { ok: false, status: 404, error: `Không có loại nội dung "${args.typeKey}"` };
@@ -45,7 +57,13 @@ export async function createTaxonomy(args: {
   const writeTaxonomy = (key: string) =>
     prisma.$transaction(async (tx) => {
       const created = await tx.taxonomy.create({
-        data: { typeKey: args.typeKey, key, name, parentId: args.parentId ?? null },
+        data: {
+          typeKey: args.typeKey,
+          key,
+          name,
+          parentId: args.parentId ?? null,
+          ...(args.order !== undefined ? { order: args.order } : {}),
+        },
         select: { id: true, key: true },
       });
       await tx.auditLog.create({
@@ -74,7 +92,10 @@ export async function createTaxonomy(args: {
       select: { key: true },
     });
     const keys = taken.map((t) => t.key);
-    let key = base;
+    if (args.key !== undefined && keys.includes(args.key)) {
+      return { ok: false, status: 409, error: `Khoá "${args.key}" đã có danh mục khác dùng` };
+    }
+    let key = args.key ?? base;
     let n = 2;
     while (keys.includes(key)) { key = `${base}-${n}`; n += 1; }
 
