@@ -1,58 +1,79 @@
-import { writeFileSync } from 'node:fs';
-const out = process.argv[2];
-const f = (n) => +n.toFixed(2);
-const C = { x: 29, y: 29 };
-const R = 22, r = 12.5, mid = (R + r) / 2, k = 3.3, gap = 1.6;
-const seams = [20, 110, 200, 290];          // độ, chiều kim đồng hồ (y hướng xuống)
-const pt = (deg, rad) => { const a = (deg * Math.PI) / 180; return { x: C.x + rad * Math.cos(a), y: C.y + rad * Math.sin(a) }; };
-const P = (p) => `${f(p.x)} ${f(p.y)}`;
-function annulus(a0, a1) {
-  const large = (a1 - a0 + 360) % 360 > 180 ? 1 : 0;
-  return `M${P(pt(a0, R))}A${R} ${R} 0 ${large} 1 ${P(pt(a1, R))}L${P(pt(a1, r))}A${r} ${r} 0 ${large} 0 ${P(pt(a0, r))}Z`;
-}
-// Đường ráp: tia từ trong ra ngoài, giữa đường vòng nửa tròn sang mảnh KẾ TIẾP (núm).
-function seam(deg) {
-  const a = pt(deg, mid - k), b = pt(deg, mid + k);
-  return `M${P(pt(deg, r - 1))}L${P(a)}A${k} ${k} 0 0 1 ${P(b)}L${P(pt(deg, R + 1))}`;
-}
-function knob(deg) {
-  const a = pt(deg, mid - k), b = pt(deg, mid + k);
-  return `M${P(a)}A${k} ${k} 0 0 1 ${P(b)}Z`;
-}
-// Sao 4 cánh = AI, làm đuôi chữ Q.
-function sparkle(cx, cy, s, w) {
-  return `M${f(cx)} ${f(cy - s)}C${f(cx + w)} ${f(cy - w)} ${f(cx + w)} ${f(cy - w)} ${f(cx + s)} ${f(cy)}C${f(cx + w)} ${f(cy + w)} ${f(cx + w)} ${f(cy + w)} ${f(cx)} ${f(cy + s)}C${f(cx - w)} ${f(cy + w)} ${f(cx - w)} ${f(cy + w)} ${f(cx - s)} ${f(cy)}C${f(cx - w)} ${f(cy - w)} ${f(cx - w)} ${f(cy - w)} ${f(cx)} ${f(cy - s)}Z`;
-}
-const tail = pt(45, R + 3.5);
-function symbol(colors, id, opts = {}) {
-  const pieces = seams.map((s, i) => `<path d="${annulus(s, seams[(i + 1) % 4])}" fill="${colors.pieces[i]}"/>`).join('');
-  // núm của mảnh i nằm ở đường ráp CUỐI mảnh i (seams[i+1]), lồi sang mảnh i+1, cùng màu mảnh i
-  const knobs = seams.map((s, i) => `<path d="${knob(seams[(i + 1) % 4])}" fill="${colors.pieces[i]}"/>`).join('');
-  const cuts = seams.map((s) => `<path d="${seam(s)}"/>`).join('');
-  const star = sparkle(tail.x, tail.y, 10.5, 2.2);
-  const starCut = sparkle(tail.x, tail.y, 10.5 + 2.4, 2.2 + 1.6);
-  return `<defs><mask id="${id}m" maskUnits="userSpaceOnUse" x="0" y="0" width="64" height="64">
-<rect width="64" height="64" fill="#fff"/>
-<g fill="none" stroke="#000" stroke-width="${gap}" stroke-linecap="round" stroke-linejoin="round">${cuts}</g>
-<path d="${starCut}" fill="#000"/>
-</mask>${opts.defs ?? ''}</defs>
-<g mask="url(#${id}m)">${pieces}${knobs}</g>
-<path d="${star}" fill="${colors.star}"/>
-<circle cx="${f(tail.x + 9.5)}" cy="${f(tail.y - 9)}" r="1.7" fill="${colors.star}"/>`;
-}
-const COLOR = { pieces: ['#4F46E5', '#0EA5E9', '#14B8A6', '#8B5CF6'], star: 'url(#qstar)' };
-const starGrad = `<linearGradient id="qstar" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FBBF24"/><stop offset="1" stop-color="#F97316"/></linearGradient>`;
-const WHITE = { pieces: ['#FFFFFF', 'rgba(255,255,255,.82)', 'rgba(255,255,255,.66)', 'rgba(255,255,255,.9)'], star: '#FFFFFF' };
-const INK = { pieces: ['#111827', '#1F2937', '#374151', '#0B1120'], star: '#111827' };
-const svg = (vb, w, h, body, title) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${vb}" width="${w}" height="${h}" role="img" aria-label="${title}"><title>${title}</title>${body}</svg>\n`;
+import { writeFileSync, mkdirSync } from 'node:fs';
+import { resolve } from 'node:path';
+const out = resolve(process.argv[2] ?? '.');
+
+// "Đang được chọn": chữ Q là một vòng tròn nằm trong khung chọn của editor. Đuôi Q là nét
+// chéo từ vòng kéo ra tay nắm resize góc dưới-phải — tay nắm đặc, mang màu brand, như
+// đang được kéo. Ba tay nắm còn lại rỗng. Lưới 64: khung 6…54, vòng tâm (30,30).
+const C = 30, R = 19.5, r = 9.5;             // vòng
+const F0 = 6, F1 = 54, H = 6.5, SW = 2.2;     // khung, cạnh tay nắm rỗng, độ dày nét
+const BH = 13, BK = 3.2;                      // tay nắm đặc (đuôi Q): cạnh, bo góc
+const b0 = F1 - BH / 2 + 1;                   // tay nắm đặc lệch ra ngoài 1 để cân thị giác
+const ring = `M${C - R} ${C}a${R} ${R} 0 1 0 ${2 * R} 0a${R} ${R} 0 1 0 ${-2 * R} 0ZM${C - r} ${C}a${r} ${r} 0 1 0 ${2 * r} 0a${r} ${r} 0 1 0 ${-2 * r} 0Z`;
+const g = H / 2;
+const frame = `M${F0 + g} ${F0}H${F1 - g}M${F1} ${F0 + g}V${b0}M${F0} ${F0 + g}V${F1 - g}M${F0 + g} ${F1}H${b0}`;
+const handle = (x, y) => `<rect x="${x - g}" y="${y - g}" width="${H}" height="${H}" rx="1.6"/>`;
+// Đuôi Q: nét ngắn chéo 45° CẮT QUA thân vòng (đầu trong lòi vào lỗ, đầu ngoài nhô ra
+// ngoài vòng) rồi dừng trước tay nắm. Không nối tới tay nắm: nối thì thành cán kính lúp.
+const tail = `M${C + 3.5} ${C + 3.5}L${C + 15.5} ${C + 15.5}`;
+
+const symbol = ({ ring: ink, block = ink }) =>
+  `<path d="${ring}" fill-rule="evenodd" fill="${ink}"/>` +
+  `<path d="${tail}" stroke="${ink}" stroke-width="7"/>` +
+  `<path d="${frame}" fill="none" stroke="${ink}" stroke-width="${SW}"/>` +
+  `<g fill="none" stroke="${ink}" stroke-width="${SW}">${handle(F0, F0)}${handle(F1, F0)}${handle(F0, F1)}</g>` +
+  `<rect x="${b0}" y="${b0}" width="${BH}" height="${BH}" rx="${BK}" fill="${block}"/>`;
+
+// Màu = token của vỏ builder (src/styles/builder.css): shell-ink, brand; bản tối = shell-ink
+// và shell-accent của theme tối.
+const INK = '#0F1A2E', WHITE = '#FFFFFF', BRAND = '#2A62D9';
+const COLOR = { ring: INK, block: BRAND };
+const COLOR_ON_DARK = { ring: '#E7ECF3', block: '#6C9BFF' };
+
+const svg = (vb, w, h, body) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${vb}" width="${w}" height="${h}" role="img" aria-label="Quilder"><title>Quilder</title>${body}</svg>\n`;
+const word = (fill) => `<text x="74" y="44" font-family="'Be Vietnam Pro', Inter, 'Segoe UI', system-ui, sans-serif" font-size="36" font-weight="700" letter-spacing="-1" fill="${fill}">Quilder</text>`;
+
 const files = {
-  'quilder-symbol.svg': svg('0 0 64 64', 64, 64, symbol(COLOR, 'a', { defs: starGrad }), 'Quilder'),
-  'quilder-symbol-white.svg': svg('0 0 64 64', 64, 64, symbol(WHITE, 'b'), 'Quilder'),
-  'quilder-symbol-ink.svg': svg('0 0 64 64', 64, 64, symbol(INK, 'c'), 'Quilder'),
+  'quilder-symbol.svg': svg('0 0 64 64', 64, 64, symbol(COLOR)),
+  'quilder-symbol-white.svg': svg('0 0 64 64', 64, 64, symbol({ ring: WHITE })),
+  'quilder-symbol-ink.svg': svg('0 0 64 64', 64, 64, symbol({ ring: INK })),
+  'quilder-wordmark.svg': svg('0 0 214 64', 214, 64, symbol(COLOR) + word(INK)),
+  'quilder-wordmark-white.svg': svg('0 0 214 64', 214, 64, symbol({ ring: WHITE }) + word(WHITE)),
+  'quilder-wordmark-on-dark.svg': svg('0 0 214 64', 214, 64, symbol(COLOR_ON_DARK) + word('#E7ECF3')),
 };
-const word = (fill) => `<text x="74" y="43" font-family="'Be Vietnam Pro', Inter, 'Segoe UI', system-ui, sans-serif" font-size="34" font-weight="700" letter-spacing="-0.5" fill="${fill}">Quilder</text>`;
-files['quilder-wordmark.svg'] = svg('0 0 214 64', 214, 64, symbol(COLOR, 'd', { defs: starGrad }) + word('#111827'), 'Quilder');
-files['quilder-wordmark-white.svg'] = svg('0 0 214 64', 214, 64, symbol(WHITE, 'e') + word('#FFFFFF'), 'Quilder');
-files['quilder-wordmark-on-dark.svg'] = svg('0 0 214 64', 214, 64, symbol(COLOR, 'g', { defs: starGrad }) + word('#F9FAFB'), 'Quilder');
 for (const [n, s] of Object.entries(files)) writeFileSync(`${out}/${n}`, s);
 console.log(Object.keys(files).join(' '));
+
+// PNG: vẽ SVG bằng Chromium của Playwright (đã có trong devDependencies).
+if (process.argv.includes('--png')) {
+  const { chromium } = await import('playwright');
+  mkdirSync(`${out}/png`, { recursive: true });
+  // [tên file, svg nguồn, rộng, cao, nền, lề (tỉ lệ), bo góc nền (tỉ lệ)]
+  // App icon = logo trắng trên ô màu brand, như ô logo ở BuilderNav (bg-shell-accent rounded-md).
+  // apple-touch-icon để vuông tràn: iOS tự bo.
+  const jobs = [
+    ...[32, 64, 128, 256, 512, 1024].map((s) => [`quilder-symbol-${s}.png`, files['quilder-symbol.svg'], s, s, null, 0]),
+    ['quilder-symbol-ink-512.png', files['quilder-symbol-ink.svg'], 512, 512, null, 0],
+    ['quilder-symbol-white-512.png', files['quilder-symbol-white.svg'], 512, 512, null, 0],
+    ['quilder-app-icon-512.png', files['quilder-symbol-white.svg'], 512, 512, BRAND, 0.2, 0.27],
+    ['apple-touch-icon-180.png', files['quilder-symbol-white.svg'], 180, 180, BRAND, 0.2, 0],
+    ['quilder-wordmark-1284.png', files['quilder-wordmark.svg'], 1284, 384, null, 0],
+    ['quilder-wordmark-on-dark-1284.png', files['quilder-wordmark-on-dark.svg'], 1284, 384, null, 0],
+    ['quilder-wordmark-white-1284.png', files['quilder-wordmark-white.svg'], 1284, 384, null, 0],
+  ];
+  const browser = await chromium.launch();
+  const page = await browser.newPage();
+  for (const [name, src, w, h, bg, pad, round = 0] of jobs) {
+    await page.setViewportSize({ width: w, height: h });
+    const p = Math.round(w * pad);
+    await page.setContent(
+      `<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@700&display=block">` +
+      `<style>html,body{margin:0;background:transparent}div{width:${w}px;height:${h}px;box-sizing:border-box;padding:${p}px;background:${bg ?? 'transparent'};border-radius:${Math.round(w * round)}px}svg{width:100%;height:100%;display:block}</style><div>${src}</div>`,
+      { waitUntil: 'networkidle' },
+    );
+    await page.evaluate(() => document.fonts.ready);
+    await page.screenshot({ path: `${out}/png/${name}`, omitBackground: true });
+  }
+  await browser.close();
+  console.log(`png: ${jobs.length} file`);
+}
