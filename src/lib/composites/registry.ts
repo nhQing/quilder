@@ -84,7 +84,14 @@ const FORM_DEFAULTS = {
   errorMessage: 'Có lỗi xảy ra. Bạn thử lại giúp.',
 };
 
-const formParams = z
+/**
+ * Schema THÔ của params Form — không `.catch`.
+ *
+ * Tách khỏi `formParams` để hai đường dùng hai luật khác nhau: renderer cần lành
+ * (hàng JSONB hỏng không làm trắng trang), còn sidebar cần NGHIÊM — nó phải biết
+ * ô nào sai để báo cạnh ô đó, thay vì để `.catch` lặng lẽ thay cả form bằng mặc định.
+ */
+const formObject = z
   .object({
     /**
      * KHOÁ trong `Site.globals.endpoint`, KHÔNG phải URL.
@@ -104,7 +111,10 @@ const formParams = z
      */
     endpointKey: z
       .string()
-      .regex(/^[a-z][a-z0-9-]*$/, 'khoá endpoint là slug')
+      // Rỗng = "chưa chọn nơi nhận" (bản sao mới của mẫu hệ thống): form hiện tắt kèm
+      // lời nhắc. Phải là giá trị TƯỜNG MINH vì vắng khoá vẫn nghĩa là `newsletter`
+      // — form cũ không có khoá phải chạy y như trước.
+      .regex(/^([a-z][a-z0-9-]*)?$/, 'khoá endpoint là slug')
       .max(40)
       .default(FORM_DEFAULTS.endpointKey),
     fields: z
@@ -132,11 +142,48 @@ const formParams = z
      * thì chỉ hiện `successMessage` như cũ.
      */
     successPanel: z.string().regex(/^[A-Za-z][\w-]*$/).max(60).optional(),
-  })
-  .catch(FORM_DEFAULTS);
+    /**
+     * Báo kết quả gửi bằng cách nào: `inline` (dòng chữ dưới nút), `dialog` (hộp thoại
+     * của chính form, nội dung ở slot `success`/`error`), `panel` (chuyển panel của modal
+     * bao ngoài qua `successPanel`). KHÔNG có default: vắng thì suy từ `successPanel`
+     * (xem `resolveAfterSubmit`) để form cũ chạy y như cũ mà không cần migrate dữ liệu.
+     */
+    afterSubmit: z.enum(['inline', 'dialog', 'panel']).optional(),
+  });
+
+const formParams = formObject.catch(FORM_DEFAULTS);
 
 export type FormParams = z.infer<typeof formParams>;
 export type FormFieldDef = z.infer<typeof formField>;
+
+export type AfterSubmit = 'inline' | 'dialog' | 'panel';
+
+/** Cách báo kết quả thật của một form — `afterSubmit` nếu có, không thì suy từ `successPanel`. */
+export function resolveAfterSubmit(p: { afterSubmit?: string; successPanel?: string }): AfterSubmit {
+  if (p.afterSubmit === 'inline' || p.afterSubmit === 'dialog' || p.afterSubmit === 'panel') {
+    return p.afterSubmit;
+  }
+  return p.successPanel ? 'panel' : 'inline';
+}
+
+export type FormParamsIssue = { path: string; message: string };
+
+/**
+ * Parse NGHIÊM params Form: không rơi về mặc định, trả từng lỗi kèm đường dẫn.
+ *
+ * Dùng cho sidebar — nó không bao giờ ghi params không qua được hàm này, và hiện lỗi
+ * cạnh ô sai. Renderer vẫn dùng `parseCompositeParams` (lành).
+ */
+export function parseFormParamsStrict(
+  raw: unknown,
+): { ok: true; params: FormParams } | { ok: false; issues: FormParamsIssue[] } {
+  const r = formObject.safeParse(raw ?? {});
+  if (r.success) return { ok: true, params: r.data };
+  return {
+    ok: false,
+    issues: r.error.issues.map((i) => ({ path: i.path.join('.'), message: i.message })),
+  };
+}
 
 /* ── Accordion ────────────────────────────────────────────────────────── */
 
@@ -223,7 +270,7 @@ export const COMPOSITE_DESCRIPTIONS: Record<CompositeKey, string> = {
   Carousel:
     'Dải thẻ cuộn ngang. CHƯA CÓ runtime dạng composite — dựng nó bằng node Composite thì được một khối trống. Dùng effect "slider" trên một cây node có part viewport/track/slide (+ prev/next/pagination nếu cần). Effect "carousel" cũng còn chạy nhưng đã cũ, xem list_effects.',
   Form:
-    'Form nhập liệu. Ô nhập nằm trong params.fields (name, kind text|email|tel|number|textarea|select|checkbox, label, required, options cho select, help, autocomplete) — KHÔNG phải node con, nên không setStyle được từng ô; style qua data-part. Nội dung đi qua slots: "heading" cho tiêu đề, "note" cho dòng ghi chú/điều khoản (node Text thật, dịch được). Tham số: endpointKey (KHOÁ trong Site.globals.endpoint, không phải URL), submitLabel, successMessage, errorMessage, a11yLabel. Submit bằng fetch tới URL resolve từ globals; builder KHÔNG lưu gì, BE sở hữu dữ liệu.',
+    'Form nhập liệu. Ô nhập nằm trong params.fields (name, kind text|email|tel|number|textarea|select|checkbox, label, required, options cho select, help, autocomplete) — KHÔNG phải node con, nên không setStyle được từng ô; style qua data-part. Nội dung đi qua slots: "heading" cho tiêu đề, "note" cho dòng ghi chú/điều khoản (node Text thật, dịch được). Slot "success" và "error" chỉ hiện khi afterSubmit = "dialog": chúng nằm trong hộp thoại của form (không có trong luồng trang), mở sau khi gửi xong. Tham số: endpointKey (KHOÁ trong Site.globals.endpoint, không phải URL; chuỗi rỗng = chưa chọn nơi nhận, form hiện tắt), submitLabel, successMessage, errorMessage, a11yLabel, afterSubmit ("inline" dòng chữ dưới nút | "dialog" hộp thoại | "panel" chuyển panel modal qua successPanel; vắng thì suy: có successPanel là panel, không là inline). Submit bằng fetch tới URL resolve từ globals; builder KHÔNG lưu gì, BE sở hữu dữ liệu.',
   Accordion:
     'FAQ mở/đóng, KHÔNG cần JavaScript — phát ra <details>/<summary> thật, nên mục đang đóng vẫn được Ctrl+F và crawler tìm thấy. Nội dung đi qua slots: "q-1".."q-N" cho câu hỏi, "a-1".."a-N" cho câu trả lời của mục N. Tham số: single (một mục mở tại một thời điểm, dùng thuộc tính name của HTML), openFirst. KHÔNG có effect nào đi kèm và không có hoạt ảnh chiều cao.',
   NavChart:

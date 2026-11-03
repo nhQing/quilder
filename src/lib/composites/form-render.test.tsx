@@ -78,10 +78,10 @@ describe('Form — thiếu cấu hình phải THẤY ĐƯỢC', () => {
     // lặng mà `Canvas.fallbackChildId` bắt buộc khai để tránh.
     const out = html({ action: null });
     expect(out).toContain('data-part="misconfig"');
-    // Nói đúng KHOÁ của form này (mặc định `newsletter`) và đúng ô phải mở ở màn Cài
-    // đặt — "thêm khoá endpoint" chung chung không chỉ ra form nào thiếu khoá nào.
+    // Nói đúng KHOÁ của form này (mặc định `newsletter`) và chỉ về sidebar — màn Cài
+    // đặt không còn là nơi sửa form.
     expect(out).toContain('<code>newsletter</code>');
-    expect(out).toContain('Cài đặt › Form');
+    expect(out).toContain('Chọn form rồi đặt nơi nhận ở sidebar');
     expect(out).toContain('disabled');
   });
 
@@ -160,5 +160,39 @@ describe('siteEndpoint', () => {
     for (const bad of ['javascript:alert(1)', 'data:text/html,x', '/relative', 'ftp://x']) {
       expect(siteEndpoint({ endpoint: { n: bad } }, 'n'), bad).toBeNull();
     }
+  });
+});
+
+describe('Form — chưa chọn nơi nhận (endpointKey rỗng)', () => {
+  it('vô hiệu, nói đúng câu trỏ về sidebar', () => {
+    const out = html({ ...params({ endpointKey: '' }), action: null });
+    expect(out).toContain('data-part="misconfig"');
+    expect(out).toContain('Chọn form rồi đặt nơi nhận ở sidebar');
+    expect(out).not.toContain('Cài đặt › Form');
+    // Mọi ô nhập và nút đều disabled.
+    expect(out).toMatch(/<input[^>]*disabled[^>]*name="email"/);
+    expect(out).toMatch(/<button[^>]*disabled/);
+  });
+
+  it("siteEndpoint('') là null, không ném", () => {
+    expect(siteEndpoint({ endpoint: { newsletter: 'https://a.b' } }, '')).toBeNull();
+  });
+});
+
+describe('Form — hộp thoại trên SSR', () => {
+  it('slot success/error không nằm trong HTML đầu tiên', () => {
+    const out = html({
+      ...params({ afterSubmit: 'dialog' }),
+      success: createElement('p', null, 'Cảm ơn'),
+      error: createElement('p', null, 'Hỏng rồi'),
+    });
+    expect(out).toContain('<dialog');
+    expect(out).not.toContain('Cảm ơn');
+    expect(out).not.toContain('Hỏng rồi');
+    expect(out).not.toContain(' open');
+  });
+
+  it('afterSubmit khác dialog thì không có thẻ dialog', () => {
+    expect(html()).not.toContain('<dialog');
   });
 });

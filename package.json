@@ -100,6 +100,7 @@
     "@types/sanitize-html": "^2.16.1",
     "eslint": "^9.18.0",
     "eslint-config-next": "^15.1.6",
+    "happy-dom": "^21.0.4",
     "playwright": "^1.62.1",
     "postcss": "^8.5.26",
     "prisma": "^6.2.1",

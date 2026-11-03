@@ -38,8 +38,9 @@
  *  - `aria-describedby` nối ô nhập với dòng `help` của nó.
  */
 
-import { useId, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 
+import { resolveAfterSubmit } from './registry';
 import type { FormFieldDef, FormParams } from './registry';
 
 /** Ô ẩn bắt bot điền mọi thứ. Tên trông thật để nó không bị bỏ qua. */
@@ -60,6 +61,14 @@ export interface FormProps extends FormParams {
   /** Nội dung slot: tiêu đề và dòng ghi chú. Node `Text` thật, dịch được. */
   heading?: React.ReactNode;
   note?: React.ReactNode;
+  /**
+   * Nội dung hộp thoại khi `afterSubmit = 'dialog'`: `success` sau khi gửi được,
+   * `error` khi thất bại. Chỉ được mount BÊN TRONG `<dialog>` và chỉ sau khi có kết
+   * quả — trước đó chúng không có trong HTML, nên trang tải không lóe và crawler
+   * không đọc nhầm lời cảm ơn như nội dung trang.
+   */
+  success?: React.ReactNode;
+  error?: React.ReactNode;
 }
 
 function inputMode(kind: FormFieldDef['kind']): 'email' | 'tel' | 'numeric' | undefined {
@@ -78,8 +87,11 @@ export function Form({
   errorMessage,
   a11yLabel,
   successPanel,
+  afterSubmit,
   heading,
   note,
+  success,
+  error,
 }: FormProps) {
   const uid = useId();
   const [status, setStatus] = useState<Status>('idle');
@@ -94,6 +106,26 @@ export function Form({
   if (mountedAt.current === null && typeof window !== 'undefined') {
     mountedAt.current = Date.now();
   }
+
+  const mode = resolveAfterSubmit({ afterSubmit, successPanel });
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const submitRef = useRef<HTMLButtonElement>(null);
+  /** Hộp thoại đang hiện kết quả nào; `null` = đóng (và slot không mount). */
+  const [shown, setShown] = useState<'success' | 'error' | null>(null);
+
+  // `showModal()` cho focus trap, Esc và lớp nền của trình duyệt — không tự dựng lại.
+  useEffect(() => {
+    const d = dialogRef.current;
+    if (shown && d && !d.open) d.showModal();
+  }, [shown]);
+
+  const closeDialog = () => {
+    const d = dialogRef.current;
+    if (d?.open) d.close();
+    setShown(null);
+    // Trả focus về nút gửi: người dùng bàn phím không bị ném về đầu trang.
+    submitRef.current?.focus();
+  };
 
   const disabled = !action || status === 'sending';
 
@@ -120,6 +152,7 @@ export function Form({
       // kiểm nằm ở đâu. Người thật gõ nhanh bất thường thì mất một lần gửi —
       // cái giá đó nhỏ hơn việc dạy bot cách lách.
       setStatus('ok');
+      if (mode === 'dialog') setShown('success');
       form.reset();
       return;
     }
@@ -133,8 +166,9 @@ export function Form({
       });
       if (!res.ok) throw new Error(String(res.status));
       setStatus('ok');
+      if (mode === 'dialog') setShown('success');
       // Báo cho modal bao ngoài (nếu có) chuyển sang panel cảm ơn — xem `successPanel`.
-      if (successPanel) {
+      if (mode === 'panel' && successPanel) {
         form.dispatchEvent(new CustomEvent('modal:show', { bubbles: true, detail: { panel: successPanel } }));
       }
       form.reset();
@@ -143,6 +177,7 @@ export function Form({
       // dùng cuối không làm gì được với chúng. `errorMessage` là chuỗi người dựng
       // trang đã duyệt.
       setStatus('error');
+      if (mode === 'dialog') setShown('error');
     }
   };
 
@@ -244,7 +279,13 @@ export function Form({
           />
         </div>
 
-        <button type="submit" className="btn btn--primary mm-form__submit" disabled={disabled} data-part="submit">
+        <button
+          ref={submitRef}
+          type="submit"
+          className="btn btn--primary mm-form__submit"
+          disabled={disabled}
+          data-part="submit"
+        >
           {status === 'sending' ? 'Đang gửi…' : submitLabel}
         </button>
 
@@ -254,18 +295,53 @@ export function Form({
           `aria-live` chỉ phát khi NỘI DUNG của một vùng đã tồn tại thay đổi.
         */}
         <p className="mm-form__status" data-part="status" role="status" aria-live="polite">
-          {status === 'ok' ? successMessage : status === 'error' ? errorMessage : ''}
+          {/* Chế độ dialog: kết quả nằm trong hộp thoại, đọc hai lần là ồn. */}
+          {mode === 'dialog' ? '' : status === 'ok' ? successMessage : status === 'error' ? errorMessage : ''}
         </p>
 
         {!action && (
           <p className="mm-form__misconfig" data-part="misconfig">
-            Form chưa có đích gửi. Đặt URL ở Cài đặt › Form (khoá <code>{endpointKey}</code>),
-            rồi Publish.
+            Chọn form rồi đặt nơi nhận ở sidebar
+            {endpointKey ? (
+              <>
+                {' '}
+                (khoá <code>{endpointKey}</code> chưa có URL)
+              </>
+            ) : null}
+            .
           </p>
         )}
       </form>
 
       {note}
+
+      {mode === 'dialog' && (
+        <dialog
+          ref={dialogRef}
+          className="mm-form__dialog"
+          data-part="dialog"
+          onClose={() => setShown(null)}
+          // Bấm nền (chính phần tử dialog, không phải nội dung) thì đóng.
+          onClick={(e) => {
+            if (e.target === e.currentTarget) closeDialog();
+          }}
+        >
+          {shown && (
+            <div className="mm-form__dialog-body" data-part="dialog-body">
+              <button
+                type="button"
+                className="mm-form__dialog-close"
+                aria-label="Đóng"
+                data-part="dialog-close"
+                onClick={closeDialog}
+              >
+                ×
+              </button>
+              {shown === 'success' ? success : error}
+            </div>
+          )}
+        </dialog>
+      )}
     </div>
   );
 }

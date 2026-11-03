@@ -143,3 +143,43 @@
   border-radius: var(--radius-s);
   padding: var(--space-xs) var(--space-s);
 }
+
+/* Hộp thoại sau khi gửi (`afterSubmit: 'dialog'`) -----------------------------
+   `<dialog>` + `showModal()`: trình duyệt lo focus trap, Esc và lớp nền, nên ở đây chỉ
+   có giao diện trung tính — căn giữa, nền token, lớp phủ mờ. Người dựng chỉnh tiếp
+   qua `style.parts` (phần "dialog") hoặc customCss. */
+.mm-form__dialog {
+  margin: auto;
+  max-width: min(32rem, calc(100vw - var(--space-l)));
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-m);
+  background: var(--color-bg);
+  color: var(--color-fg);
+}
+
+.mm-form__dialog::backdrop {
+  background: rgb(0 0 0 / 0.5);
+}
+
+.mm-form__dialog-body {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-s);
+  padding: var(--space-l);
+}
+
+.mm-form__dialog-close {
+  position: absolute;
+  top: var(--space-xs);
+  right: var(--space-xs);
+  min-width: 2rem;
+  min-height: 2rem;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-size: var(--step-1);
+  line-height: 1;
+  cursor: pointer;
+}

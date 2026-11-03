@@ -552,6 +552,8 @@ function renderComposite(
           action={siteEndpoint(ctx.scope.site, params.endpointKey)}
           heading={<Slot ids={node.slots.heading} renderChild={renderChild} />}
           note={<Slot ids={node.slots.note} renderChild={renderChild} />}
+          success={<Slot ids={node.slots.success} renderChild={renderChild} />}
+          error={<Slot ids={node.slots.error} renderChild={renderChild} />}
         />
       </div>
     );

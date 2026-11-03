@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { COMPOSITE_DESCRIPTIONS, IMPLEMENTED, parseCompositeParams } from './registry';
+import {
+  COMPOSITE_DESCRIPTIONS,
+  IMPLEMENTED,
+  parseCompositeParams,
+  parseFormParamsStrict,
+  resolveAfterSubmit,
+} from './registry';
 import type { FormParams } from './registry';
 
 /**
@@ -116,5 +122,95 @@ describe('Form trong registry', () => {
     expect(about).toContain('endpointKey');
     expect(about).toMatch(/KHOÁ|khoá/);
     expect(about).toContain('slots');
+  });
+});
+
+/**
+ * `afterSubmit`, `endpointKey: ''` và bộ parse NGHIÊM.
+ *
+ * Form cũ (không có `afterSubmit`) phải chạy y như trước: suy từ `successPanel`.
+ * Params thật của form danh sách chờ trên trang chủ là bài hồi quy chính.
+ */
+const WAITLIST = {
+  fields: [
+    { kind: 'email', name: 'mail', label: 'Địa chỉ email', required: true, placeholder: 'Email', autocomplete: 'email' },
+  ],
+  a11yLabel: 'Tham gia danh sách chờ. Khám phá những ưu đãi riêng dành cho bạn',
+  endpointKey: 'subscribe',
+  submitLabel: 'Đăng ký danh sách chờ',
+  errorMessage: 'Gửi email không thành công!',
+  successPanel: 'waitlist-done',
+  successMessage: 'Đăng ký thành công',
+};
+
+describe('resolveAfterSubmit', () => {
+  it('thiếu afterSubmit thì suy từ successPanel', () => {
+    expect(resolveAfterSubmit({})).toBe('inline');
+    expect(resolveAfterSubmit({ successPanel: 'x' })).toBe('panel');
+  });
+
+  it('afterSubmit tường minh thắng successPanel', () => {
+    expect(resolveAfterSubmit({ afterSubmit: 'dialog', successPanel: 'x' })).toBe('dialog');
+    expect(resolveAfterSubmit({ afterSubmit: 'inline', successPanel: 'x' })).toBe('inline');
+  });
+});
+
+describe('formParams — hồi quy form danh sách chờ', () => {
+  it('params thật vẫn nguyên, afterSubmit suy ra panel', () => {
+    const p = parse(WAITLIST);
+    expect(p.endpointKey).toBe('subscribe');
+    expect(p.successPanel).toBe('waitlist-done');
+    expect(p.fields[0]!.name).toBe('mail');
+    expect(p.afterSubmit).toBeUndefined();
+    expect(resolveAfterSubmit(p)).toBe('panel');
+  });
+});
+
+describe('endpointKey rỗng = chưa chọn nơi nhận', () => {
+  it("'' hợp lệ và được giữ nguyên", () => {
+    expect(parse({ endpointKey: '' }).endpointKey).toBe('');
+  });
+
+  it('vắng khoá vẫn là newsletter', () => {
+    expect(parse({}).endpointKey).toBe('newsletter');
+  });
+});
+
+describe('parseFormParamsStrict', () => {
+  it('params hợp lệ thì ok', () => {
+    const r = parseFormParamsStrict(WAITLIST);
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.params.endpointKey).toBe('subscribe');
+  });
+
+  it('hai ô trùng name thì lỗi, path là fields', () => {
+    const r = parseFormParamsStrict({
+      fields: [
+        { name: 'email', kind: 'email', label: 'A' },
+        { name: 'email', kind: 'text', label: 'B' },
+      ],
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.issues.some((i) => i.path === 'fields')).toBe(true);
+  });
+
+  it('KHÔNG rơi về mặc định: URL ở endpointKey là lỗi chỉ đúng ô đó', () => {
+    const r = parseFormParamsStrict({ endpointKey: 'https://evil.example' });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.issues[0]!.path).toBe('endpointKey');
+  });
+
+  it('afterSubmit ngoài ba giá trị là lỗi', () => {
+    expect(parseFormParamsStrict({ afterSubmit: 'popup' }).ok).toBe(false);
+    expect(parseFormParamsStrict({ afterSubmit: 'dialog' }).ok).toBe(true);
+  });
+});
+
+describe('mô tả composite Form cho AI', () => {
+  it('nhắc afterSubmit và slot success/error', () => {
+    const about = COMPOSITE_DESCRIPTIONS.Form;
+    expect(about).toContain('afterSubmit');
+    expect(about).toContain('success');
+    expect(about).toContain('error');
   });
 });
