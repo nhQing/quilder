@@ -318,6 +318,18 @@ function makeStyleProps(w: Wrap) {
 export const zStyleProps = makeStyleProps(plain);
 export const zStylePatch = makeStyleProps(patch);
 
+const zPartStyle = z
+  .object({
+    base: zStyleProps,
+    sm: zStyleProps.optional(),
+    md: zStyleProps.optional(),
+    lg: zStyleProps.optional(),
+    xl: zStyleProps.optional(),
+    hover: zStyleProps.optional(),
+    focusVisible: zStyleProps.optional(),
+  })
+  .strict();
+
 export const zResponsiveStyle = z
   .object({
     base: zStyleProps,
@@ -329,6 +341,7 @@ export const zResponsiveStyle = z
     focusVisible: zStyleProps.optional(),
     inView: zStyleProps.optional(),
     states: z.record(z.string(), zStyleProps).optional(),
+    parts: z.record(z.string(), zPartStyle).optional(),
   })
   .strict();
 
@@ -1077,6 +1090,16 @@ export const zOp = z.discriminatedUnion('op', [
         'điều khiển, tên phải có trong statesWritten của nó (đọc list_effects). ' +
         'Ra CSS [data-n="<id>"][data-<tên>="true"].',
     ),
+    part: z
+      .string()
+      .regex(/^[a-z][a-z0-9-]*$/)
+      .max(40)
+      .optional()
+      .describe(
+        'Phần con của Composite (vd Form: field|label|input|help|submit|status|dialog) — ' +
+          'style cho phần tử do composite tự render. Chỉ dùng với node Composite có phần đó ' +
+          '(get_node_schema liệt kê) và target là base|sm|md|lg|xl|hover|focusVisible.',
+      ),
     patch: zStylePatch.describe('Merge sâu vào lớp đang có. null ở một key = xoá key đó.'),
   }).strict(),
 

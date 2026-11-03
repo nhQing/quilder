@@ -11,7 +11,7 @@ Mọi thay đổi doc — từ inspector, undo, AI — là một batch các op n
 | `moveNode` | `nodeId`, `newParentId`, `newIndex` |
 | `duplicateNode` | `nodeId`, `newId` |
 | `setProps` | `nodeId`, `props` |
-| `setStyle` | `nodeId`, `target`, `patch` |
+| `setStyle` | `nodeId`, `target`, `part?`, `patch` |
 | `setText` | `nodeId`, `field`, `value` |
 | `attachEffect` | `nodeId`, `attachment` |
 | `updateEffect` | `nodeId`, `instanceId`, `params` |

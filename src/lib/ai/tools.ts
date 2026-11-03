@@ -500,7 +500,9 @@ const applyOps: ToolDef = {
     '- setStyle { nodeId, target, patch } — target: base|sm|md|lg|xl|hover|focusVisible|inView, ' +
     'hoặc { state: "<tên>" } để ghi vào style.states (state do effect trên node điều khiển; ' +
     'tên phải có trong statesWritten của nó — đọc list_effects). patch merge sâu; null ở một ' +
-    'key = xoá key đó\n' +
+    'key = xoá key đó. Thêm part: "<phần>" để style PHẦN CON của một Composite (Form: ' +
+    'field|label|input|help|submit|status|dialog) — ghi vào style.parts, target chỉ ' +
+    'base|sm|md|lg|xl|hover|focusVisible\n' +
     '- setText { nodeId, field, value } — field: content (Text) | label (Button); value là RichText\n' +
     '- attachEffect { nodeId, attachment } / updateEffect { nodeId, instanceId, params } / ' +
     'detachEffect { nodeId, instanceId }\n' +

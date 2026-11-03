@@ -52,7 +52,7 @@ export type Op =
   | { op: 'moveNode'; nodeId: NodeId; newParentId: NodeId; newIndex: number }
   | { op: 'duplicateNode'; nodeId: NodeId; newId: NodeId }
   | { op: 'setProps'; nodeId: NodeId; props: Record<string, unknown> }
-  | { op: 'setStyle'; nodeId: NodeId; target: StyleTarget; patch: Partial<StyleProps> }
+  | { op: 'setStyle'; nodeId: NodeId; target: StyleTarget; part?: string; patch: Partial<StyleProps> }
   | { op: 'setText'; nodeId: NodeId; field: 'content' | 'label'; value: RichText }
   | { op: 'attachEffect'; nodeId: NodeId; attachment: EffectAttachment }
   | { op: 'updateEffect'; nodeId: NodeId; instanceId: string; params: Record<string, unknown> }
@@ -129,8 +129,40 @@ function isTaggedValue(value: unknown): boolean {
 function styleLayer(
   target: Node,
   layer: StyleTarget,
+  part?: string,
 ): { read: () => Record<string, unknown>; write: (next: Record<string, unknown>) => void } {
   const style = target.style as unknown as Record<string, unknown>;
+
+  /*
+   * Phần con của Composite (`style.parts[part]`): cùng các lớp cố định như node, nhưng KHÔNG có
+   * state của effect (validator chặn `part` + `{state}`/`inView`). Dọn rác theo ba bậc:
+   * lớp rỗng → xoá lớp, phần không còn lớp nào có nội dung → xoá phần, `parts` rỗng → xoá `parts`.
+   * `base` của phần là bắt buộc theo schema nên giữ `{}` khi phần còn lớp khác.
+   */
+  if (part !== undefined) {
+    if (typeof layer !== 'string') throw new OpError('part không đi với target {state}');
+    const parts = () => (style.parts ?? {}) as Record<string, Record<string, unknown>>;
+    return {
+      read: () => (parts()[part]?.[layer] ?? {}) as Record<string, unknown>,
+      write: (next) => {
+        const all = parts();
+        const cur = { ...(all[part] ?? {}) };
+        if (Object.keys(next).length === 0) delete cur[layer];
+        else cur[layer] = next;
+        const hasContent = Object.values(cur).some(
+          (v) => v && typeof v === 'object' && Object.keys(v as object).length > 0,
+        );
+        if (!hasContent) {
+          delete all[part];
+        } else {
+          if (!cur.base) cur.base = {};
+          all[part] = cur;
+        }
+        if (Object.keys(all).length === 0) delete style.parts;
+        else style.parts = all;
+      },
+    };
+  }
 
   if (typeof layer === 'string') {
     return {
@@ -287,7 +319,7 @@ function applyOne(doc: Doc, op: Op): void {
     }
 
     case 'setStyle': {
-      const layer = styleLayer(node(doc, op.nodeId), op.target);
+      const layer = styleLayer(node(doc, op.nodeId), op.target, op.part);
       const next = mergeDeep(layer.read(), op.patch as Record<string, unknown>);
 
       // Gỡ thuộc tính cuối cùng của một nhóm thì xoá luôn nhóm đó.
@@ -496,7 +528,7 @@ export function invert(doc: Doc, ops: Op[]): Op[] {
       }
 
       case 'setStyle': {
-        const current = styleLayer(node(state, op.nodeId), op.target).read();
+        const current = styleLayer(node(state, op.nodeId), op.target, op.part).read();
         // Với mỗi key patch chạm tới, ghi lại giá trị TRƯỚC — hoặc null nếu chưa có.
         const before: Record<string, unknown> = {};
         for (const [group, value] of Object.entries(op.patch as Record<string, unknown>)) {
@@ -518,6 +550,7 @@ export function invert(doc: Doc, ops: Op[]): Op[] {
           op: 'setStyle',
           nodeId: op.nodeId,
           target: op.target,
+          ...(op.part !== undefined ? { part: op.part } : {}),
           patch: before as Partial<StyleProps>,
         });
         break;

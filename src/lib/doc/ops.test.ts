@@ -465,3 +465,60 @@ describe('setStyle — state của effect', () => {
     expect(back).toEqual(first);
   });
 });
+
+describe('setStyle — part (style.parts)', () => {
+  const patch = { fill: { color: { $token: 'brand' } } } as never;
+  const parts = (d: Doc) =>
+    (d.nodes.a!.style as unknown as { parts?: Record<string, Record<string, unknown>> }).parts;
+
+  it('ghi vào style.parts[part][layer], không đụng lớp của node', () => {
+    const after = apply(baseDoc(), [
+      { op: 'setStyle', nodeId: 'a', target: 'base', part: 'submit', patch },
+    ]);
+    expect(parts(after)).toEqual({ submit: { base: { fill: { color: { $token: 'brand' } } } } });
+    expect(after.nodes.a!.style.base).toEqual({ spacing: { pt: t('space-l') } });
+  });
+
+  it('lớp breakpoint/hover của phần tự thêm base rỗng (schema bắt buộc base)', () => {
+    const after = apply(baseDoc(), [
+      { op: 'setStyle', nodeId: 'a', target: 'hover', part: 'submit', patch },
+    ]);
+    expect(parts(after)!.submit).toEqual({ base: {}, hover: { fill: { color: { $token: 'brand' } } } });
+  });
+
+  it('gỡ thuộc tính cuối → xoá lớp, xoá phần, xoá parts rỗng', () => {
+    const withPart = apply(baseDoc(), [
+      { op: 'setStyle', nodeId: 'a', target: 'base', part: 'submit', patch },
+    ]);
+    const after = apply(withPart, [
+      { op: 'setStyle', nodeId: 'a', target: 'base', part: 'submit', patch: { fill: { color: null } } as never },
+    ]);
+    expect(parts(after)).toBeUndefined();
+  });
+
+  it('xoá một phần thì phần khác ở lại', () => {
+    const two = apply(baseDoc(), [
+      { op: 'setStyle', nodeId: 'a', target: 'base', part: 'submit', patch },
+      { op: 'setStyle', nodeId: 'a', target: 'base', part: 'input', patch },
+    ]);
+    const after = apply(two, [
+      { op: 'setStyle', nodeId: 'a', target: 'base', part: 'submit', patch: { fill: { color: null } } as never },
+    ]);
+    expect(Object.keys(parts(after)!)).toEqual(['input']);
+  });
+
+  it('invert khôi phục (lần ghi đầu và lần ghi thứ hai)', () => {
+    const { before, back } = roundTrip([
+      { op: 'setStyle', nodeId: 'a', target: 'md', part: 'input', patch },
+    ]);
+    expect(back).toEqual(before);
+
+    const first = apply(baseDoc(), [
+      { op: 'setStyle', nodeId: 'a', target: 'base', part: 'input', patch },
+    ]);
+    const second: Op[] = [
+      { op: 'setStyle', nodeId: 'a', target: 'base', part: 'input', patch: { fill: { color: { $token: 'ink' } } } as never },
+    ];
+    expect(apply(apply(first, second), invert(first, second))).toEqual(first);
+  });
+});

@@ -17,7 +17,7 @@ import { z } from 'zod';
 
 import { prisma } from '@/lib/db';
 import { VIRTUAL_KEYS } from '@/lib/collections/repeat';
-import { compositeParamsSchema, isKnownComposite } from '@/lib/composites/registry';
+import { compositeParamsSchema, isKnownComposite, stylePartsOf } from '@/lib/composites/registry';
 import { isKnownEffect, loadEffect } from '@/lib/motion/effects/registry';
 import type { AnyEffectModule } from '@/lib/motion/effects/types';
 import { stylePathsForProperty } from '@/lib/builder/style-css-map';
@@ -607,7 +607,7 @@ export async function validateOps(
    * bảng chỉ vì file này chạm tới.
    */
   const needsEffectStates = ops.some(
-    (o) => o.op === 'setStyle' && typeof o.target === 'object',
+    (o) => o.op === 'setStyle' && o.part === undefined && typeof o.target === 'object',
   );
   const effectStates = needsEffectStates ? await loadEffectStates() : new Map<string, string[]>();
 
@@ -712,6 +712,38 @@ export async function validateOps(
        * được viết.
        */
       case 'setStyle': {
+        /*
+         * `part`: style cho phần con của một Composite (`style.parts`). Phần con là phần tử
+         * composite tự render, nên chỉ composite có khai phần đó trong `STYLE_PARTS` mới nhận;
+         * ở node khác selector sinh ra không khớp gì — rule chết im lặng. Và phần con không có
+         * effect/cờ riêng nên `inView` và `{state}` vô nghĩa.
+         */
+        if (op.part !== undefined) {
+          const target = doc.nodes[op.nodeId];
+          const valid = target ? stylePartsOf(target as { type: string; composite?: string }) : [];
+          if (target && target.type !== 'Composite') {
+            add(
+              'part-not-composite',
+              `"part" chỉ dùng cho node Composite; ${op.nodeId} là ${target.type}.`,
+            );
+          } else if (target && !valid.some((p) => p.key === op.part)) {
+            add(
+              'unknown-part',
+              `Composite ${(target as { composite: string }).composite} không có phần "${op.part}". ` +
+                (valid.length
+                  ? `Phần hợp lệ: ${valid.map((p) => p.key).join(', ')}.`
+                  : 'Composite này chưa có phần nào style được.'),
+            );
+          }
+          if (typeof op.target === 'object' || op.target === 'inView') {
+            add(
+              'part-target',
+              '"part" chỉ đi với target base|sm|md|lg|xl|hover|focusVisible — phần con không có ' +
+                'inView hay state của effect.',
+            );
+          }
+          break;
+        }
         if (typeof op.target === 'string') break;
         const state = op.target.state;
 

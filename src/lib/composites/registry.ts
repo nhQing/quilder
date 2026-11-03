@@ -318,3 +318,32 @@ export function compositeCatalog(): { key: string; about: string; implemented: b
     ...projectComposites().map((c) => ({ key: c.key, about: c.description, implemented: true })),
   ];
 }
+
+/* ── Phần con có thể style (style.parts) ─────────────────────────────── */
+
+/**
+ * Phần con của composite mà `style.parts` / `setStyle { part }` nhắm tới.
+ *
+ * Phần con là phần tử composite tự render (ô nhập, nút gửi…), không có `data-n` riêng nên
+ * không `setStyle` trực tiếp được; compiler dịch khoá → selector, scope dưới node.
+ * `selector` có thể là danh sách phân cách dấu phẩy — compiler tách và scope từng cái.
+ * Composite của gói dự án chưa khai phần con nào (rỗng).
+ */
+export const STYLE_PARTS: Record<string, Record<string, { label: string; selector: string }>> = {
+  Form: {
+    field: { label: 'Ô', selector: '.mm-form__row' },
+    label: { label: 'Nhãn', selector: '.mm-form__label' },
+    input: { label: 'Ô nhập', selector: '.mm-form__input, .mm-form__checkbox' },
+    help: { label: 'Trợ giúp', selector: '.mm-form__help' },
+    submit: { label: 'Nút gửi', selector: '.mm-form__submit' },
+    status: { label: 'Thông báo', selector: '.mm-form__status' },
+    dialog: { label: 'Hộp thoại', selector: '.mm-form__dialog' },
+  },
+};
+
+/** Phần con style được của một node; node không phải Composite (hay composite không có phần) → []. */
+export function stylePartsOf(node: { type: string; composite?: string }): { key: string; label: string }[] {
+  if (node.type !== 'Composite' || !node.composite) return [];
+  if (!Object.hasOwn(STYLE_PARTS, node.composite)) return [];
+  return Object.entries(STYLE_PARTS[node.composite]!).map(([key, p]) => ({ key, label: p.label }));
+}

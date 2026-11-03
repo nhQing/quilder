@@ -34,8 +34,10 @@ import {
   OVERRIDE_BREAKPOINTS,
   STATE_SELECTOR,
   STYLE_STATES,
+  type StyleLayer,
   type StyleState,
 } from '@/lib/design/breakpoints';
+import { STYLE_PARTS } from '@/lib/composites/registry';
 import type {
   CalcOp,
   ColorValue,
@@ -612,6 +614,38 @@ function backdropFallback(id: string, s: Partial<StyleProps>): string {
   );
 }
 
+/**
+ * Rule của `style.parts` cho một lớp (base / breakpoint / hover / focusVisible).
+ *
+ * `scope` là selector của node (`sel` hoặc `selIn`). Selector của phần có thể là danh sách
+ * (`.a, .b`): tách ra rồi scope + gắn state cho TỪNG cái — nếu không, chỉ cái đầu được scope
+ * và cái sau rò ra mọi form trên trang. Phần không có trong `STYLE_PARTS` bị bỏ (doc mang
+ * composite từ schema khác không được phá cả stylesheet). Ở trong `@layer doc` như node.
+ */
+function partRules(
+  n: Node,
+  scope: string,
+  layer: 'base' | StyleLayer | StyleState,
+  indent: string,
+): string {
+  const parts = n.style.parts;
+  if (!parts || n.type !== 'Composite') return '';
+  const known = Object.hasOwn(STYLE_PARTS, n.composite) ? STYLE_PARTS[n.composite]! : {};
+  const suffix = layer === 'hover' || layer === 'focusVisible' ? STATE_SELECTOR[layer] : '';
+  let out = '';
+  for (const key of Object.keys(parts).sort()) {
+    if (!Object.hasOwn(known, key)) continue;
+    const style = (parts[key] as Record<string, Partial<StyleProps> | undefined>)[layer];
+    if (!style) continue;
+    const selector = known[key]!.selector
+      .split(',')
+      .map((p) => `${scope} ${p.trim()}${suffix}`)
+      .join(', ');
+    out += rule(selector, declarations(style), indent);
+  }
+  return out;
+}
+
 export interface CompiledCss {
   css: string;
   hash: string;
@@ -636,6 +670,7 @@ export function compileDoc(doc: Doc, components?: ComponentTrees): CompiledCss {
   // 1 — base
   for (const n of nodes) {
     parts.push(rule(sel(n.id), declarations(n.style.base), '  '));
+    parts.push(partRules(n, sel(n.id), 'base', '  '));
   }
 
   // 1b — fallback backdrop (ngoài @layer để @supports không bị lồng sai)
@@ -646,7 +681,10 @@ export function compileDoc(doc: Doc, components?: ComponentTrees): CompiledCss {
     const inner = nodes
       .map((n) => {
         const layer = n.style[bp];
-        return layer ? rule(sel(n.id), declarations(layer), '    ') : '';
+        return (
+          (layer ? rule(sel(n.id), declarations(layer), '    ') : '') +
+          partRules(n, sel(n.id), bp, '    ')
+        );
       })
       .filter(Boolean)
       .join('');
@@ -660,6 +698,7 @@ export function compileDoc(doc: Doc, components?: ComponentTrees): CompiledCss {
     for (const n of nodes) {
       const layer = n.style[st as StyleState];
       if (layer) parts.push(rule(sel(n.id, STATE_SELECTOR[st]), declarations(layer), '  '));
+      if (st === 'hover' || st === 'focusVisible') parts.push(partRules(n, sel(n.id), st, '  '));
     }
   }
 
@@ -704,13 +743,17 @@ export function compileDoc(doc: Doc, components?: ComponentTrees): CompiledCss {
 
     for (const cn of localNodes) {
       parts.push(rule(selIn(componentId, cn.id), declarations(cn.style.base), '  '));
+      parts.push(partRules(cn, selIn(componentId, cn.id), 'base', '  '));
     }
 
     for (const bp of OVERRIDE_BREAKPOINTS) {
       const inner = localNodes
         .map((cn) => {
           const layer = cn.style[bp];
-          return layer ? rule(selIn(componentId, cn.id), declarations(layer), '    ') : '';
+          return (
+            (layer ? rule(selIn(componentId, cn.id), declarations(layer), '    ') : '') +
+            partRules(cn, selIn(componentId, cn.id), bp, '    ')
+          );
         })
         .filter(Boolean)
         .join('');
@@ -724,6 +767,9 @@ export function compileDoc(doc: Doc, components?: ComponentTrees): CompiledCss {
         const layer = cn.style[st as StyleState];
         if (layer) {
           parts.push(rule(selIn(componentId, cn.id, STATE_SELECTOR[st]), declarations(layer), '  '));
+        }
+        if (st === 'hover' || st === 'focusVisible') {
+          parts.push(partRules(cn, selIn(componentId, cn.id), st, '  '));
         }
       }
     }

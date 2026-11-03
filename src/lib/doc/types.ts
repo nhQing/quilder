@@ -146,7 +146,17 @@ export interface ResponsiveStyle {
    * của các effect đang gắn trên node, nên không thể sinh ra state chết.
    */
   states?: Record<string, Partial<StyleProps>>;
+  /**
+   * Style có kiểu cho PHẦN CON của một Composite (vd Form: ô nhập, nút gửi, hộp thoại).
+   * Phần con là phần tử do composite tự render nên không có `data-n` riêng — khoá là tên
+   * trong `STYLE_PARTS` (registry), compiler dịch ra selector của phần đó, scope dưới node.
+   * Không có inView/states: phần con không có effect riêng để bật cờ.
+   */
+  parts?: Record<string, PartStyle>;
 }
+
+/** Một phần con: cùng các lớp với node, trừ inView / states / parts. */
+export type PartStyle = Omit<ResponsiveStyle, 'parts' | 'states' | 'inView'>;
 
 export type StyleLayerKey = StyleLayer;
 
