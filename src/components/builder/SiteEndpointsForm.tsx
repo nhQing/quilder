@@ -116,10 +116,13 @@ function EndpointRow({
 
   const remove = async () => {
     setBusy(true);
+    setError(null);
     const err = await removeKey(name);
     setBusy(false);
     if (err) {
       setError(err);
+      // Đóng ô xác nhận: để "Xoá thật" nằm đó sau lỗi thì bấm lại là xoá mà không hỏi lại.
+      setConfirm(false);
       return;
     }
     onDone();
@@ -143,7 +146,8 @@ function EndpointRow({
           </Badge>
         )}
         <span className="flex-1" />
-        {canDelete && forms.length === 0 && !off &&
+        {/* Kể cả khoá có URL rỗng: không ai dùng thì nó chỉ là rác trong bảng. */}
+        {canDelete && forms.length === 0 &&
           (confirm ? (
             <>
               <Button variant="danger" size="sm" loading={busy} onClick={() => void remove()}>

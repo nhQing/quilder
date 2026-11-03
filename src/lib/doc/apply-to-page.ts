@@ -182,12 +182,18 @@ export async function applyOpsToPage(args: {
 
   /*
    * Mẫu hệ thống chỉ nhân bản, không chèn Instance: Instance chỉ ghi đè chữ/ảnh, nên một
-   * form chèn kiểu đó không chỉnh được trường hay nơi nhận. Chỉ xét Instance MỚI — trang
-   * đã có Instance từ trước vẫn sửa bình thường.
+   * form chèn kiểu đó không chỉnh được trường hay nơi nhận. Chỉ xét Instance MỚI hoặc
+   * Instance ĐỔI `componentId` (`setProps` đổi được nó — không xét thì đó là cửa sau của
+   * đúng luật này) — trang đã có Instance từ trước vẫn sửa bình thường.
    */
+  const componentOf = (n: unknown) => (n as { componentId?: unknown } | undefined)?.componentId;
   const fresh = Object.values(result.doc.nodes)
-    .filter((n) => n.type === 'Instance' && !current.nodes[n.id])
-    .map((n) => (n as { componentId?: string }).componentId)
+    .filter((n) => {
+      if (n.type !== 'Instance') return false;
+      const before = current.nodes[n.id];
+      return !before || before.type !== 'Instance' || componentOf(before) !== componentOf(n);
+    })
+    .map(componentOf)
     .filter((v): v is string => typeof v === 'string');
   if (fresh.length) {
     const sys = await prisma.preset.findMany({

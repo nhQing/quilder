@@ -448,6 +448,41 @@ test.describe('mẫu hệ thống', () => {
     }
   });
 
+  test('đổi componentId của Instance có sẵn sang mẫu hệ thống bị từ chối', async ({ request }) => {
+    const p = await systemPreset(request);
+    const other = await createComponent(request, 'E2E instance thường');
+    const slug = `e2e-mau-he-thong-doi-${Date.now().toString(36)}`;
+    const pageRes = await request.post('/api/pages', { data: { title: 'E2E đổi componentId', slug } });
+    expect(pageRes.ok(), await pageRes.text()).toBe(true);
+    const pageId = (await pageRes.json()).page.id as string;
+    try {
+      const { rootId } = await tool(request, 'get_page_outline', { pageId });
+      const ins = await request.post('/api/ops', {
+        data: {
+          pageId,
+          ops: [{
+            op: 'insertNode', parentId: rootId, index: 0,
+            node: {
+              id: 'e2einstdoi', parentId: rootId, type: 'Instance', componentId: other, overrides: {},
+              children: [], effects: [], style: { base: {} },
+            },
+          }],
+        },
+      });
+      expect(ins.ok(), await ins.text()).toBe(true);
+
+      const r = await request.post('/api/ops', {
+        data: { pageId, ops: [{ op: 'setProps', nodeId: 'e2einstdoi', props: { componentId: p.id } }] },
+      });
+      expect(r.status()).toBeGreaterThanOrEqual(400);
+      expect(r.status()).toBeLessThan(500);
+      expect((await r.json()).error).toMatch(/bản sao/);
+    } finally {
+      await request.delete(`/api/pages/${pageId}`);
+      await request.delete(`/api/pages/${pageId}?purge=1`);
+    }
+  });
+
   test('mẫu hệ thống chỉ nhân bản được, chèn vào trang là bản sao', async ({ page, request }) => {
     // Editor trang là màn nặng nhất builder: nạp + chèn + kiểm qua MCP vượt 30s mặc định.
     test.setTimeout(120_000);

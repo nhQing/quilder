@@ -150,6 +150,46 @@ test('nơi nhận không ai dùng: vẫn liệt kê, có nút Xoá (admin), xoá
   expect((await endpoints(request))['e2e-thua']).toBeUndefined();
 });
 
+test('khoá trong bảng có URL rỗng, không ai dùng: vẫn xoá được; xoá hỏng thì về lại nút Xoá', async ({ page, request }) => {
+  const original = await endpoints(request);
+  cleanup.push((r) => r.patch('/api/settings/endpoints', { data: { endpoints: original, force: true } }));
+  // URL rỗng không qua được `checkEndpointTable`, nên đặt qua bảng biến (nó ghi `endpoint`
+  // nguyên trạng) — đúng kiểu bảng gõ tay / dữ liệu cũ mà màn này phải dọn được.
+  const site = await tool(request, 'list_site_globals', {});
+  const plain = Object.fromEntries(
+    (site.globals as { key: string; value: unknown }[])
+      .filter((g) => g.key !== 'endpoint')
+      .map((g) => [g.key, g.value]),
+  );
+  const saved = await request.patch('/api/settings', {
+    data: { globals: { ...plain, endpoint: { ...original, 'e2e-rong': '' } } },
+  });
+  expect(saved.ok(), await saved.text()).toBe(true);
+
+  await page.goto('/builder/settings');
+  const row = sectionOf(page).locator('[data-endpoint-row="e2e-rong"]');
+  await expect(row).toContainText('chưa có URL');
+
+  // Lần đầu: API hỏng → lỗi hiện, và ô xác nhận đóng lại (không kẹt ở "Xoá thật").
+  await page.route('**/api/settings/endpoints', (route) =>
+    route.request().method() === 'POST'
+      ? route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ error: 'Hỏng thử' }) })
+      : route.continue(),
+  );
+  await row.getByRole('button', { name: 'Xoá nơi nhận e2e-rong' }).click();
+  await row.getByRole('button', { name: 'Xoá thật' }).click();
+  await expect(row.getByRole('alert')).toContainText('Hỏng thử');
+  await expect(row.getByRole('button', { name: 'Xoá thật' })).toHaveCount(0);
+  await expect(row.getByRole('button', { name: 'Xoá nơi nhận e2e-rong' })).toBeVisible();
+
+  // Lần hai: API thật → dòng mất khỏi bảng.
+  await page.unroute('**/api/settings/endpoints');
+  await row.getByRole('button', { name: 'Xoá nơi nhận e2e-rong' }).click();
+  await row.getByRole('button', { name: 'Xoá thật' }).click();
+  await expect(sectionOf(page).locator('[data-endpoint-row="e2e-rong"]')).toHaveCount(0);
+  expect(Object.hasOwn(await endpoints(request), 'e2e-rong')).toBe(false);
+});
+
 test('API: xoá URL đang có form dùng bị chặn nếu không ép', async ({ request }) => {
   await setup(request, { table: { 'e2e-hook': 'https://example.com/e2e-hook' } });
   const res = await request.post('/api/settings/endpoints', { data: { action: 'removeKey', key: 'e2e-hook' } });
