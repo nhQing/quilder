@@ -158,6 +158,16 @@
   color: var(--color-fg);
 }
 
+/* Hộp thoại ĐÓNG luôn ẩn, kể cả khi người dựng đặt `display` cho phần "dialog".
+   Rule của tác giả (`@layer doc`) thắng luật UA `dialog:not([open]) { display: none }`,
+   nên một `display: flex` để căn nội dung làm hộp thoại đóng hiện giữa trang live.
+   `!important` ở layer `base` (khai TRƯỚC `doc`, `doc-custom`) thắng mọi khai báo
+   của người dựng — với `!important`, layer khai trước mới là layer mạnh hơn. Chỉ nhắm
+   phần tử `dialog`: khối xem trước trên canvas là `div` cùng class, không bị ẩn. */
+dialog.mm-form__dialog:not([open]) {
+  display: none !important;
+}
+
 .mm-form__dialog::backdrop {
   background: rgb(0 0 0 / 0.5);
 }

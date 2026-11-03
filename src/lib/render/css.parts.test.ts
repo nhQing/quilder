@@ -7,6 +7,9 @@
  * để `customCss` (`doc-custom`) vẫn thắng.
  */
 
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
 import { describe, expect, it } from 'vitest';
 
 import { compileDoc } from './css';
@@ -90,5 +93,31 @@ describe('style.parts — compiler', () => {
     expect(css).toContain('[data-c="c1"] [data-cn="cf"] .mm-form__submit {');
     expect(css).toContain('[data-c="c1"] [data-cn="cf"] .mm-form__submit:hover {');
     expect(css).toContain('[data-c="c1"] [data-cn="cf"] .mm-form__input, [data-c="c1"] [data-cn="cf"] .mm-form__checkbox {');
+  });
+});
+
+/**
+ * Phần "dialog" đặt `display` (vd flex để căn nội dung): rule của tác giả trong `@layer doc`
+ * thắng luật UA `dialog:not([open]) { display: none }`, và hộp thoại ĐÓNG hiện ra giữa trang
+ * live. `form.css` (layer `base`, khai TRƯỚC `doc`) giữ nó đóng bằng `!important` — với
+ * `!important`, layer khai trước thắng, nên không style nào của người dựng đè được.
+ */
+describe('style.parts — dialog đóng vẫn ẩn', () => {
+  it('display của phần dialog đi vào @layer doc với selector .mm-form__dialog', () => {
+    const { css } = compileDoc(
+      formDoc({ parts: { dialog: { base: { layout: { display: 'flex' } } } } }),
+    );
+    const layer = docLayer(css);
+    expect(layer).toContain('[data-n="f1"] .mm-form__dialog {');
+    expect(layer).toMatch(/\.mm-form__dialog \{[^}]*display: flex/);
+  });
+
+  it('form.css ẩn dialog đóng bằng !important, và nằm ở layer base trước doc', () => {
+    const root = join(__dirname, '..', '..', 'styles');
+    const formCss = readFileSync(join(root, 'components', 'form.css'), 'utf8');
+    expect(formCss).toMatch(/dialog\.mm-form__dialog:not\(\[open\]\)\s*\{\s*display:\s*none\s*!important;?\s*\}/);
+    const site = readFileSync(join(root, 'site.css'), 'utf8');
+    expect(site).toMatch(/@import '\.\/components\/form\.css' layer\(base\);/);
+    expect(site).toMatch(/@layer base, doc, doc-custom;/);
   });
 });
