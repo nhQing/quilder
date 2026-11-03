@@ -140,21 +140,19 @@ export default async function SettingsPage() {
           </Section>
 
           {/*
-            Form trên site — mỗi form một box: tên, URL nhận dữ liệu, các nút của nó.
-
-            Trước 13/10/2026 bảng URL chỉ hiện dạng JSON khoá lại trong "Biến của site",
-            nên builder tạo được form mà không có chỗ nào đặt URL nhận. Xem `SiteEndpointsForm`
-            cho lý do lấy FORM làm gốc thay vì khoá. Giữ id `settings-endpoints`: Inspector
-            (`EndpointPicker`) và thông báo của Form trỏ link tới đây.
+            Nơi nhận dữ liệu của form — bảng chỉ xem (sửa URL, tách, đổi tên làm ở Inspector).
+            Xem `SiteEndpointsForm`. Giữ id `settings-endpoints`: Inspector (`EndpointPicker`)
+            và thông báo của Form trỏ link tới đây.
           */}
           <Section
             id="settings-endpoints"
-            title="Form"
+            title="Nơi nhận dữ liệu"
             count={formCount}
             description={
               <>
                 Mỗi form gửi dữ liệu khách nhập tới một URL — backend ở đó nhận, builder không lưu bản
-                đăng ký nào. Đổi URL: xem nháp dùng ngay, site thật đổi khi bấm Publish.
+                đăng ký nào. Bảng này chỉ để xem; đổi nơi nhận ở mục “Gửi tới” của Inspector khi chọn
+                form. URL đổi: xem nháp dùng ngay, site thật đổi khi bấm Publish.
               </>
             }
             actions={
@@ -166,7 +164,7 @@ export default async function SettingsPage() {
             }
             className={cn(ui.card, 'p-5')}
           >
-            <SiteEndpointsForm initial={endpoints} usage={usage} />
+            <SiteEndpointsForm initial={endpoints} usage={usage} canDelete={session.role === 'admin'} />
           </Section>
         </div>
 

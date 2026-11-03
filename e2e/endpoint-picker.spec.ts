@@ -79,12 +79,11 @@ test('chọn khoá cho form và đặt tên form trong Inspector', async ({ page
   await name.press('Enter');
   await expect.poll(async () => (await formNode(request, pageId)).name).toBe('Form liên hệ E2E');
 
-  // Box của form ở Cài đặt mang đúng tên vừa đặt, URL và khoá vừa chọn.
+  // Bảng "Nơi nhận dữ liệu" ở Cài đặt: form hiện dưới khoá vừa chọn, với tên vừa đặt.
   await page.goto('/builder/settings');
-  const box = page.locator('section[aria-labelledby="settings-endpoints"] [data-form-box="e2epickerform"]');
-  await expect(box.locator('h3')).toHaveText('Form liên hệ E2E');
-  await expect(box.getByLabel('URL nhận dữ liệu')).toHaveValue('https://example.com/hai');
-  await expect(box).toContainText('khoá: e2e-hai');
+  const row = page.locator('section[aria-labelledby="settings-endpoints"] [data-endpoint-row="e2e-hai"]');
+  await expect(row).toContainText('Form liên hệ E2E');
+  await expect(row.locator('[data-endpoint-url]')).toHaveText('https://example.com/hai');
 });
 
 /* ── Sửa URL ngay ở sidebar: dùng chung theo khoá, tách riêng, nơi nhận mới, phân quyền ── */

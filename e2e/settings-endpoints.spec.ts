@@ -1,16 +1,11 @@
-import { expect, test, type APIRequestContext } from '@playwright/test';
+import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 
 /**
- * Ô "Form" ở màn Cài đặt — mỗi form một box: tên, URL nhận dữ liệu, các nút của nó.
+ * Mục "Nơi nhận dữ liệu" ở màn Cài đặt — bảng CHỈ XEM: URL, cảnh báo http, form/biểu đồ đang
+ * dùng từng nơi nhận (link Mở vào editor, chọn sẵn node), và nút Xoá cho nơi nhận không ai dùng.
  *
- * Trước ô này, `Site.globals.endpoint` chỉ hiện dạng JSON khoá lại trong bảng biến:
- * builder tạo được form mà không có chỗ nào đặt URL nhận. Bản đầu của ô bày bảng KHOÁ →
- * URL và người dùng đọc không hiểu, nên ô lấy FORM làm gốc. Những điều phải giữ:
- *  - form chưa có URL thì box nói ra (form đang tắt);
- *  - lưu URL thì bản nháp (canvas, /preview) dùng ngay, không phải chờ Publish;
- *  - hai form dùng chung URL thì box nói rõ hậu quả, và tách riêng được;
- *  - đổi tên form ngay trong box;
- *  - lưu bảng biến bên cạnh KHÔNG được xoá mất URL của form.
+ * Sửa URL / tách / đổi tên đã chuyển sang Inspector (xem endpoint-picker.spec.ts). Phần API
+ * (xoá bị chặn khi còn form dùng, đổi tên khoá, lưu bảng biến không xoá URL) giữ nguyên.
  *
  * Dọn trong `afterEach`: trả bảng endpoint và trang về như cũ.
  */
@@ -86,99 +81,72 @@ async function nodeOf(request: APIRequestContext, pageId: string, id: string) {
 
 const misconfig = '<code>e2e-hook</code>';
 
-test('form chưa có URL: box nói ra, nhập URL, lưu — bản nháp dùng ngay', async ({ page, request }) => {
+const sectionOf = (page: Page) => page.locator('section[aria-labelledby="settings-endpoints"]');
+
+test('form dùng khoá chưa có URL: dòng hiện "chưa có URL", link Mở chọn sẵn node', async ({ page, request }) => {
   const { pageId } = await setup(request);
   expect(await (await request.get(`/render/${pageId}`)).text()).toContain(misconfig);
 
   await page.goto('/builder/settings');
-  const section = page.locator('section[aria-labelledby="settings-endpoints"]');
-  await expect(section.getByRole('heading', { name: /^Form/ }).first()).toBeVisible();
+  const section = sectionOf(page);
+  await expect(section.getByRole('heading', { name: /^Nơi nhận dữ liệu/ }).first()).toBeVisible();
 
-  const box = section.locator('[data-form-box="e2eendpointform"]');
-  await expect(box).toContainText('form đang tắt');
-  await expect(box).toContainText('trang /gioi-thieu');
-  await expect(box.getByRole('link', { name: 'Mở' })).toHaveAttribute('href', `/builder/${pageId}?node=e2eendpointform`);
-  await expect(box.getByRole('button', { name: 'Lưu URL' })).toBeDisabled();
-
-  await box.getByLabel('URL nhận dữ liệu').fill('https://example.com/e2e-hook');
-  await box.getByRole('button', { name: 'Lưu URL' }).click();
-  await expect(section.locator('[data-form-box="e2eendpointform"]')).toContainText('đã lưu URL');
-  await expect(section.locator('[data-form-box="e2eendpointform"]')).not.toContainText('form đang tắt');
-
-  expect((await endpoints(request))['e2e-hook']).toBe('https://example.com/e2e-hook');
-
-  // Canvas và /preview là bản NHÁP: đọc globals live, không chờ Publish.
-  const canvas = await (await request.get(`/render/${pageId}`)).text();
-  expect(canvas).not.toContain(misconfig);
-  expect(canvas).toContain('https://example.com/e2e-hook');
+  const row = section.locator('[data-endpoint-row="e2e-hook"]');
+  await expect(row).toContainText('chưa có URL');
+  await expect(row).toContainText('trang /gioi-thieu');
+  await expect(row.getByRole('link', { name: 'Mở' })).toHaveAttribute('href', `/builder/${pageId}?node=e2eendpointform`);
+  // Nơi nhận có form dùng: không xoá được.
+  await expect(row.getByRole('button', { name: /^Xoá/ })).toHaveCount(0);
 });
 
-test('nút "Mở" của một form đưa vào editor và chọn sẵn form đó', async ({ page, request }) => {
+test('chỉ xem: không còn ô nhập URL, nút Đổi tên hay Tách URL; URL và cảnh báo http hiện ra', async ({ page, request }) => {
+  await setup(request, { table: { 'e2e-hook': 'http://example.com/e2e-hook' } });
+  await page.goto('/builder/settings');
+  const section = sectionOf(page);
+  const row = section.locator('[data-endpoint-row="e2e-hook"]');
+
+  await expect(row.locator('[data-endpoint-url]')).toHaveText('http://example.com/e2e-hook');
+  await expect(row).toContainText('http — trình duyệt sẽ chặn');
+  await expect(row).not.toContainText('chưa có URL');
+
+  await expect(section.locator('input')).toHaveCount(0);
+  await expect(section.getByRole('button', { name: /Đổi tên|Tách URL|Lưu URL/ })).toHaveCount(0);
+});
+
+test('hai form dùng chung một nơi nhận: cùng một dòng, mỗi form một link Mở', async ({ page, request }) => {
+  const { pageId } = await setup(request, {
+    table: { 'e2e-hook': 'https://example.com/chung' },
+    extra: (rootId) => [formNode('e2eendpointform2', rootId, 'e2e-hook', 'E2E form hai')],
+  });
+  await page.goto('/builder/settings');
+  const row = sectionOf(page).locator('[data-endpoint-row="e2e-hook"]');
+  await expect(row.locator('[data-endpoint-forms] > li')).toHaveCount(2);
+  await expect(row).toContainText('E2E form hai');
+  await expect(row.locator('a[href$="?node=e2eendpointform2"]')).toHaveAttribute('href', `/builder/${pageId}?node=e2eendpointform2`);
+});
+
+test('nút "Mở" đưa vào editor và chọn sẵn form đó', async ({ page, request }) => {
   const { pageId } = await setup(request);
   await page.goto('/builder/settings');
-  const box = page.locator('[data-form-box="e2eendpointform"]');
+  const row = sectionOf(page).locator('[data-endpoint-row="e2e-hook"]');
 
   // Điều hướng PHÍA CLIENT (next/link), không tải lại trang. Lỗi 13/10/2026: đường này
   // ra editor trống — Strict Mode dọn effect một lượt, `reset()` xoá node vừa chọn, và
   // một chốt ref chặn lượt chọn lại. Tải thẳng URL thì không lộ ra.
-  await box.getByRole('link', { name: 'Mở' }).click();
+  await row.getByRole('link', { name: 'Mở' }).click();
   await expect(page).toHaveURL(new RegExp(`/builder/${pageId}$`));
   await expect(page.locator('[data-node-name]')).toBeVisible({ timeout: 30_000 });
   await expect(page.locator('[data-endpoint-picker]')).toBeVisible();
 });
 
-test('URL sai bị từ chối, không lưu', async ({ page, request }) => {
-  await setup(request);
-  await page.goto('/builder/settings');
-  const box = page.locator('[data-form-box="e2eendpointform"]');
-  await box.getByLabel('URL nhận dữ liệu').fill('javascript:alert(1)');
-  await box.getByRole('button', { name: 'Lưu URL' }).click();
-  await expect(box.getByRole('alert')).toContainText('https://');
-  expect((await endpoints(request))['e2e-hook']).toBeUndefined();
-});
-
-test('hai form dùng chung URL: box nói rõ, và tách riêng được', async ({ page, request }) => {
-  const { pageId } = await setup(request, {
-    table: { 'e2e-hook': 'https://example.com/chung' },
-    extra: (rootId) => [formNode('e2eendpointform2', rootId, 'e2e-hook', 'E2E form hai')],
-  });
-
-  await page.goto('/builder/settings');
-  const two = page.locator('[data-form-box="e2eendpointform2"]');
-  await expect(two.locator('[data-form-shared]')).toContainText('Sửa URL ở đây là sửa cho cả 2 form');
-
-  await two.getByRole('button', { name: 'Tách URL riêng cho form này' }).click();
-  await expect(page.locator('[data-form-box="e2eendpointform2"]')).toContainText('đã tách URL riêng');
-  await expect(page.locator('[data-form-box="e2eendpointform2"] [data-form-shared]')).toHaveCount(0);
-
-  // Form hai có khoá RIÊNG đặt theo tên, cùng URL; form một giữ nguyên.
-  const moved = await nodeOf(request, pageId, 'e2eendpointform2');
-  expect(moved.params.endpointKey).toBe('e2e-form-hai');
-  expect((await nodeOf(request, pageId, 'e2eendpointform')).params.endpointKey).toBe('e2e-hook');
-  const table = await endpoints(request);
-  expect(table['e2e-form-hai']).toBe('https://example.com/chung');
-  expect(table['e2e-hook']).toBe('https://example.com/chung');
-});
-
-test('đổi tên form ngay trong box', async ({ page, request }) => {
-  const { pageId } = await setup(request);
-  await page.goto('/builder/settings');
-  const box = page.locator('[data-form-box="e2eendpointform"]');
-  await box.getByRole('button', { name: 'Đổi tên form' }).click();
-  await box.getByLabel('Tên form').fill('Form E2E mới');
-  await box.getByRole('button', { name: 'Lưu tên' }).click();
-
-  await expect(page.locator('[data-form-box="e2eendpointform"] h3')).toHaveText('Form E2E mới');
-  expect((await nodeOf(request, pageId, 'e2eendpointform')).name).toBe('Form E2E mới');
-});
-
-test('URL không form nào dùng: liệt kê riêng và xoá được', async ({ page, request }) => {
+test('nơi nhận không ai dùng: vẫn liệt kê, có nút Xoá (admin), xoá xong mất khỏi bảng', async ({ page, request }) => {
   await setup(request, { table: { 'e2e-thua': 'https://example.com/thua' } });
   await page.goto('/builder/settings');
-  const row = page.locator('[data-endpoint-orphan="e2e-thua"]');
-  await row.getByRole('button', { name: 'Xoá URL e2e-thua' }).click();
+  const row = sectionOf(page).locator('[data-endpoint-row="e2e-thua"]');
+  await expect(row).toContainText('https://example.com/thua');
+  await row.getByRole('button', { name: 'Xoá nơi nhận e2e-thua' }).click();
   await row.getByRole('button', { name: 'Xoá thật' }).click();
-  await expect(page.locator('[data-endpoint-orphan="e2e-thua"]')).toHaveCount(0);
+  await expect(sectionOf(page).locator('[data-endpoint-row="e2e-thua"]')).toHaveCount(0);
   expect((await endpoints(request))['e2e-thua']).toBeUndefined();
 });
 
