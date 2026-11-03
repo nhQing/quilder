@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { NODE_TYPES } from '@/lib/doc/types';
 import { AI_CSS_ALLOWLIST } from '@/lib/doc/ai-css-allowlist';
 
+import { STYLE_PARTS } from '@/lib/composites/registry';
 import { SCHEMA_TOOLS } from './schema-tools';
 
 /**
@@ -59,5 +60,15 @@ describe('get_node_schema', () => {
   it('có nêu bẫy Grid.columns', async () => {
     const out = await output();
     expect(out.traps.some((t) => t.includes('gridTemplateColumns'))).toBe(true);
+  });
+
+  it('liệt kê style.parts sinh từ STYLE_PARTS (Form có submit)', async () => {
+    const out = (await tool.run({} as never, {} as never)) as {
+      nodeBase: { required: { style: string } };
+      style: { parts: { composites: Record<string, Record<string, string>> } };
+    };
+    expect(out.nodeBase.required.style).toContain('parts');
+    expect(Object.keys(out.style.parts.composites.Form!)).toEqual(Object.keys(STYLE_PARTS.Form!));
+    expect(out.style.parts.composites.Form).toHaveProperty('submit');
   });
 });
