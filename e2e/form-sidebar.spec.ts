@@ -56,6 +56,8 @@ test('chọn phần Nút gửi rồi đổi màu nền chỉ đổi nút gửi',
 
     // Form có phần con → có cả hai ô.
     await expect(page.getByLabel('Đang chỉnh', { exact: true })).toBeVisible();
+    // Lựa chọn đầu gọi đúng tên khối đang chọn — "Cả form", không phải "Cả khối" chung chung.
+    await expect(page.getByLabel('Đang chỉnh', { exact: true }).locator('option').first()).toHaveText('Cả form');
     await expect(page.getByLabel('Trạng thái', { exact: true })).toBeVisible();
 
     await page.getByLabel('Đang chỉnh', { exact: true }).selectOption({ label: 'Nút gửi' });
@@ -390,6 +392,73 @@ test('khối Form trên trang: kéo ô thì bản dịch tiếng Anh đi theo ô
       .filter((t) => t.nodeId === formId)
       .map((t) => t.field);
     expect(fields).toEqual(['param:fields.1.label']);
+  } finally {
+    await dropPage(request, pageId);
+  }
+});
+
+test('khối Form trên trang: kéo ô rồi Hoàn tác / Làm lại thì bản dịch đi theo ô cả hai chiều', async ({ page, request }) => {
+  // Nhiều lần lưu + dời bản dịch + nạp lại: vượt trần 30 giây mặc định khi stack bận.
+  test.setTimeout(120_000);
+  const pageId = await newPage(request, 'trundo');
+  try {
+    const formId = await insertAndSelectForm(page, request, pageId);
+    const panel = page.locator('[data-form-panel]');
+    await panel.getByLabel('Thêm ô').selectOption({ label: 'Số điện thoại' });
+    await expect
+      .poll(async () => (await formNode(request, pageId, formId)).params.fields.map((f) => f.name), SAVE_POLL)
+      .toEqual(['email', 'tel']);
+
+    await setTranslation(request, { pageId, locale: 'en', nodeId: formId, field: 'param:fields.0.label', value: 'Email EN' });
+    await setTranslation(request, { pageId, locale: 'en', nodeId: formId, field: 'param:fields.1.label', value: 'Phone EN' });
+
+    /** Nhãn tiếng Anh theo TÊN ô (đọc từ khung xem trước `en`), không theo chỉ số. */
+    const enLabels = async () => {
+      const html = await renderEn(request, pageId);
+      return {
+        email: /for="[^"]*-email"[^>]*>Email EN/.test(html),
+        tel: /for="[^"]*-tel"[^>]*>Phone EN/.test(html),
+        swapped: /for="[^"]*-email"[^>]*>Phone EN/.test(html) || /for="[^"]*-tel"[^>]*>Email EN/.test(html),
+      };
+    };
+    const RIGHT = { email: true, tel: true, swapped: false };
+    expect(await enLabels()).toEqual(RIGHT);
+
+    // Nạp lại để Inspector có bản dịch vừa ghi (và lịch sử hoàn tác rỗng), rồi đưa SĐT lên đầu.
+    await page.reload();
+    await page.locator(`[data-layer-row="${formId}"]`).click();
+    await page.locator('[data-form-panel]').getByRole('button', { name: 'Đưa ô "Số điện thoại" lên' }).click();
+    await expect
+      .poll(async () => (await formNode(request, pageId, formId)).params.fields.map((f) => f.name), SAVE_POLL)
+      .toEqual(['tel', 'email']);
+    await expect.poll(enLabels, SAVE_POLL).toEqual(RIGHT);
+
+    const undo = page.getByRole('button', { name: 'Hoàn tác', exact: true });
+    const redo = page.getByRole('button', { name: 'Làm lại', exact: true });
+
+    // Hoàn tác: ô về thứ tự cũ, và nhãn tiếng Anh vẫn nằm đúng ô (không đổi chỗ cho nhau).
+    await expect(undo).toBeEnabled();
+    await undo.click();
+    await expect
+      .poll(async () => (await formNode(request, pageId, formId)).params.fields.map((f) => f.name), SAVE_POLL)
+      .toEqual(['email', 'tel']);
+    await expect.poll(enLabels, SAVE_POLL).toEqual(RIGHT);
+
+    // Làm lại: thứ tự mới, nhãn vẫn đúng ô.
+    await expect(redo).toBeEnabled();
+    await redo.click();
+    await expect
+      .poll(async () => (await formNode(request, pageId, formId)).params.fields.map((f) => f.name), SAVE_POLL)
+      .toEqual(['tel', 'email']);
+    await expect.poll(enLabels, SAVE_POLL).toEqual(RIGHT);
+
+    const rows = await tool(request, 'list_translations', { pageId, locale: 'en' });
+    // Đúng hai hàng, không hàng thừa nào sót lại sau ba lần dời.
+    const fields = (rows.translations as { nodeId: string; field: string }[])
+      .filter((t) => t.nodeId === formId)
+      .map((t) => t.field)
+      .sort();
+    expect(fields).toEqual(['param:fields.0.label', 'param:fields.1.label']);
   } finally {
     await dropPage(request, pageId);
   }

@@ -336,6 +336,41 @@ export function translationRemapPlan(
   return { upserts, deletes };
 }
 
+export type TranslationPlan = ReturnType<typeof translationRemapPlan>;
+
+/**
+ * Hai chiều của một lần dời bản dịch theo ô: `forward` (= `translationRemapPlan`, cũng là
+ * "làm lại") và `backward` (hoàn tác).
+ *
+ * ## Vì sao cần chiều ngược
+ *
+ * Hoàn tác một lần kéo/bỏ ô chạy op nghịch đảo — params quay về, bản dịch thì KHÔNG: chúng
+ * nằm ở bảng riêng, ngoài doc. Không ghi ngược thì sau Ctrl+Z nhãn tiếng Anh của ô email nằm
+ * trên ô SĐT. `backward` tính từ ẢNH CHỤP lúc dời (không suy ngược từ map chỉ số): bỏ ô thì
+ * lần dời đã XOÁ bản dịch của ô đó, và chỉ ảnh chụp còn giữ giá trị để ghi lại.
+ *
+ * Chỉ chạm các hàng lần dời đã chạm — bản dịch khác của form để nguyên.
+ */
+export function translationRemapSteps(
+  rows: readonly TranslationRow[],
+  remap: (path: string) => string | null,
+): { forward: TranslationPlan; backward: TranslationPlan } {
+  const forward = translationRemapPlan(rows, remap);
+  const key = (r: { locale: string; field: string }) => `${r.locale}|${r.field}`;
+  const before = new Map(rows.map((r) => [key(r), r]));
+  const touched = new Map<string, { locale: string; field: string }>();
+  for (const r of [...forward.upserts, ...forward.deletes]) {
+    touched.set(key(r), { locale: r.locale, field: r.field });
+  }
+  const backward: TranslationPlan = { upserts: [], deletes: [] };
+  for (const [k, at] of touched) {
+    const was = before.get(k);
+    if (was) backward.upserts.push({ locale: at.locale, field: at.field, value: was.value });
+    else backward.deletes.push(at);
+  }
+  return { forward, backward };
+}
+
 /** Ngược của `optionsFromText`: chỉ viết `giá trị | nhãn` khi giá trị KHÔNG suy được từ nhãn. */
 export function optionsToText(options: readonly Option[] | undefined): string {
   return (options ?? [])

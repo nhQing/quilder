@@ -19,6 +19,7 @@ import {
   paramPathRemapper,
   reconcileOptions,
   translationRemapPlan,
+  translationRemapSteps,
   formPreviewCss,
   moveField,
   optionsFromText,
@@ -388,5 +389,65 @@ describe('dời bản dịch theo chỉ số ô', () => {
       paramPathRemapper([0, 1], {}),
     );
     expect(plan).toEqual({ upserts: [], deletes: [] });
+  });
+});
+
+/**
+ * Hoàn tác / làm lại một lần kéo/bỏ ô: params quay về nhờ op nghịch đảo, còn bản dịch theo
+ * chỉ số ô thì phải được ghi NGƯỢC lại — không thì nhãn tiếng Anh nằm trên ô khác.
+ */
+describe('translationRemapSteps', () => {
+  /** Áp một bước lên bảng bản dịch giả (khoá locale|field). */
+  const run = (table: Map<string, unknown>, step: ReturnType<typeof translationRemapSteps>['forward']) => {
+    const next = new Map(table);
+    for (const u of step.upserts) next.set(`${u.locale}|${u.field}`, u.value);
+    for (const d of step.deletes) next.delete(`${d.locale}|${d.field}`);
+    return next;
+  };
+  const tableOf = (rows: { locale: string; field: string; value: unknown }[]) =>
+    new Map(rows.map((r) => [`${r.locale}|${r.field}`, r.value]));
+
+  it('kéo ô: forward là kế hoạch dời cũ, backward trả mọi hàng về chỗ cũ', () => {
+    const rows = [
+      { locale: 'en', field: 'param:fields.0.label', value: 'Email EN' },
+      { locale: 'en', field: 'param:fields.1.label', value: 'Phone EN' },
+      { locale: 'en', field: 'param:fields.1.help', value: 'Phone help' },
+    ];
+    const remap = paramPathRemapper([1, 0], {});
+    const steps = translationRemapSteps(rows, remap);
+    expect(steps.forward).toEqual(translationRemapPlan(rows, remap));
+
+    const before = tableOf(rows);
+    const after = run(before, steps.forward);
+    expect(after.get('en|param:fields.1.label')).toBe('Email EN');
+    expect(after.get('en|param:fields.0.label')).toBe('Phone EN');
+    expect(after.get('en|param:fields.0.help')).toBe('Phone help');
+    expect(after.has('en|param:fields.1.help')).toBe(false);
+
+    expect(run(after, steps.backward)).toEqual(before);
+    // Làm lại sau hoàn tác: về đúng trạng thái sau lần dời.
+    expect(run(run(after, steps.backward), steps.forward)).toEqual(after);
+  });
+
+  it('bỏ ô: backward ghi LẠI bản dịch của ô đã bỏ (lần dời đã xoá nó)', () => {
+    const rows = [
+      { locale: 'en', field: 'param:fields.0.label', value: 'Email EN' },
+      { locale: 'en', field: 'param:fields.1.label', value: 'Phone EN' },
+      { locale: 'fr', field: 'param:fields.0.label', value: 'Email FR' },
+    ];
+    const steps = translationRemapSteps(rows, paramPathRemapper([null, 0], {}));
+    const before = tableOf(rows);
+    const after = run(before, steps.forward);
+    expect([...after.entries()]).toEqual([['en|param:fields.0.label', 'Phone EN']]);
+    expect(run(after, steps.backward)).toEqual(before);
+  });
+
+  it('không có gì dời → hai bước đều rỗng', () => {
+    const steps = translationRemapSteps(
+      [{ locale: 'en', field: 'param:fields.0.label', value: 'A' }],
+      paramPathRemapper([0, 1], {}),
+    );
+    expect(steps.forward).toEqual({ upserts: [], deletes: [] });
+    expect(steps.backward).toEqual({ upserts: [], deletes: [] });
   });
 });

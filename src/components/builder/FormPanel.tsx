@@ -43,7 +43,7 @@ import {
   paramPathRemapper,
   reconcileOptions,
   removeField,
-  translationRemapPlan,
+  translationRemapSteps,
   setAfterSubmitOps,
   setFormParam,
   updateField,
@@ -51,9 +51,10 @@ import {
   type FormEdit,
   type FormPreview,
   type FormTextParam,
+  type TranslationPlan,
 } from '@/lib/builder/form-edit';
 import { freshId } from '@/lib/builder/node-actions';
-import { selectStyleLocked, useEditor } from '@/lib/builder/store';
+import { selectStyleLocked, useEditor, type HistoryEffect } from '@/lib/builder/store';
 import { focusRing, ui } from '@/lib/builder/ui';
 import {
   MAX_FORM_FIELDS,
@@ -201,21 +202,35 @@ export function FormPanel({
     });
 
   /**
-   * Bản dịch của trang này đi theo ô: sau khi op đã lưu, ghi lại từng hàng `param:fields.*`
-   * về chỉ số mới qua đường ghi bản dịch có sẵn (`/api/translations`), rồi xoá chỗ cũ.
-   * Xem `translationRemapPlan`.
+   * Bản dịch của trang này đi theo ô: kéo/bỏ ô thì ghi lại từng hàng `param:fields.*` về chỉ
+   * số mới qua đường ghi bản dịch có sẵn (`/api/translations`), rồi xoá chỗ cũ — và hoàn tác /
+   * làm lại bước đó ghi ngược / xuôi lại. Trả `undefined` khi không có hàng nào phải dời.
+   *
+   * Gắn vào mục lịch sử (`HistoryEffect` của store) chứ không chạy tay sau `dispatch`: Ctrl+Z
+   * trả params về bằng op nghịch đảo, còn bản dịch ở bảng riêng — không ghi ngược thì nhãn
+   * tiếng Anh nằm trên ô khác. Kế hoạch tính TRƯỚC khi lưu, từ bản dịch đang có; hai chiều lấy
+   * từ cùng ảnh chụp đó (xem `translationRemapSteps`).
    */
-  const remapTranslations = async (remap: (path: string) => string | null) => {
+  const translationEffect = (remap: (path: string) => string | null): HistoryEffect | undefined => {
     // Form trong component: bản dịch nằm trên các trang dùng nó (địa chỉ instance/local),
     // không phải của trang đang mở — việc đó do `indexBlock` chặn, không dời ở đây.
-    if (!pageId || componentId) return;
+    if (!pageId || componentId) return undefined;
     const rows = Object.entries(translations).flatMap(([locale, list]) =>
       list
         .filter((t) => t.nodeId === node.id && t.field.startsWith('param:fields.'))
         .map((t) => ({ locale, field: t.field, value: t.value })),
     );
-    const plan = translationRemapPlan(rows, remap);
-    if (!plan.upserts.length && !plan.deletes.length) return;
+    const steps = translationRemapSteps(rows, remap);
+    if (!steps.forward.upserts.length && !steps.forward.deletes.length) return undefined;
+    return {
+      forward: () => writeTranslationPlan(pageId, steps.forward),
+      backward: () => writeTranslationPlan(pageId, steps.backward),
+    };
+  };
+
+  /** Ghi một chiều của lần dời bản dịch. Hàng ghi hỏng thì nói ra, không nuốt. */
+  const writeTranslationPlan = async (pageId: string, plan: TranslationPlan) => {
+    setRemapping(true);
     const failed: string[] = [];
     const write = async (locale: string, field: string, value: unknown) => {
       try {
@@ -232,9 +247,13 @@ export function FormPanel({
         failed.push(`${locale} ${field}: ${error instanceof Error ? error.message : 'lỗi mạng'}`);
       }
     };
-    // Ghi đích TRƯỚC rồi mới xoá: lỡ đứt giữa chừng thì còn bản thừa, không mất bản nào.
-    for (const u of plan.upserts) await write(u.locale, u.field, u.value);
-    for (const d of plan.deletes) await write(d.locale, d.field, null);
+    try {
+      // Ghi đích TRƯỚC rồi mới xoá: lỡ đứt giữa chừng thì còn bản thừa, không mất bản nào.
+      for (const u of plan.upserts) await write(u.locale, u.field, u.value);
+      for (const d of plan.deletes) await write(d.locale, d.field, null);
+    } finally {
+      setRemapping(false);
+    }
     setRemapError(
       failed.length
         ? `Không dời được ${failed.length} bản dịch theo ô — kiểm lại ở bảng Văn bản: ${failed.join('; ')}`
@@ -274,16 +293,12 @@ export function FormPanel({
       const { [source]: _drop, ...rest } = e;
       return rest;
     });
-    void (async () => {
-      const saved = await dispatch([{ op: 'setProps', nodeId: node.id, props: { params: result.params } }], { label });
-      if (!saved || !moves || !remap) return;
-      setRemapping(true);
-      try {
-        await remapTranslations(paramPathRemapper(remap.fields, remap.options));
-      } finally {
-        setRemapping(false);
-      }
-    })();
+    // Store chạy `forward` sau khi lưu, `backward` khi hoàn tác, `forward` lại khi làm lại.
+    const effect = moves && remap ? translationEffect(paramPathRemapper(remap.fields, remap.options)) : undefined;
+    void dispatch(
+      [{ op: 'setProps', nodeId: node.id, props: { params: result.params } }],
+      { label, ...(effect ? { effect } : {}) },
+    );
     return true;
   };
 

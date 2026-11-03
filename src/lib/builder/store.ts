@@ -203,10 +203,47 @@ export interface EditorState {
   setScreenWidth: (id: string, width: number) => void;
   resetScreens: () => void;
 
-  /** Gửi op lên server, cập nhật doc và ngăn xếp undo. */
-  dispatch: (ops: Op[], opts?: { label?: string }) => Promise<boolean>;
+  /**
+   * Gửi op lên server, cập nhật doc và ngăn xếp undo. `effect`: việc NGOÀI doc đi kèm batch
+   * này — chạy `forward` sau khi lưu, và theo mục lịch sử qua mọi lần hoàn tác / làm lại.
+   */
+  dispatch: (ops: Op[], opts?: { label?: string; effect?: HistoryEffect }) => Promise<boolean>;
   undo: () => Promise<void>;
   redo: () => Promise<void>;
+}
+
+/**
+ * Việc NGOÀI doc gắn với một mục lịch sử — vd dời bản dịch `param:fields.N.*` khi kéo/bỏ ô
+ * Form (xem `FormPanel`). `forward` chạy khi lưu và khi làm lại, `backward` khi hoàn tác.
+ *
+ * ## Vì sao ở store
+ *
+ * Op nghịch đảo chỉ trả doc về. Bản dịch nằm ở bảng riêng, nên hoàn tác một lần kéo ô mà
+ * không ghi ngược bản dịch thì nhãn tiếng Anh nằm trên ô khác — và Ctrl+Z bấm ở thanh trên,
+ * lúc khối Form có khi đã đóng. Chỉ store biết mục nào đang được hoàn tác.
+ *
+ * Hai hàm tự lo báo lỗi của chúng; store chỉ đảm bảo lỗi không làm kẹt trạng thái lưu.
+ */
+export interface HistoryEffect {
+  forward: () => Promise<void>;
+  backward: () => Promise<void>;
+}
+
+/**
+ * Mục lịch sử → việc kèm theo. Khoá là CHÍNH mảng op trong `undoStack` / `redoStack`: mỗi lần
+ * hoàn tác / làm lại server trả một mảng nghịch đảo mới, và việc kèm được chuyển sang nó. Map
+ * yếu nên mục rơi khỏi ngăn xếp (thao tác mới xoá nhánh redo, `init`) tự được dọn.
+ */
+const historyEffects = new WeakMap<Op[], HistoryEffect>();
+
+/** Chạy một chiều của việc kèm; lỗi không được làm kẹt trạng thái "đang lưu". */
+async function runEffect(effect: HistoryEffect | undefined, dir: 'forward' | 'backward') {
+  if (!effect) return;
+  try {
+    await effect[dir]();
+  } catch (error) {
+    console.error('[editor] việc kèm mục lịch sử lỗi', error);
+  }
 }
 
 /** 409 từ /api/ops: bản nháp đã đổi ở nơi khác. `currentSeq` là bản hiện tại. */
@@ -470,16 +507,20 @@ export const useEditor = create<EditorState>((set, get) => ({
       const { doc, undo, seq, rebased, css } = await postWithRebase(
         target, ops, opts?.label, get().draftSeq,
       );
+      if (opts?.effect) historyEffects.set(undo, opts.effect);
       set((s) => ({
         savedDoc: doc,
         candidateDoc: doc,
         // Thao tác mới làm nhánh redo cũ vô nghĩa — giống mọi editor khác.
         undoStack: [...s.undoStack, undo],
         redoStack: [],
-        save: rebased ? { k: 'clean', seq, rebased } : { k: 'clean', seq },
         draftSeq: seq,
         ...(css !== undefined ? { liveCss: { css, at: Date.now() } } : {}),
       }));
+      // Vẫn "đang lưu" tới khi việc kèm xong: Hoàn tác bấm chen vào giữa sẽ ghi ngược bản
+      // dịch trong lúc chiều xuôi còn đang ghi.
+      await runEffect(opts?.effect, 'forward');
+      set({ save: rebased ? { k: 'clean', seq, rebased } : { k: 'clean', seq } });
       return true;
     } catch (error) {
       // `retry: ops` — chính batch vừa trượt. Không giữ nó thì nút "thử lại" không
@@ -511,14 +552,17 @@ export const useEditor = create<EditorState>((set, get) => ({
       // Undo cũng đi qua đúng API và đúng validator — nó chỉ là một batch op
       // bình thường. Không có đường tắt nào ghi thẳng vào DB.
       const { doc, undo, seq, rebased, css } = await postWithRebase(target, last, 'undo', get().draftSeq);
+      const effect = historyEffects.get(last);
+      if (effect) historyEffects.set(undo, effect);
       set((s) => ({
         savedDoc: doc, candidateDoc: doc,
         undoStack: s.undoStack.slice(0, -1),
         redoStack: [...s.redoStack, undo],
-        save: rebased ? { k: 'clean', seq, rebased } : { k: 'clean', seq },
         draftSeq: seq,
         ...(css !== undefined ? { liveCss: { css, at: Date.now() } } : {}),
       }));
+      await runEffect(effect, 'backward');
+      set({ save: rebased ? { k: 'clean', seq, rebased } : { k: 'clean', seq } });
     } catch (error) {
       set({
         save: {
@@ -538,14 +582,17 @@ export const useEditor = create<EditorState>((set, get) => ({
     set({ save: { k: 'saving' } });
     try {
       const { doc, undo, seq, rebased, css } = await postWithRebase(target, last, 'redo', get().draftSeq);
+      const effect = historyEffects.get(last);
+      if (effect) historyEffects.set(undo, effect);
       set((s) => ({
         savedDoc: doc, candidateDoc: doc,
         redoStack: s.redoStack.slice(0, -1),
         undoStack: [...s.undoStack, undo],
-        save: rebased ? { k: 'clean', seq, rebased } : { k: 'clean', seq },
         draftSeq: seq,
         ...(css !== undefined ? { liveCss: { css, at: Date.now() } } : {}),
       }));
+      await runEffect(effect, 'forward');
+      set({ save: rebased ? { k: 'clean', seq, rebased } : { k: 'clean', seq } });
     } catch (error) {
       set({
         save: {
