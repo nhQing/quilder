@@ -94,6 +94,21 @@ describe('Form — hộp thoại sau khi gửi', () => {
     expect(document.activeElement).toBe(host.querySelector('[data-part="submit"]'));
   });
 
+  it('Esc (cancel rồi close) cũng đóng và trả focus về nút gửi', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true }));
+    await mount();
+    await submit();
+    const dlg = host.querySelector('dialog')!;
+    expect(dlg.getAttribute('aria-label')).toBeTruthy();
+    await act(async () => {
+      dlg.dispatchEvent(new Event('cancel', { cancelable: true }));
+      dlg.close();
+      dlg.dispatchEvent(new Event('close'));
+    });
+    expect(host.querySelector('dialog[open]')).toBeNull();
+    expect(document.activeElement).toBe(host.querySelector('[data-part="submit"]'));
+  });
+
   it('slot trỏ id không tồn tại (slot rỗng) thì không ném', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true }));
     await mount({ success: null, error: undefined });

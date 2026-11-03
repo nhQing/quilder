@@ -170,7 +170,8 @@ describe('Form — chưa chọn nơi nhận (endpointKey rỗng)', () => {
     expect(out).toContain('Chọn form rồi đặt nơi nhận ở sidebar');
     expect(out).not.toContain('Cài đặt › Form');
     // Mọi ô nhập và nút đều disabled.
-    expect(out).toMatch(/<input[^>]*disabled[^>]*name="email"/);
+    const emailInput = /<input[^>]*name="email"[^>]*>/.exec(out)?.[0] ?? '';
+    expect(emailInput).toContain('disabled');
     expect(out).toMatch(/<button[^>]*disabled/);
   });
 

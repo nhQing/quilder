@@ -119,11 +119,16 @@ export function Form({
     if (shown && d && !d.open) d.showModal();
   }, [shown]);
 
+  /**
+   * MỘT đường đóng cho mọi cách đóng (nút Đóng, bấm nền, Esc, sự kiện `close`).
+   * Idempotent: gọi hai lần (`d.close()` rồi `onClose`) vô hại.
+   * Trả focus về nút gửi — lúc này status đã ok/error nên nút không còn disabled;
+   * nếu để Esc tự xử lý thì focus rơi về body.
+   */
   const closeDialog = () => {
     const d = dialogRef.current;
     if (d?.open) d.close();
     setShown(null);
-    // Trả focus về nút gửi: người dùng bàn phím không bị ném về đầu trang.
     submitRef.current?.focus();
   };
 
@@ -320,7 +325,8 @@ export function Form({
           ref={dialogRef}
           className="mm-form__dialog"
           data-part="dialog"
-          onClose={() => setShown(null)}
+          onClose={closeDialog}
+          aria-label={a11yLabel ?? 'Kết quả gửi form'}
           // Bấm nền (chính phần tử dialog, không phải nội dung) thì đóng.
           onClick={(e) => {
             if (e.target === e.currentTarget) closeDialog();
