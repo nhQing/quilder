@@ -17,6 +17,7 @@
 
 import { parseCompositeParams } from '@/lib/composites/registry';
 import type { EndpointTable } from '@/lib/doc/endpoint-table';
+import type { EndpointFormRow, EndpointUsageRow } from '@/lib/doc/endpoint-usage';
 
 export interface EndpointOption {
   key: string;
@@ -108,4 +109,32 @@ export function readEndpointKey(
  */
 export function withEndpointKey(raw: unknown, key: string): Record<string, unknown> {
   return { ...(isRecord(raw) ? raw : {}), endpointKey: key };
+}
+
+/** Form đang chọn, theo nơi chứa: `nodeId` chỉ duy nhất TRONG một cây. */
+export interface FormSelf {
+  kind: 'page' | 'component';
+  id: string;
+  nodeId: string;
+}
+
+/**
+ * Các form KHÁC đang đọc cùng khoá — để khối "Gửi tới" nói "Dùng chung với N form".
+ *
+ * Bỏ chính form đang chọn theo (nơi chứa, nodeId) chứ không theo khoá: `usage` cấp từ
+ * server lúc tải trang, còn khoá của form đang chọn vừa đổi trong editor thì `usage` chưa
+ * biết — "ai khác dùng khoá này" thì vẫn đúng, "form này đang ở khoá nào" mới là thứ cũ.
+ * Khoá rỗng (chưa có nơi nhận) không chia sẻ với ai.
+ */
+export function sharedWith(usage: readonly EndpointUsageRow[], key: string, self: FormSelf): EndpointFormRow[] {
+  if (!key) return [];
+  const row = usage.find((u) => u.key === key);
+  return (row?.forms ?? []).filter(
+    (f) => !(f.where.kind === self.kind && f.where.id === self.id && f.nodeId === self.nodeId),
+  );
+}
+
+/** Tên nơi chứa một form: `/slug` cho trang, `component Tên` cho component. */
+export function placeLabel(f: EndpointFormRow): string {
+  return f.where.kind === 'page' ? `/${f.where.slug}` : `component ${f.where.name}`;
 }

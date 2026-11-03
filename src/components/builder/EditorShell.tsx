@@ -18,6 +18,8 @@ import { readFlag, safeStorage, STORAGE_KEYS, write } from '@/lib/builder/persis
 import type { ComponentTrees } from '@/lib/builder/text-units';
 import type { Doc } from '@/lib/doc/types';
 import type { EndpointTable } from '@/lib/doc/endpoint-table';
+import type { EndpointUsageRow } from '@/lib/doc/endpoint-usage';
+import type { Role } from '@/lib/auth/session';
 import { presetTreeToDoc } from '@/lib/doc/migrate';
 import type { PageSummary, PresetSummary, TokenOption } from '@/lib/builder/queries';
 import { publishLook } from '@/lib/builder/publish-label';
@@ -53,6 +55,8 @@ export function EditorShell({
   seo,
   siteUrl,
   endpoints,
+  endpointUsage,
+  role,
 }: {
   pageId: string;
   slug: string;
@@ -82,6 +86,10 @@ export function EditorShell({
   siteUrl: string | null;
   /** Bảng `Site.globals.endpoint` — ô "Gửi tới" của Form trong Inspector. */
   endpoints: EndpointTable;
+  /** Form nào dùng khoá nào trên cả site — khối "Gửi tới" ghi "Dùng chung với …". */
+  endpointUsage: EndpointUsageRow[];
+  /** Role của người đang sửa: chỉ admin đặt được URL nhận mới. */
+  role: Role;
 }) {
   const router = useRouter();
   const init = useEditor((s) => s.init);
@@ -737,6 +745,8 @@ export function EditorShell({
             // Giữ cả ở chế độ sửa component: bảng là của SITE, không theo trang, nên
             // một Form nằm trong component chọn từ đúng bảng đó.
             endpoints={endpoints}
+            endpointUsage={endpointUsage}
+            role={role}
             onEditComponent={editing ? undefined : editFromPane}
           />
         </aside>

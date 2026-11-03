@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { endpointOptions, readEndpointKey, withEndpointKey } from './endpoint-options';
+import { endpointOptions, placeLabel, readEndpointKey, sharedWith, withEndpointKey } from './endpoint-options';
+import type { EndpointUsageRow } from '@/lib/doc/endpoint-usage';
 
 const TABLE = {
   subscribe: 'https://admin-api.example.com/v1/core-service/subscribe',
@@ -99,5 +100,42 @@ describe('withEndpointKey', () => {
     expect(withEndpointKey(null, 'a')).toEqual({ endpointKey: 'a' });
     expect(withEndpointKey(['x'], 'a')).toEqual({ endpointKey: 'a' });
     expect(withEndpointKey('x', 'a')).toEqual({ endpointKey: 'a' });
+  });
+});
+
+describe('sharedWith / placeLabel', () => {
+  const row = (nodeId: string, where: EndpointUsageRow['forms'][number]['where']) => ({
+    nodeId, label: nodeId, composite: 'Form' as const, where, href: '/x',
+  });
+  const usage: EndpointUsageRow[] = [
+    {
+      key: 'subscribe',
+      forms: [
+        row('f1', { kind: 'page', id: 'pa', slug: 'a', title: 'A' }),
+        row('f2', { kind: 'page', id: 'pb', slug: 'b', title: 'B' }),
+        row('f3', { kind: 'component', id: 'c1', name: 'Chân trang' }),
+      ],
+    },
+    { key: 'other', forms: [row('f9', { kind: 'page', id: 'pz', slug: 'z', title: 'Z' })] },
+  ];
+
+  it('liệt kê form CÙNG khoá, bỏ chính form đang chọn', () => {
+    const rows = sharedWith(usage, 'subscribe', { kind: 'page', id: 'pa', nodeId: 'f1' });
+    expect(rows.map((r) => r.nodeId)).toEqual(['f2', 'f3']);
+  });
+
+  it('cùng nodeId nhưng ở nơi khác thì vẫn là form khác', () => {
+    const rows = sharedWith(usage, 'subscribe', { kind: 'page', id: 'pz', nodeId: 'f1' });
+    expect(rows).toHaveLength(3);
+  });
+
+  it('khoá rỗng hoặc không có ai dùng → rỗng', () => {
+    expect(sharedWith(usage, '', { kind: 'page', id: 'pa', nodeId: 'f1' })).toEqual([]);
+    expect(sharedWith(usage, 'nope', { kind: 'page', id: 'pa', nodeId: 'f1' })).toEqual([]);
+  });
+
+  it('placeLabel: trang là /slug, component có tên', () => {
+    expect(placeLabel(usage[0]!.forms[1]!)).toBe('/b');
+    expect(placeLabel(usage[0]!.forms[2]!)).toBe('component Chân trang');
   });
 });

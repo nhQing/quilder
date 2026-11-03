@@ -158,9 +158,9 @@ export const GUIDES: Record<TransferCode, Guide> = {
     tag: 'C1', title: 'Form chưa có URL nhận dữ liệu',
     why: 'Form "{form}" gửi tới khoá {key}, nhưng môi trường này chưa đặt URL cho khoá đó — form đang tắt.',
     steps: [
-      'Mở Cài đặt › Form.',
-      'Tìm box của form "{form}" (khoá {key}).',
-      'Dán URL nhận dữ liệu CỦA MÔI TRƯỜNG NÀY, bấm "Lưu URL".',
+      'Mở form "{form}" trong editor (màn Cài đặt có nút Mở cho từng form).',
+      'Ở khối "Gửi tới" của thanh bên, chọn khoá {key} (hoặc bấm "Nơi nhận mới").',
+      'Dán URL nhận dữ liệu CỦA MÔI TRƯỜNG NÀY, bấm "Lưu URL". Chỉ admin đặt được URL.',
     ],
   },
   'locale-missing': {

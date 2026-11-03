@@ -22,6 +22,8 @@ import { presetTreeToDoc } from '@/lib/doc/migrate';
 
 import { ComponentEditorShell } from '@/components/builder/ComponentEditorShell';
 import { prisma } from '@/lib/db';
+import { getSession } from '@/lib/auth/guard';
+import { endpointUsage } from '@/lib/builder/site-settings';
 import { listPresets, listTokens } from '@/lib/builder/queries';
 import { readEndpointTable } from '@/lib/doc/endpoint-table';
 import { loadComponents } from '@/lib/render/components';
@@ -36,7 +38,7 @@ export default async function ComponentEditPage({
 }) {
   const { id } = await params;
 
-  const [preset, presets, tokens, globals] = await Promise.all([
+  const [preset, presets, tokens, globals, session, usage] = await Promise.all([
     prisma.preset.findUnique({
       where: { id },
       select: { id: true, key: true, name: true, builtin: true, system: true, tree: true },
@@ -45,6 +47,8 @@ export default async function ComponentEditPage({
     listTokens(),
     // Bảng endpoint cho ô "Gửi tới" của Form — cùng nguồn với editor trang.
     draftSiteGlobals(),
+    getSession(),
+    endpointUsage(),
   ]);
   if (!preset) notFound();
   // Mẫu hệ thống không sửa trực tiếp (server 409): về trang chi tiết, nơi có nút Nhân bản.
@@ -77,6 +81,8 @@ export default async function ComponentEditPage({
       components={components}
       presets={presets}
       endpoints={readEndpointTable(globals)}
+      endpointUsage={usage}
+      role={session?.role ?? 'viewer'}
     />
   );
 }

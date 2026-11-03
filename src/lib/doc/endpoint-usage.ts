@@ -73,3 +73,21 @@ export function endpointFormsIn(tree: { nodes: Record<string, Node> }): Endpoint
   }
   return out.sort((a, b) => a.nodeId.localeCompare(b.nodeId));
 }
+
+/**
+ * Một form (hoặc biểu đồ) đang đọc một khoá, kèm nơi chứa và link mở đúng chỗ — hình dạng
+ * mà server cấp cho UI (`endpointUsage` ở `site-settings.ts`). Ở file thuần này, không ở
+ * component, để cả khối "Gửi tới" của Inspector lẫn màn Cài đặt import mà không kéo nhau.
+ */
+export interface EndpointFormRow {
+  nodeId: string;
+  label: string;
+  composite: 'Form' | 'NavChart';
+  where: { kind: 'page'; id: string; slug: string; title: string } | { kind: 'component'; id: string; name: string };
+  href: string;
+}
+
+export interface EndpointUsageRow {
+  key: string;
+  forms: EndpointFormRow[];
+}

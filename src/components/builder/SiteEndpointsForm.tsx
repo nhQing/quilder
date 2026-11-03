@@ -26,23 +26,14 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 import { insecureEndpoint, type EndpointTable } from '@/lib/doc/endpoint-table';
+import type { EndpointFormRow, EndpointUsageRow } from '@/lib/doc/endpoint-usage';
 import { cn } from '@/lib/builder/cn';
 import { ui } from '@/lib/builder/ui';
 import { Badge } from './ui/Badge';
 import { Button, ButtonLink, IconButton } from './ui/Button';
 
-export interface EndpointFormRow {
-  nodeId: string;
-  label: string;
-  composite: 'Form' | 'NavChart';
-  where: { kind: 'page'; id: string; slug: string; title: string } | { kind: 'component'; id: string; name: string };
-  href: string;
-}
-
-export interface EndpointUsageRow {
-  key: string;
-  forms: EndpointFormRow[];
-}
+// Kiểu dùng chung với khối "Gửi tới" của Inspector — định nghĩa ở `endpoint-usage.ts`.
+export type { EndpointFormRow, EndpointUsageRow };
 
 type FormItem = EndpointFormRow & { key: string };
 

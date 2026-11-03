@@ -28,6 +28,8 @@ import { selectSaving, selectStyleLocked, useEditor } from '@/lib/builder/store'
 import { formatColor, formatLen } from '@/lib/builder/value-io';
 import { labelOf } from '@/lib/builder/node-label';
 import type { EndpointTable } from '@/lib/doc/endpoint-table';
+import type { EndpointUsageRow } from '@/lib/doc/endpoint-usage';
+import type { Role } from '@/lib/auth/session';
 import { ContentPanel } from './ContentPanel';
 import { EndpointPicker } from './EndpointPicker';
 import { FormPanel } from './FormPanel';
@@ -223,6 +225,7 @@ const KEYS = {
 
 /** Bảng rỗng dùng chung — mặc định của `endpoints`, một object cho mọi lần render. */
 const NO_ENDPOINTS: EndpointTable = {};
+const NO_USAGE: EndpointUsageRow[] = [];
 
 /** Cùng giới hạn với `setName` trong `schema.ts`. */
 const NAME_MAX = 120;
@@ -245,6 +248,8 @@ export function Inspector({
   translations,
   seo,
   endpoints = NO_ENDPOINTS,
+  endpointUsage = NO_USAGE,
+  role = 'viewer',
   onEditComponent,
 }: {
   doc: Doc;
@@ -277,6 +282,10 @@ export function Inspector({
    * mà phải chờ một round-trip mới có danh sách là bảng thuộc tính nhấp nháy.
    */
   endpoints?: EndpointTable;
+  /** Form nào dùng khoá nào trên cả site (cho "Dùng chung với …"). */
+  endpointUsage?: EndpointUsageRow[];
+  /** Chỉ `admin` sửa được URL nhận; mặc định `viewer` = chỉ đọc. */
+  role?: Role;
   /** Vắng mặt khi đang Ở TRONG chế độ sửa component — không lồng thêm một lớp nữa. */
   onEditComponent?: (componentId: string) => void;
 }) {
@@ -361,6 +370,8 @@ export function Inspector({
             pageId={pageId}
             translations={translations}
             endpoints={endpoints}
+            endpointUsage={endpointUsage}
+            role={role}
           />
         )
       )}
@@ -384,6 +395,8 @@ function NodeInspector({
   pageId,
   translations,
   endpoints,
+  endpointUsage,
+  role,
 }: {
   node: Node;
   tokens: TokenOption[];
@@ -393,6 +406,8 @@ function NodeInspector({
   pageId: string | null;
   translations: Record<string, DraftTranslation[]>;
   endpoints: EndpointTable;
+  endpointUsage: EndpointUsageRow[];
+  role: Role;
 }) {
   const breakpoint = useEditor((s) => s.breakpoint);
   const locale = useEditor((s) => s.locale);
@@ -474,7 +489,7 @@ function NodeInspector({
         và một ô chọn ghi vào doc GỐC giữa lúc đang sửa bản tiếng Anh là đúng loại lỗi
         im lặng mà `selectStyleLocked` tồn tại để chặn.
       */}
-      {node.type === 'Composite' && !locale && <EndpointPicker node={node} endpoints={endpoints} />}
+      {node.type === 'Composite' && !locale && <EndpointPicker node={node} endpoints={endpoints} usage={endpointUsage} role={role} />}
 
       {/*
         Form: ô nhập, nút gửi, "Sau khi gửi" — ngay sau "Gửi tới", trước Nội dung (nhãn và

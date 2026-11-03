@@ -184,7 +184,7 @@ export function buildImportPlan(
       const form = forms.find((f) => f.key === key);
       issues.push(issue('endpoint-missing', 'todo', {
         vars: { key, form: form?.label ?? key },
-        items: [{ label: 'Mở Cài đặt › Form', href: '/builder/settings#settings-endpoints' }],
+        items: [{ label: 'Xem các form đang chờ URL ở Cài đặt', href: '/builder/settings#settings-endpoints' }],
       }));
     }
   }

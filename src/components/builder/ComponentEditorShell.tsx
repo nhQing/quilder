@@ -39,6 +39,8 @@ import { readFlag, safeStorage, STORAGE_KEYS, write } from '@/lib/builder/persis
 import type { ComponentTrees } from '@/lib/builder/text-units';
 import type { Doc } from '@/lib/doc/types';
 import type { EndpointTable } from '@/lib/doc/endpoint-table';
+import type { EndpointUsageRow } from '@/lib/doc/endpoint-usage';
+import type { Role } from '@/lib/auth/session';
 import type { PresetSummary, TokenOption } from '@/lib/builder/queries';
 import { Canvas } from './Canvas';
 import { ComponentNotice, EditorTopbar } from './EditorTopbar';
@@ -57,6 +59,8 @@ export function ComponentEditorShell({
   components,
   presets,
   endpoints,
+  endpointUsage,
+  role,
 }: {
   component: { id: string; name: string; key: string; builtin: boolean };
   doc: Doc;
@@ -68,6 +72,10 @@ export function ComponentEditorShell({
    * có: thiếu nó thì một Form trong component báo "site chưa có endpoint nào" dù có.
    */
   endpoints: EndpointTable;
+  /** Form nào dùng khoá nào trên cả site — khối "Gửi tới" ghi "Dùng chung với …". */
+  endpointUsage: EndpointUsageRow[];
+  /** Role của người đang sửa: chỉ admin đặt được URL nhận mới. */
+  role: Role;
 }) {
   const init = useEditor((s) => s.init);
   const candidateDoc = useEditor((s) => s.candidateDoc);
@@ -238,6 +246,8 @@ export function ComponentEditorShell({
             translations={{}}
             seo={null}
             endpoints={endpoints}
+            endpointUsage={endpointUsage}
+            role={role}
           />
         </aside>
       </div>

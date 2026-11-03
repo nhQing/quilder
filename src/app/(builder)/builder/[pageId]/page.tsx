@@ -2,6 +2,8 @@ import { notFound } from 'next/navigation';
 
 import { EditorShell } from '@/components/builder/EditorShell';
 import { getDraftPage, listPages, listPresets, listTokens, publishedSeq, siteShareDefaults } from '@/lib/builder/queries';
+import { getSession } from '@/lib/auth/guard';
+import { endpointUsage } from '@/lib/builder/site-settings';
 import { loadComponents } from '@/lib/render/components';
 import { draftSiteGlobals } from '@/lib/render/draft-globals';
 import { readEndpointTable } from '@/lib/doc/endpoint-table';
@@ -16,7 +18,7 @@ export default async function EditorPage({
   params: Promise<{ pageId: string }>;
 }) {
   const { pageId } = await params;
-  const [page, pages, presets, tokens, baseSeq, locales, translations, share, globals, siteUrl] = await Promise.all([
+  const [page, pages, presets, tokens, baseSeq, locales, translations, share, globals, siteUrl, session, usage] = await Promise.all([
     getDraftPage(pageId),
     listPages(),
     listPresets(),
@@ -37,6 +39,10 @@ export default async function EditorPage({
     draftSiteGlobals(),
     // `null` khi chưa đặt domain: thẻ xem trước và nút Chia sẻ lùi về địa chỉ builder.
     configuredSiteOrigin(),
+    // Role: khối "Gửi tới" chỉ cho ADMIN sửa URL (API cũng chặn — đây chỉ để giao diện nói đúng).
+    getSession(),
+    // Form nào dùng khoá nào, trên mọi trang/component — để khối "Gửi tới" ghi "Dùng chung với …".
+    endpointUsage(),
   ]);
   if (!page) notFound();
 
@@ -71,6 +77,8 @@ export default async function EditorPage({
       }}
       siteUrl={siteUrl}
       endpoints={readEndpointTable(globals)}
+      endpointUsage={usage}
+      role={session?.role ?? 'viewer'}
     />
   );
 }
