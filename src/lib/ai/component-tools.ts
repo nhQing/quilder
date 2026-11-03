@@ -25,6 +25,7 @@ import { z } from 'zod';
 import { prisma } from '@/lib/db';
 import { applyOpsToPreset } from '@/lib/doc/apply-to-preset';
 import { copyName, uniqueKey } from '@/lib/builder/preset-key';
+import { SYSTEM_PRESET_REFUSAL } from '@/lib/setup/system-presets';
 import type { PresetTree } from '@/lib/doc/preset';
 import { plainText } from '@/lib/render/richtext';
 import { componentNodeScope } from '@/lib/render/sanitize-css';
@@ -233,9 +234,11 @@ const updateComponent: ToolDef = {
   ) {
     const preset = await prisma.preset.findUnique({
       where: { id: input.componentId },
-      select: { id: true, key: true },
+      select: { id: true, key: true, system: true },
     });
     if (!preset) return { error: `Không tìm thấy component ${input.componentId}` };
+    // Mẫu hệ thống: đổi tên/mô tả cũng là sửa — chỉ nhân bản. Kiểm trước mọi thứ khác.
+    if (preset.system) return { error: SYSTEM_PRESET_REFUSAL };
 
     if (input.name) {
       const clash = await prisma.preset.findFirst({

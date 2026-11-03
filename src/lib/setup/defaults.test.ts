@@ -22,6 +22,7 @@ function fakeDb() {
     versions: [] as Record<string, unknown>[],
     releases: [] as Record<string, unknown>[],
     presets: [] as Record<string, unknown>[],
+    presetVersions: [] as Record<string, unknown>[],
   };
   const match = (row: Record<string, unknown>, where: Record<string, unknown>) =>
     Object.entries(where).every(([k, v]) => row[k] === v);
@@ -68,11 +69,19 @@ function fakeDb() {
     preset: {
       findUnique: async ({ where }: { where: Record<string, unknown> }) =>
         db.presets.find((p) => match(p, where)) ?? null,
-      create: async ({ data }: { data: Record<string, unknown> }) => {
-        const row = { id: id('preset'), ...data };
-        db.presets.push(row);
-        return row;
+      createMany: async ({ data }: { data: Record<string, unknown>[] }) => {
+        let count = 0;
+        for (const d of data) {
+          const dup = db.presets.some((p) => p.key === d.key || (d.system && p.system === d.system));
+          if (dup) continue; // skipDuplicates
+          db.presets.push({ id: id('preset'), ...d });
+          count += 1;
+        }
+        return { count };
       },
+    },
+    presetVersion: {
+      create: async ({ data }: { data: Record<string, unknown> }) => (db.presetVersions.push(data), data),
     },
     release: {
       create: async ({ data }: { data: Record<string, unknown> }) => {
@@ -160,6 +169,26 @@ describe('mẫu hệ thống', () => {
     expect(third.created).not.toContain('preset:form');
     expect(db.presets[0]!.name).toBe('Tên đã sửa');
     expect(db.presets).toHaveLength(1);
+  });
+
+  it('hai lần chạy đua: bên thua (createMany count 0) coi như đã có, không lỗi', async () => {
+    const { db, tx } = fakeDb();
+    const real = (tx as never as { preset: { findUnique: unknown } }).preset;
+    const orig = real.findUnique as (a: { where: Record<string, unknown> }) => Promise<unknown>;
+    // Kiểm đầu thấy trống, nhưng bên kia đã chèn xen vào trước createMany.
+    let first = true;
+    real.findUnique = async (a: { where: Record<string, unknown> }) => {
+      if (first && a.where.system) {
+        first = false;
+        db.presets.push({ id: 'other', key: 'mau-form', system: 'form' });
+        return null;
+      }
+      return orig(a);
+    };
+    const r = await ensureSiteDefaults(tx);
+    expect(r.created).not.toContain('preset:form');
+    expect(db.presets).toHaveLength(1);
+    expect(db.presetVersions).toHaveLength(0);
   });
 
   it('key mau-form đã bị người dùng chiếm: mẫu lấy hậu tố -2', async () => {

@@ -233,8 +233,11 @@ export async function ensureSiteDefaults(
     for (let n = 2; await tx.preset.findUnique({ where: { key }, select: { id: true } }); n += 1) {
       key = `${slugify(seed.key)}-${n}`;
     }
-    await tx.preset.create({
-      data: {
+    // `createMany + skipDuplicates` = INSERT … ON CONFLICT DO NOTHING: hai `up -d` chạy đua thì
+    // bên thua nhận count 0 thay vì lỗi P2002 — một lỗi unique làm HỎNG cả transaction Postgres
+    // (mọi câu sau đó, kể cả COMMIT, đều vô nghĩa), nên không bắt-rồi-đi-tiếp được.
+    const made = await tx.preset.createMany({
+      data: [{
         key,
         name: seed.name,
         category: seed.category,
@@ -242,13 +245,17 @@ export async function ensureSiteDefaults(
         tree: seed.tree as unknown as Prisma.InputJsonValue,
         builtin: false,
         system: seed.system,
-        versions: {
-          create: {
-            tree: seed.tree as unknown as Prisma.InputJsonValue,
-            label: 'mẫu hệ thống',
-            createdBy: 'system',
-          },
-        },
+      }],
+      skipDuplicates: true,
+    });
+    if (made.count === 0) continue;
+    const row = await tx.preset.findUnique({ where: { system: seed.system }, select: { id: true } });
+    await tx.presetVersion.create({
+      data: {
+        presetId: row!.id,
+        tree: seed.tree as unknown as Prisma.InputJsonValue,
+        label: 'mẫu hệ thống',
+        createdBy: 'system',
       },
     });
     created.push(`preset:${seed.system}`);

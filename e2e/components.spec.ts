@@ -381,8 +381,13 @@ test.describe('mẫu hệ thống', () => {
     expect(mcp.ok).toBe(false);
     expect(mcp.error).toMatch(/Mẫu hệ thống/);
 
+    const upd = await tool(request, 'update_component', { componentId: p.id, name: 'Đã bị đổi' });
+    expect(upd.error).toMatch(/Mẫu hệ thống/);
+
     const list = await tool(request, 'list_components', {});
-    expect(list.components.find((c: { id: string }) => c.id === p.id).system).toBe('form');
+    const row = list.components.find((c: { id: string }) => c.id === p.id);
+    expect(row.system).toBe('form');
+    expect(row.name).not.toBe('Đã bị đổi');
   });
 
   test('nhân bản được, bản sao không mang cờ system và xoá được', async ({ request }) => {
@@ -394,6 +399,15 @@ test.describe('mẫu hệ thống', () => {
 
     const { presets } = await (await request.get('/api/presets')).json();
     expect(presets.find((x: { id: string }) => x.id === preset.id).system).toBeNull();
+  });
+
+  test('MCP duplicate_component trên mẫu cho bản sao system null', async ({ request }) => {
+    const p = await systemPreset(request);
+    const r = await tool(request, 'duplicate_component', { componentId: p.id });
+    expect(r.ok).toBe(true);
+    created.push(r.component.id);
+    const list = await tool(request, 'list_components', {});
+    expect(list.components.find((c: { id: string }) => c.id === r.component.id).system).toBeNull();
   });
 
   test('chèn Instance của mẫu vào trang bị từ chối, nhắc nhân bản', async ({ request }) => {
