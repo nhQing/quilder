@@ -438,4 +438,56 @@ test.describe('mẫu hệ thống', () => {
       await request.delete(`/api/pages/${pageId}?purge=1`);
     }
   });
+
+  test('mẫu hệ thống chỉ nhân bản được, chèn vào trang là bản sao', async ({ page, request }) => {
+    // Editor trang là màn nặng nhất builder: nạp + chèn + kiểm qua MCP vượt 30s mặc định.
+    test.setTimeout(120_000);
+    const p = await systemPreset(request);
+
+    // Thẻ thư viện có nhãn.
+    await page.goto('/builder/components');
+    await expect(page.getByRole('link', { name: 'Form', exact: true }).first()).toBeVisible();
+    await expect(page.getByText('Mẫu hệ thống').first()).toBeVisible();
+
+    // Trang chi tiết: không Xoá / Sửa, có câu giải thích, Nhân bản dẫn tới id mới.
+    await page.goto(`/builder/components/${p.id}`);
+    await expect(page.getByText('Mẫu hệ thống', { exact: true }).first()).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Xoá component' })).toHaveCount(0);
+    await expect(page.getByRole('link', { name: 'Sửa trong trang' })).toHaveCount(0);
+    await expect(page.getByRole('link', { name: 'Mở canvas' })).toHaveCount(0);
+    await expect(
+      page.getByText('Mẫu hệ thống không sửa trực tiếp. Nhân bản để có bản của bạn.'),
+    ).toBeVisible();
+    await page.getByRole('button', { name: 'Nhân bản', exact: true }).click();
+    await page.waitForURL((u) => u.pathname.startsWith('/builder/components/') && !u.pathname.endsWith(p.id) && !u.pathname.endsWith('/components'));
+    created.push(page.url().split('/').pop()!);
+
+    // Mở canvas trực tiếp thì quay về trang chi tiết.
+    await page.goto(`/builder/components/${p.id}/edit`);
+    await expect(page).toHaveURL(new RegExp(`/builder/components/${p.id}$`));
+
+    // Trong editor trang: chỉ có "Chèn bản sao".
+    const slug = `e2e-mau-ui-${Date.now().toString(36)}`;
+    const pageRes = await request.post('/api/pages', { data: { title: 'E2E mẫu UI', slug } });
+    expect(pageRes.ok(), await pageRes.text()).toBe(true);
+    const pageId = (await pageRes.json()).page.id as string;
+    try {
+      await page.goto(`/builder/${pageId}`);
+      await page.locator('aside').first().getByRole('button', { name: /^Comp/ }).click();
+      const item = page.locator(`[data-component-item="${p.id}"]`);
+      await expect(item).toBeVisible({ timeout: 30_000 });
+      await expect(item.getByRole('button', { name: 'Chèn bản sao' })).toBeVisible();
+      await expect(item.getByRole('button', { name: 'Chèn', exact: true })).toHaveCount(0);
+      await expect(item.getByRole('button', { name: 'Bản sao', exact: true })).toHaveCount(0);
+      await item.getByRole('button', { name: 'Chèn bản sao' }).click();
+
+      await expect.poll(async () => {
+        const r = await tool(request, 'find_nodes', { pageId, type: 'Composite' });
+        return JSON.stringify(r);
+      }, { timeout: 30_000 }).toMatch(/Form/i);
+    } finally {
+      await request.delete(`/api/pages/${pageId}`);
+      await request.delete(`/api/pages/${pageId}?purge=1`);
+    }
+  });
 });

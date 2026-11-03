@@ -1,4 +1,4 @@
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import { presetTreeToDoc } from '@/lib/doc/migrate';
 
 /**
@@ -39,7 +39,7 @@ export default async function ComponentEditPage({
   const [preset, presets, tokens, globals] = await Promise.all([
     prisma.preset.findUnique({
       where: { id },
-      select: { id: true, key: true, name: true, builtin: true, tree: true },
+      select: { id: true, key: true, name: true, builtin: true, system: true, tree: true },
     }),
     listPresets(),
     listTokens(),
@@ -47,6 +47,8 @@ export default async function ComponentEditPage({
     draftSiteGlobals(),
   ]);
   if (!preset) notFound();
+  // Mẫu hệ thống không sửa trực tiếp (server 409): về trang chi tiết, nơi có nút Nhân bản.
+  if (preset.system) redirect(`/builder/components/${preset.id}`);
 
   /*
    * `Preset.tree` là `{ rootId, nodes }` — đúng hình dạng `Doc` trừ `schemaVersion`.

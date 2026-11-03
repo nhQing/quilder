@@ -377,6 +377,8 @@ function ComponentList({
    * bản sao thì không quay ngược lại thành liên kết được.
    */
   const insert = async (preset: PresetSummary, linked: boolean) => {
+    // Mẫu hệ thống chỉ chèn dạng bản sao: server từ chối Instance của nó (422).
+    if (preset.system) linked = false;
     const { parentId, index } = targetFor();
     const ids = new Set(Object.keys(doc.nodes));
 
@@ -502,6 +504,18 @@ function ComponentList({
                   {preset.aiDescription}
                 </span>
                 <span className="relative z-1 mt-0.5 flex flex-wrap gap-1">
+                  {preset.system ? (
+                    <Button
+                      size="sm"
+                      icon="plus"
+                      disabled={saving}
+                      onClick={() => void insert(preset, false)}
+                      title="Mẫu hệ thống: chèn cây node riêng của trang, sửa tự do."
+                    >
+                      Chèn bản sao
+                    </Button>
+                  ) : (
+                  <>
                   <Button
                     size="sm"
                     icon="plus"
@@ -520,9 +534,11 @@ function ComponentList({
                   >
                     Bản sao
                   </Button>
+                  </>
+                  )}
                   {/* Mở component ra sửa. Nằm CẠNH hai nút chèn vì nó là lựa chọn
                       thứ ba của cùng một câu hỏi — dùng, tách ra, hay sửa nó. */}
-                  {onEdit && (
+                  {onEdit && !preset.system && (
                     <Button
                       variant="ghost"
                       size="sm"

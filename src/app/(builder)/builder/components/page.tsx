@@ -34,7 +34,7 @@ export default async function ComponentsPage() {
     orderBy: [{ category: 'asc' }, { name: 'asc' }],
     select: {
       id: true, key: true, name: true, category: true, aiDescription: true,
-      builtin: true, updatedAt: true,
+      builtin: true, system: true, updatedAt: true,
       _count: { select: { versions: true } },
     },
   });
@@ -46,6 +46,7 @@ export default async function ComponentsPage() {
     category: p.category,
     about: p.aiDescription,
     builtin: p.builtin,
+    system: p.system,
     edited: when(p.updatedAt, DAY),
     versions: p._count.versions,
   }));

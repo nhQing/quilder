@@ -131,7 +131,7 @@ export default async function ComponentDetail({
       where: { id },
       select: {
         id: true, key: true, name: true, category: true, aiDescription: true,
-        builtin: true, tree: true, updatedAt: true,
+        builtin: true, system: true, tree: true, updatedAt: true,
         versions: {
           orderBy: { createdAt: 'desc' },
           take: 12,
@@ -166,8 +166,8 @@ export default async function ComponentDetail({
             <span>Nhóm {preset.category}</span>
             <span aria-hidden>·</span>
             <span>Sửa {relTime(preset.updatedAt)}</span>
-            <Badge tone={preset.builtin ? 'neutral' : 'accent'}>
-              {preset.builtin ? 'Có sẵn' : 'Tự tạo'}
+            <Badge tone={preset.system || !preset.builtin ? 'accent' : 'neutral'}>
+              {preset.system ? 'Mẫu hệ thống' : preset.builtin ? 'Có sẵn' : 'Tự tạo'}
             </Badge>
           </span>
         }
@@ -175,19 +175,21 @@ export default async function ComponentDetail({
           <>
             {/* Đường phụ: sửa NGAY TRONG một trang đang dùng nó, để thấy component
                 trong bối cảnh thật. Chỉ hiện khi có trang như vậy. */}
-            {hostPageId && (
+            {!preset.system && hostPageId && (
               <ButtonLink href={`/builder/${hostPageId}?component=${preset.id}`} variant="secondary">
                 Sửa trong trang
               </ButtonLink>
             )}
-            <ButtonLink href={`/builder/components/${preset.id}/edit`} variant="primary" icon="edit">
-              Mở canvas
-            </ButtonLink>
+            {!preset.system && (
+              <ButtonLink href={`/builder/components/${preset.id}/edit`} variant="primary" icon="edit">
+                Mở canvas
+              </ButtonLink>
+            )}
           </>
         }
       />
 
-      {preset.builtin && (
+      {preset.builtin && !preset.system && (
         <div
           role="note"
           className="flex items-start gap-3 rounded-md bg-shell-warn-soft px-4 py-3 text-small leading-relaxed text-shell-ink"
@@ -383,7 +385,7 @@ export default async function ComponentDetail({
           </SideCard>
 
           <SideCard title="Thao tác">
-            <ComponentActions id={preset.id} name={preset.name} usedOn={users} />
+            <ComponentActions id={preset.id} name={preset.name} usedOn={users} system={!!preset.system} />
           </SideCard>
 
           <SideCard title="Lịch sử" count={preset.versions.length}>

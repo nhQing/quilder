@@ -273,6 +273,8 @@ export interface PresetSummary {
    * GHI ĐÈ, nên công sửa tay trên một builtin sẽ mất mà không có lỗi nào.
    */
   builtin: boolean;
+  /** Khoá mẫu hệ thống (`'form'`…) hoặc null. Mẫu chỉ chèn dạng bản sao, không sửa/xoá. */
+  system: string | null;
   /**
    * Cây này được ghi ở schema CŨ hơn code đang chạy.
    *
@@ -305,7 +307,7 @@ export async function listPresets(): Promise<PresetSummary[]> {
     orderBy: [{ category: 'asc' }, { name: 'asc' }],
     select: {
       id: true, key: true, name: true, category: true,
-      aiDescription: true, tree: true, builtin: true,
+      aiDescription: true, tree: true, builtin: true, system: true,
     },
   });
 
@@ -335,6 +337,7 @@ export async function listPresets(): Promise<PresetSummary[]> {
       aiDescription: r.aiDescription,
       nodeCount: raw?.nodes ? Object.keys(raw.nodes).length : 0,
       builtin: r.builtin,
+      system: r.system,
       // Thiếu `schemaVersion` cũng là lệch: nghĩa là cây ghi trước khi trường này
       // tồn tại, tức v1 — và nếu code đã lên v2 thì nó thật sự lạc hậu.
       staleSchema: (raw?.schemaVersion ?? 1) < CURRENT_SCHEMA_VERSION,

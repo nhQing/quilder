@@ -83,6 +83,8 @@ export interface ComponentCardData {
   category: string;
   about: string;
   builtin: boolean;
+  /** Khoá mẫu hệ thống, hoặc null. Mẫu hệ thống chỉ nhân bản được. */
+  system: string | null;
   /** Ngày sửa cuối, đã định dạng ở server (`when`) để hai phía vẽ cùng một chuỗi. */
   edited: string;
   versions: number;
@@ -181,8 +183,12 @@ function ComponentCard({
     >
       <div className="relative h-34 overflow-hidden rounded-md bg-shell-raised p-3">
         <ComponentThumb componentId={c.id} name={c.name} />
-        <Badge size="sm" tone={c.builtin ? 'neutral' : 'accent'} className="absolute top-2.5 left-2.5">
-          {c.builtin ? 'Có sẵn' : 'Tự tạo'}
+        <Badge
+          size="sm"
+          tone={c.system || !c.builtin ? 'accent' : 'neutral'}
+          className="absolute top-2.5 left-2.5"
+        >
+          {c.system ? 'Mẫu hệ thống' : c.builtin ? 'Có sẵn' : 'Tự tạo'}
         </Badge>
       </div>
 
@@ -191,7 +197,8 @@ function ComponentCard({
         label={`Tuỳ chọn cho ${c.name}`}
         className="absolute top-5.5 right-5.5 z-10 rounded bg-shell-panel"
         items={[
-          { label: 'Mở canvas', icon: 'edit', href: `${href}/edit` },
+          // Mẫu hệ thống không sửa được: bỏ lối vào canvas, chỉ còn xem và nhân bản.
+          ...(c.system ? [] : [{ label: 'Mở canvas', icon: 'edit' as const, href: `${href}/edit` }]),
           { label: 'Xem chi tiết', icon: 'info', href },
           { label: 'Nhân bản', icon: 'copy', onSelect: onDuplicate, disabled: busy },
         ]}
@@ -219,11 +226,11 @@ function ComponentCard({
       <div className="mt-auto flex items-center justify-between gap-2.5 border-t border-shell-line px-1.5 pt-3">
         <span className="text-mini text-shell-muted">Sửa {c.edited}</span>
         <ButtonLink
-          href={`${href}/edit`}
+          href={c.system ? href : `${href}/edit`}
           variant="ghost"
           size="sm"
           iconRight="arrow-right"
-          aria-label={`Mở canvas của ${c.name}`}
+          aria-label={c.system ? `Xem ${c.name}` : `Mở canvas của ${c.name}`}
           className="relative z-10"
         >
           Mở
@@ -323,9 +330,12 @@ export function ComponentActions({
   id,
   name,
   usedOn,
+  system = false,
 }: {
   id: string;
   name: string;
+  /** Mẫu hệ thống: server từ chối xoá (409), nên không bày nút Xoá. */
+  system?: boolean;
   /** Đường dẫn các trang (kể cả đã lưu trữ) còn Instance trỏ tới — xem `componentUsers`. */
   usedOn: string[];
 }) {
@@ -356,6 +366,7 @@ export function ComponentActions({
         </Button>
         {/* Còn trang dùng: server từ chối xoá (409). Khoá sẵn ở đây và nói lý do ngay
             dưới, thay vì để người dùng xác nhận xong mới biết là không được. */}
+        {!system && (
         <Button
           variant="danger"
           icon="trash"
@@ -365,8 +376,12 @@ export function ComponentActions({
         >
           Xoá component
         </Button>
+        )}
       </div>
-      {usedOn.length > 0 && (
+      {system && (
+        <p className={ui.hint}>Mẫu hệ thống không sửa trực tiếp. Nhân bản để có bản của bạn.</p>
+      )}
+      {!system && usedOn.length > 0 && (
         <p className={ui.hint}>
           Đang dùng ở {usedOn.join(', ')}. Gỡ Instance của nó khỏi các trang đó trước rồi mới
           xoá được.
