@@ -17,13 +17,19 @@ import { z } from 'zod';
 
 import { prisma } from '@/lib/db';
 import { VIRTUAL_KEYS } from '@/lib/collections/repeat';
-import { compositeParamsSchema, isKnownComposite, stylePartsOf } from '@/lib/composites/registry';
+import {
+  compositeParamsSchema,
+  isKnownComposite,
+  parseFormParamsStrict,
+  stylePartsOf,
+} from '@/lib/composites/registry';
 import { isKnownEffect, loadEffect } from '@/lib/motion/effects/registry';
 import type { AnyEffectModule } from '@/lib/motion/effects/types';
 import { stylePathsForProperty } from '@/lib/builder/style-css-map';
 import { sanitizeCustomCss } from '@/lib/render/sanitize-css';
 import { AI_CSS_ALLOWLIST, CSS_ESCAPE_HINT, cssPropertiesIn } from './ai-css-allowlist';
 import { expandPreset, loadEffectPresets } from './effect-presets';
+import { readEndpointTable } from './endpoint-table';
 import type { Actor } from './validate-types';
 import { apply, OpError, type Op } from './ops';
 import { propsKeysFor, zodIssuesRaw, zOps, zPropsFor, zRepeatSpec } from './schema';
@@ -89,6 +95,47 @@ async function loadTokenNames(): Promise<Set<string>> {
 async function loadEffectStates(): Promise<Map<string, string[]>> {
   const rows = await prisma.effect.findMany({ select: { key: true, statesWritten: true } });
   return new Map(rows.map((r) => [r.key, r.statesWritten]));
+}
+
+/**
+ * Khoá trong `Site.globals.endpoint` — đọc thẳng DB, cùng lý do như `loadCollectionFields`:
+ * admin vừa thêm khoá ở màn Cài đặt rồi chọn nó cho form ngay thì validator phải thấy.
+ */
+async function loadEndpointKeys(): Promise<Set<string>> {
+  const row = await prisma.site.findFirst({ select: { globals: true } });
+  const globals = (row?.globals ?? undefined) as Record<string, unknown> | undefined;
+  return new Set(Object.keys(readEndpointTable(globals)));
+}
+
+/**
+ * Khoá endpoint CÓ HIỆU LỰC trong params thô của Form — vắng là `newsletter` (mặc định
+ * của `formParams`), không phải "không có". `null` khi params không đọc được.
+ */
+function formEndpointKey(raw: unknown): string | null {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const key = (raw as { endpointKey?: unknown }).endpointKey;
+  if (key === undefined) return 'newsletter';
+  return typeof key === 'string' ? key : null;
+}
+
+/**
+ * `setProps` ĐỔI khoá endpoint của một Form: trả khoá mới, `null` khi không đổi.
+ *
+ * Chỉ ca ĐỔI: form đang trỏ một khoá chưa có URL (bảng bị bớt khoá, bản nháp cũ) vẫn phải
+ * sửa được nhãn, ô, chữ nút — chặn mọi `setProps` của nó là khoá cứng form đó. Node chưa
+ * có trong doc (tạo cùng batch) thì coi là đổi từ "không có".
+ *
+ * `insertNode` KHÔNG tính: nó là dán, nhân đôi, hoàn tác một lần xoá — form mang khoá nó
+ * vốn có. Chặn ở đó thì xoá nhầm một form có khoá đã bị bỏ khỏi bảng là không Ctrl+Z được.
+ */
+function changedEndpointKey(doc: Doc, op: Op): string | null {
+  if (op.op !== 'setProps' || !('params' in op.props)) return null;
+  const node = doc.nodes[op.nodeId] as { type?: string; composite?: string; params?: unknown } | undefined;
+  if (node && (node.type !== 'Composite' || node.composite !== 'Form')) return null;
+  const next = formEndpointKey(op.props.params);
+  if (!next) return null;
+  const before = node ? formEndpointKey(node.params ?? {}) : null;
+  return next === before ? null : next;
 }
 
 /** Tên và kiểu field của mỗi loại nội dung — chỉ hai thứ mà luật `map` cần. */
@@ -511,7 +558,7 @@ function compositeParamsIssue(key: string, raw: unknown): string | null {
 
   const allowed = Object.keys(inner.shape);
   const bad = Object.keys(raw as Record<string, unknown>).filter((k) => !allowed.includes(k));
-  if (!bad.length) return null;
+  if (!bad.length) return key === 'Form' ? formValueIssue(raw) : null;
 
   return (
     `Composite ${key} không có tham số ${bad.map((k) => `\`${k}\``).join(', ')} — ` +
@@ -519,6 +566,24 @@ function compositeParamsIssue(key: string, raw: unknown): string | null {
     (allowed.length
       ? `Tham số của ${key}: ${allowed.map((k) => `\`${k}\``).join(', ')}.`
       : `${key} KHÔNG có tham số nào — nội dung của nó đi qua slot, không qua params.`)
+  );
+}
+
+/**
+ * GIÁ TRỊ params của Form, theo đúng luật nghiêm sidebar dùng (`parseFormParamsStrict`).
+ *
+ * Composite khác chỉ bị kiểm TÊN tham số (xem trên). Form thì khác: `.catch` của renderer
+ * đưa CẢ form về mặc định — gửi tới `newsletter` — khi một giá trị sai, tức một
+ * `afterSubmit: "modal"` do AI ghi đổi luôn nơi nhận dữ liệu khách mà không lỗi nào hiện ra.
+ * Sidebar không bao giờ ghi params hỏng; AI/MCP và API ghi qua đây nên phải chặn ở đây.
+ */
+function formValueIssue(raw: unknown): string | null {
+  const r = parseFormParamsStrict(raw);
+  if (r.ok) return null;
+  const list = r.issues.map((i) => `\`${i.path || 'params'}\`: ${i.message}`).join('; ');
+  return (
+    `Params của Form sai — renderer sẽ bỏ cả bảng params và đưa form về mặc định (gửi tới ` +
+    `\`newsletter\`): ${list}.`
   );
 }
 
@@ -626,6 +691,16 @@ export async function validateOps(
   );
   const fieldsByType = needsTypes ? await loadCollectionFields() : new Map<string, FieldShape[]>();
 
+  /*
+   * Bảng endpoint — chỉ khi batch ĐỔI khoá của một Form sang một khoá thật (hiếm: chọn
+   * nơi nhận, đổi tên khoá). Sửa nhãn hay chữ nút của form không đáng một truy vấn.
+   */
+  const needsEndpoints = ops.some((o) => {
+    const k = changedEndpointKey(doc, o);
+    return k !== null && k !== '';
+  });
+  const endpointKeys = needsEndpoints ? await loadEndpointKeys() : new Set<string>();
+
   const warnings: ValidationIssue[] = [];
 
   /* ── Tầng 2: ngữ nghĩa ────────────────────────────────────────────── */
@@ -697,6 +772,32 @@ export async function validateOps(
           !op.node.alt.trim()
         ) {
           add('missing-alt', 'Image cần alt, hoặc đặt decorative: true nếu là ảnh trang trí.');
+        }
+        /*
+         * `style.parts` mang theo node mới: cùng luật với `setStyle { part }` bên dưới.
+         * Schema khai `parts` là record khoá tuỳ ý, nên không kiểm ở đây thì một phần bịa
+         * (hay `parts` trên một Text) đi qua insertNode và thành rule chết im lặng.
+         */
+        const parts = (op.node.style as { parts?: Record<string, unknown> } | undefined)?.parts;
+        const partKeys = parts ? Object.keys(parts) : [];
+        if (partKeys.length && op.node.type !== 'Composite') {
+          add(
+            'part-not-composite',
+            `"style.parts" chỉ dùng cho node Composite; ${op.node.id} là ${op.node.type}.`,
+          );
+        } else if (partKeys.length) {
+          const valid = stylePartsOf(op.node as { type: string; composite?: string }).map((p) => p.key);
+          const unknown = partKeys.filter((k) => !valid.includes(k));
+          if (unknown.length) {
+            add(
+              'unknown-part',
+              `Composite ${(op.node as { composite: string }).composite} không có phần ` +
+                `${unknown.map((k) => `"${k}"`).join(', ')}. ` +
+                (valid.length
+                  ? `Phần hợp lệ: ${valid.join(', ')}.`
+                  : 'Composite này chưa có phần nào style được.'),
+            );
+          }
         }
         break;
       }
@@ -1084,9 +1185,10 @@ export async function validateOps(
      * tầng render gỡ sạch khoá lạ. Không lỗi, không cảnh báo, section trông y như
      * trước, và người dựng tin rằng mình vừa cấu hình được một thứ.
      *
-     * Chỉ kiểm TÊN tham số, không kiểm giá trị: `.catch()` là cố ý (một hàng JSONB
+     * Kiểm TÊN tham số, không kiểm giá trị: `.catch()` là cố ý (một hàng JSONB
      * hỏng không được làm cả trang trắng — xem registry), nên `safeParse` ở đây
-     * không bao giờ thất bại và không nói được gì.
+     * không bao giờ thất bại và không nói được gì. Ngoại lệ là `Form`: nó kiểm cả
+     * giá trị bằng schema nghiêm — xem `formValueIssue`.
      */
     const compositeOp =
       op.op === 'setProps'
@@ -1107,6 +1209,22 @@ export async function validateOps(
     if (compositeOp && compositeOp.key && compositeOp.raw != null) {
       const issue = compositeParamsIssue(compositeOp.key, compositeOp.raw);
       if (issue) add('composite_params', issue);
+    }
+
+    /*
+     * Đổi form sang một khoá KHÔNG có trong bảng endpoint = form tắt ở lần Publish sau
+     * ("chưa có đích gửi"), và không ai biết vì sao. Nơi nhận mới phải có URL TRƯỚC (admin
+     * đặt ở màn Cài đặt / "Nơi nhận mới"), rồi mới gán — mọi đường ghi của builder (tách URL,
+     * đổi tên khoá, EndpointPicker) đã ghi bảng trước form. Rỗng = "chưa chọn", hợp lệ.
+     */
+    const nextKey = changedEndpointKey(doc, op);
+    if (nextKey && !endpointKeys.has(nextKey)) {
+      add(
+        'endpoint_missing',
+        `Khoá endpoint "${nextKey}" chưa có URL trong Site.globals.endpoint — form sẽ tắt ở lần ` +
+          'Publish sau. Chọn một khoá đã có (list_site_globals), hoặc nhờ admin thêm nơi nhận ' +
+          'ở màn Cài đặt trước.',
+      );
     }
 
     const gridColumnsOp =

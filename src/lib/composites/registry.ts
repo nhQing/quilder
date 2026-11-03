@@ -139,15 +139,6 @@ const formObject = z
               message: 'field select phải có options, nếu không nó là một menu rỗng',
             });
           }
-          // Hai lựa chọn cùng giá trị: BE nhận một giá trị mà không biết khách chọn dòng nào.
-          const values = (f.options ?? []).map((o) => o.value);
-          if (new Set(values).size !== values.length) {
-            ctx.addIssue({
-              code: z.ZodIssueCode.custom,
-              path: [i, 'options'],
-              message: 'giá trị lựa chọn bị lặp — BE không phân biệt được hai dòng',
-            });
-          }
         });
       })
       .default(FORM_DEFAULTS.fields),
@@ -174,18 +165,33 @@ const formObject = z
 
 const formParams = formObject.catch(FORM_DEFAULTS);
 
+/**
+ * Luật CHỈ của đường nghiêm (sidebar, validator) — không vào renderer.
+ *
+ * Luật thêm sau khi form đã chạy trên site: đặt vào `formObject` thì `.catch` của
+ * renderer biến một form live có hai lựa chọn trùng giá trị thành form mặc định gửi tới
+ * `newsletter` — im lặng, sau một lần triển khai, không ai sửa gì. Ở đây nó chỉ chặn
+ * lần GHI kế tiếp, và báo đúng ô để người dựng sửa.
+ */
+const formStrict = formObject.superRefine((p, ctx) => {
+  p.fields.forEach((f, i) => {
+    // Hai lựa chọn cùng giá trị: BE nhận một giá trị mà không biết khách chọn dòng nào.
+    const values = (f.options ?? []).map((o) => o.value);
+    if (new Set(values).size !== values.length) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['fields', i, 'options'],
+        message: 'giá trị lựa chọn bị lặp — BE không phân biệt được hai dòng',
+      });
+    }
+  });
+});
+
 export type FormParams = z.infer<typeof formParams>;
 export type FormFieldDef = z.infer<typeof formField>;
 
-export type AfterSubmit = 'inline' | 'dialog' | 'panel';
-
-/** Cách báo kết quả thật của một form — `afterSubmit` nếu có, không thì suy từ `successPanel`. */
-export function resolveAfterSubmit(p: { afterSubmit?: string; successPanel?: string }): AfterSubmit {
-  if (p.afterSubmit === 'inline' || p.afterSubmit === 'dialog' || p.afterSubmit === 'panel') {
-    return p.afterSubmit;
-  }
-  return p.successPanel ? 'panel' : 'inline';
-}
+// Sống ở `form-mode.ts` (không phụ thuộc gì) để `Form.tsx` khỏi kéo registry vào bundle live.
+export { resolveAfterSubmit, type AfterSubmit } from './form-mode';
 
 export type FormParamsIssue = { path: string; message: string };
 
@@ -198,7 +204,7 @@ export type FormParamsIssue = { path: string; message: string };
 export function parseFormParamsStrict(
   raw: unknown,
 ): { ok: true; params: FormParams } | { ok: false; issues: FormParamsIssue[] } {
-  const r = formObject.safeParse(raw ?? {});
+  const r = formStrict.safeParse(raw ?? {});
   if (r.success) return { ok: true, params: r.data };
   return {
     ok: false,
@@ -375,6 +381,19 @@ export const STYLE_PARTS: Record<string, Record<string, { label: string; selecto
     dialog: { label: 'Hộp thoại', selector: '.mm-form__dialog' },
   },
 };
+
+/**
+ * Nhãn lựa chọn "cả node" của ô "Đang chỉnh" — gọi đúng tên khối khi có tên riêng
+ * ("Cả form" cạnh "Nút gửi", "Ô nhập"), không thì "Cả khối".
+ */
+const WHOLE_SCOPE_LABEL: Record<string, string> = { Form: 'Cả form' };
+
+export function wholeScopeLabel(node: { type: string; composite?: string }): string {
+  if (node.type === 'Composite' && node.composite && Object.hasOwn(WHOLE_SCOPE_LABEL, node.composite)) {
+    return WHOLE_SCOPE_LABEL[node.composite]!;
+  }
+  return 'Cả khối';
+}
 
 /** Phần con style được của một node; node không phải Composite (hay composite không có phần) → []. */
 export function stylePartsOf(node: { type: string; composite?: string }): { key: string; label: string }[] {

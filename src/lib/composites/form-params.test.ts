@@ -6,6 +6,7 @@ import {
   parseCompositeParams,
   parseFormParamsStrict,
   resolveAfterSubmit,
+  wholeScopeLabel,
 } from './registry';
 import type { FormParams } from './registry';
 
@@ -206,11 +207,50 @@ describe('parseFormParamsStrict', () => {
   });
 });
 
+describe('giá trị lựa chọn trùng — chỉ đường nghiêm chặn', () => {
+  const DUP = {
+    endpointKey: 'lien-he',
+    fields: [
+      {
+        name: 'goi',
+        kind: 'select',
+        label: 'Gói',
+        options: [
+          { value: 'a', label: 'Gói A' },
+          { value: 'a', label: 'Gói A (bản cũ)' },
+        ],
+      },
+    ],
+  };
+
+  it('renderer (lành) GIỮ nguyên form đang chạy, không rơi về mặc định newsletter', () => {
+    // Form live dựng trước luật này không được đổi nơi gửi sau khi triển khai.
+    const p = parse(DUP);
+    expect(p.endpointKey).toBe('lien-he');
+    expect(p.fields[0]!.name).toBe('goi');
+    expect(p.fields[0]!.options).toHaveLength(2);
+  });
+
+  it('đường nghiêm (sidebar, validator) báo lỗi ở fields.0.options', () => {
+    const r = parseFormParamsStrict(DUP);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.issues.map((i) => i.path)).toContain('fields.0.options');
+  });
+});
+
 describe('mô tả composite Form cho AI', () => {
   it('nhắc afterSubmit và slot success/error', () => {
     const about = COMPOSITE_DESCRIPTIONS.Form;
     expect(about).toContain('afterSubmit');
     expect(about).toContain('success');
     expect(about).toContain('error');
+  });
+});
+
+describe('ô "Đang chỉnh" — nhãn lựa chọn đầu', () => {
+  it('Form gọi là "Cả form", composite khác vẫn "Cả khối"', () => {
+    expect(wholeScopeLabel({ type: 'Composite', composite: 'Form' })).toBe('Cả form');
+    expect(wholeScopeLabel({ type: 'Composite', composite: 'Accordion' })).toBe('Cả khối');
+    expect(wholeScopeLabel({ type: 'Stack' })).toBe('Cả khối');
   });
 });

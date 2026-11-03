@@ -36,11 +36,14 @@ const STATES: { value: string; label: string }[] = [
 export function ScopePicker({
   nodeId,
   parts,
+  wholeLabel = 'Cả khối',
   scope,
   onChange,
 }: {
   nodeId: string;
   parts: { key: string; label: string }[];
+  /** Nhãn lựa chọn "cả node" — xem `wholeScopeLabel` ("Cả form" cho Form). */
+  wholeLabel?: string;
   scope: StyleScope;
   onChange: (next: StyleScope) => void;
 }) {
@@ -57,7 +60,7 @@ export function ScopePicker({
             value={scope.part ?? ''}
             onChange={(e) => onChange({ ...scope, part: e.target.value || null })}
           >
-            <option value="">Cả khối</option>
+            <option value="">{wholeLabel}</option>
             {parts.map((p) => (
               <option key={p.key} value={p.key}>
                 {p.label}

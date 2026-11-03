@@ -40,7 +40,7 @@
 
 import { useEffect, useId, useRef, useState } from 'react';
 
-import { resolveAfterSubmit } from './registry';
+import { resolveAfterSubmit } from './form-mode';
 import type { FormFieldDef, FormParams } from './registry';
 
 /** Ô ẩn bắt bot điền mọi thứ. Tên trông thật để nó không bị bỏ qua. */
@@ -64,8 +64,10 @@ export interface FormProps extends FormParams {
   /**
    * Nội dung hộp thoại khi `afterSubmit = 'dialog'`: `success` sau khi gửi được,
    * `error` khi thất bại. Chỉ được mount BÊN TRONG `<dialog>` và chỉ sau khi có kết
-   * quả — trước đó chúng không có trong HTML, nên trang tải không lóe và crawler
-   * không đọc nhầm lời cảm ơn như nội dung trang.
+   * quả — trước đó chúng không có trong DOM / HTML render sẵn, nên trang tải không lóe
+   * và crawler đọc HTML không nhầm lời cảm ơn là nội dung trang. Chúng VẪN nằm trong
+   * payload RSC (là prop của client component này, phải gửi xuống thì mới mount được
+   * sau đó): đừng đặt vào slot thứ gì không được lộ trước khi khách gửi form.
    */
   success?: React.ReactNode;
   error?: React.ReactNode;

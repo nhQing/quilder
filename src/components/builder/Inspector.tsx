@@ -19,7 +19,7 @@ import { breakpointInfo, type Breakpoint } from '@/lib/design/breakpoints';
 import { cn } from '@/lib/builder/cn';
 import { focusRing, ui } from '@/lib/builder/ui';
 import { effectiveStyle, ownLayer, scopedSetStyleOp, scopedView, NO_SCOPE, type StyleScope } from '@/lib/builder/style-resolve';
-import { stylePartsOf } from '@/lib/composites/registry';
+import { stylePartsOf, wholeScopeLabel } from '@/lib/composites/registry';
 import { ScopePicker, StyleScopeProvider, useStyleScope } from './StyleScope';
 import { declaredProperties, sanitizeCustomCss } from '@/lib/render/sanitize-css';
 import { scopeForTarget } from '@/lib/builder/css-scope';
@@ -582,7 +582,13 @@ function NodeInspector({
       */}
 
       {/* Bản đồ lớp: node này còn đặt riêng gì ở những khổ đang KHÔNG xem. */}
-      <ScopePicker nodeId={node.id} parts={parts} scope={scope} onChange={setScope} />
+      <ScopePicker
+        nodeId={node.id}
+        parts={parts}
+        wholeLabel={wholeScopeLabel(node)}
+        scope={scope}
+        onChange={setScope}
+      />
       {/* Bản đồ lớp theo khổ màn không nói được về hover/focus — ẩn khi đang chỉnh trạng thái. */}
       {!scope.state && <LayerMap node={view.node} breakpoint={breakpoint} />}
 
