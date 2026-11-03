@@ -12,6 +12,13 @@ async function tool(request: APIRequestContext, name: string, input: unknown) {
   return (await res.json()).result;
 }
 
+/**
+ * Chờ một lần lưu tới server. Mặc định 5 giây của `expect.poll` không đủ khi cả stack e2e
+ * đang bận (lần lưu đầu sau khi chèn mẫu còn kéo theo biên dịch route của dev server) —
+ * test từng đỏ chập chờn ở đúng chỗ này dù thao tác đã đúng.
+ */
+const SAVE_POLL = { timeout: 30_000 };
+
 const color = (page: Page) => page.locator('[data-color-field="fill.color"] input');
 
 async function setBackground(page: Page, hex: string) {
@@ -58,7 +65,7 @@ test('chọn phần Nút gửi rồi đổi màu nền chỉ đổi nút gửi',
       .poll(async () => {
         const n = JSON.stringify(await tool(request, 'get_node', { pageId, nodeIds: [formId] }));
         return /"parts":{"submit":{"[a-z]+":{"fill":{"color":{"hex":"#123456"/.test(n);
-      })
+      }, SAVE_POLL)
       .toBe(true);
     let node = JSON.stringify(await tool(request, 'get_node', { pageId, nodeIds: [formId] }));
     // Style của chính form không bị chạm.
@@ -71,7 +78,7 @@ test('chọn phần Nút gửi rồi đổi màu nền chỉ đổi nút gửi',
       .poll(async () => {
         const n = JSON.stringify(await tool(request, 'get_node', { pageId, nodeIds: [formId] }));
         return /"submit":{[^]*"hover":{"fill":{"color":{"hex":"#abcdef"/.test(n);
-      })
+      }, SAVE_POLL)
       .toBe(true);
     node = JSON.stringify(await tool(request, 'get_node', { pageId, nodeIds: [formId] }));
     expect(node).toContain('"hex":"#123456"');
@@ -305,6 +312,11 @@ test('khối Form: danh sách chọn bỏ hết lựa chọn → lỗi cạnh ô
     // Không ghi: params vẫn hai lựa chọn.
     await page.waitForTimeout(500);
     expect((await formNode(request, pageId, formId)).params.fields.find((f) => f.name === 'select')?.options).toHaveLength(2);
+
+    // Gõ lại đúng giá trị đã lưu rồi rời ô: lỗi cũ hết nghĩa và biến mất.
+    await options.fill('Lựa chọn 1\nLựa chọn 2');
+    await options.blur();
+    await expect(editor.getByText(/select phải có options/)).toBeHidden();
   } finally {
     await dropPage(request, pageId);
   }
@@ -326,6 +338,127 @@ test('khối Form trong component: nói rõ sửa đổi mọi trang dùng compo
     await expect(page.locator('[data-form-panel]')).toBeVisible();
     await expect(page.getByText('Sửa ở đây đổi mọi trang dùng component này.')).toBeVisible();
   } finally {
+    await request.delete(`/api/presets/${copyId}`);
+  }
+});
+
+/* ── Bản dịch theo chỉ số ô (param:fields.N.*) ───────────────────────────────────── */
+
+async function setTranslation(request: APIRequestContext, data: Record<string, unknown>) {
+  const res = await request.post('/api/translations', { data });
+  expect(res.ok(), await res.text()).toBe(true);
+}
+
+/** HTML khung xem trước ở ngôn ngữ `en` — chỗ bản dịch nháp được phủ lên doc. */
+async function renderEn(request: APIRequestContext, pageId: string) {
+  const res = await request.get(`/render/${pageId}?locale=en`);
+  expect(res.ok()).toBe(true);
+  return res.text();
+}
+
+test('khối Form trên trang: kéo ô thì bản dịch tiếng Anh đi theo ô', async ({ page, request }) => {
+  const pageId = await newPage(request, 'tr');
+  try {
+    const formId = await insertAndSelectForm(page, request, pageId);
+    const panel = page.locator('[data-form-panel]');
+    await panel.getByLabel('Thêm ô').selectOption({ label: 'Số điện thoại' });
+    await expect
+      .poll(async () => (await formNode(request, pageId, formId)).params.fields.map((f) => f.name), SAVE_POLL)
+      .toEqual(['email', 'tel']);
+
+    // Nhãn tiếng Anh cho ô email (đang ở chỉ số 0).
+    await setTranslation(request, { pageId, locale: 'en', nodeId: formId, field: 'param:fields.0.label', value: 'Email EN' });
+    expect(await renderEn(request, pageId)).toMatch(/for="[^"]*-email"[^>]*>Email EN/);
+
+    // Nạp lại để Inspector có bản dịch vừa ghi, rồi đưa ô SĐT lên đầu.
+    await page.reload();
+    await page.locator(`[data-layer-row="${formId}"]`).click();
+    await page.locator('[data-form-panel]').getByRole('button', { name: 'Đưa ô "Số điện thoại" lên' }).click();
+    await expect
+      .poll(async () => (await formNode(request, pageId, formId)).params.fields.map((f) => f.name), SAVE_POLL)
+      .toEqual(['tel', 'email']);
+
+    // Nhãn tiếng Anh vẫn nằm trên ô email (giờ ở chỉ số 1), ô SĐT không mang nó.
+    await expect.poll(async () => {
+      const html = await renderEn(request, pageId);
+      return /for="[^"]*-email"[^>]*>Email EN/.test(html) && !/for="[^"]*-tel"[^>]*>Email EN/.test(html);
+    }, SAVE_POLL).toBe(true);
+    const rows = await tool(request, 'list_translations', { pageId, locale: 'en' });
+    const fields = (rows.translations as { nodeId: string; field: string }[])
+      .filter((t) => t.nodeId === formId)
+      .map((t) => t.field);
+    expect(fields).toEqual(['param:fields.1.label']);
+  } finally {
+    await dropPage(request, pageId);
+  }
+});
+
+test('khối Form trong component có bản dịch trên trang: chặn kéo/bỏ ô, nói lý do', async ({ page, request }) => {
+  // Component dựng bằng op (không nhân bản mẫu): một Form hai ô làm con của gốc.
+  const made = await request.post('/api/presets', { data: { name: `E2E form lock ${Date.now().toString(36)}` } });
+  expect(made.ok(), await made.text()).toBe(true);
+  const copyId = (await made.json()).preset.id as string;
+  const pageId = await newPage(request, 'lock');
+  try {
+    const { rootId: compRoot } = await tool(request, 'get_component', { componentId: copyId });
+    const formLocal = 'e2eformlock';
+    const built = await request.post(`/api/presets/${copyId}/ops`, {
+      data: {
+        ops: [{
+          op: 'insertNode', parentId: compRoot, index: 0,
+          node: {
+            id: formLocal, parentId: compRoot, type: 'Composite', composite: 'Form', name: 'Form',
+            children: [], effects: [], style: { base: {} }, slots: {},
+            params: {
+              endpointKey: '',
+              fields: [
+                { name: 'email', kind: 'email', label: 'Email', required: true },
+                { name: 'ten', kind: 'text', label: 'Tên', required: false },
+              ],
+              submitLabel: 'Gửi',
+              successMessage: 'Đã nhận.',
+              errorMessage: 'Chưa gửi được.',
+            },
+          },
+        }],
+      },
+    });
+    expect(built.ok(), await built.text()).toBe(true);
+
+    const instId = 'e2einstform';
+    const ops = await request.post('/api/ops', {
+      data: {
+        pageId,
+        label: 'e2e chèn instance form',
+        ops: [{
+          op: 'insertNode', parentId: 'root', index: 0,
+          node: {
+            id: instId, type: 'Instance', componentId: copyId, parentId: 'root',
+            children: [], effects: [], style: { base: {} }, overrides: {},
+          },
+        }],
+      },
+    });
+    expect(ops.ok(), await ops.text()).toBe(true);
+    await setTranslation(request, {
+      pageId, locale: 'en', nodeId: `${instId}/${formLocal}`, field: 'param:fields.0.label', value: 'Email EN',
+    });
+
+    await page.goto(`/builder/components/${copyId}/edit`);
+    await page.locator(`[data-layer-row="${formLocal}"]`).click();
+    const panel = page.locator('[data-form-panel]');
+    await expect(panel.locator('[data-form-index-lock]')).toContainText('Không sắp lại hay bỏ ô được');
+    await expect(panel.locator('[data-form-index-lock]')).toContainText('/e2e-form-lock-');
+    // Hai ô mà không nút sắp/bỏ nào bấm được.
+    await expect(panel.getByRole('button', { name: 'Bỏ ô "Email"' })).toBeDisabled();
+    await expect(panel.getByRole('button', { name: 'Đưa ô "Email" xuống' })).toBeDisabled();
+    await expect(panel.getByRole('button', { name: 'Đưa ô "Tên" lên' })).toBeDisabled();
+
+    // Thêm ô vào cuối vẫn được — nó không dời chỉ số nào.
+    await panel.getByLabel('Thêm ô').selectOption({ label: 'Số điện thoại' });
+    await expect(panel.locator('[data-form-field="tel"]')).toBeVisible({ timeout: 15_000 });
+  } finally {
+    await dropPage(request, pageId);
     await request.delete(`/api/presets/${copyId}`);
   }
 });

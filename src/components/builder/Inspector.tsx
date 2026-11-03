@@ -481,7 +481,7 @@ function NodeInspector({
         chữ nút dạng chữ phẳng, thứ DỊCH được). Ẩn ở chế độ bản dịch cùng lý do với ô chọn
         nơi nhận: cấu trúc form dùng chung mọi ngôn ngữ, chữ của bản dịch sửa ở Nội dung.
       */}
-      {node.type === 'Composite' && node.composite === 'Form' && !locale && <FormPanel node={node} doc={doc} />}
+      {node.type === 'Composite' && node.composite === 'Form' && !locale && <FormPanel node={node} doc={doc} pageId={pageId} translations={translations} />}
 
       {/*
         Chữ đứng TRƯỚC mọi ô style — cùng lý lẽ với bộ chọn ảnh ngay dưới đây.

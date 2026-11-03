@@ -68,6 +68,9 @@ const formField = z.object({
   autocomplete: z.string().max(40).optional(),
 });
 
+/** Trần số ô của một form — schema dùng, và sidebar dùng để tắt nút "Thêm ô". */
+export const MAX_FORM_FIELDS = 12;
+
 const FORM_DEFAULTS = {
   endpointKey: 'newsletter',
   fields: [
@@ -120,7 +123,7 @@ const formObject = z
     fields: z
       .array(formField)
       .min(1)
-      .max(12)
+      .max(MAX_FORM_FIELDS)
       .refine(
         (fs) => new Set(fs.map((f) => f.name)).size === fs.length,
         'tên trường bị lặp — BE sẽ chỉ nhận được một giá trị',
@@ -134,6 +137,15 @@ const formObject = z
               code: z.ZodIssueCode.custom,
               path: [i, 'options'],
               message: 'field select phải có options, nếu không nó là một menu rỗng',
+            });
+          }
+          // Hai lựa chọn cùng giá trị: BE nhận một giá trị mà không biết khách chọn dòng nào.
+          const values = (f.options ?? []).map((o) => o.value);
+          if (new Set(values).size !== values.length) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              path: [i, 'options'],
+              message: 'giá trị lựa chọn bị lặp — BE không phân biệt được hai dòng',
             });
           }
         });

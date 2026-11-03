@@ -15,6 +15,10 @@ import { zNode } from '@/lib/doc/schema';
 import type { CompositeNode, Doc, SectionNode } from '@/lib/doc/types';
 import {
   addField,
+  fieldIndexMap,
+  paramPathRemapper,
+  reconcileOptions,
+  translationRemapPlan,
   formPreviewCss,
   moveField,
   optionsFromText,
@@ -186,7 +190,7 @@ function counter() {
 describe('setAfterSubmitOps', () => {
   it('chọn dialog khi slot trống → dựng khung + tiêu đề + dòng chữ cho cả hai slot, rồi setProps trong CÙNG batch', () => {
     const node = formNode();
-    const r = ok(setAfterSubmitOps(node, 'dialog', counter()));
+    const r = ok(setAfterSubmitOps(node, 'dialog', counter(), docWith(node).nodes));
     const kinds = r.ops.map((o) => o.op);
     expect(kinds.filter((k) => k === 'insertNode')).toHaveLength(6);
     expect(kinds.at(-1)).toBe('setProps');
@@ -216,7 +220,7 @@ describe('setAfterSubmitOps', () => {
 
   it('slot đã có nội dung → chỉ setProps, giữ slot cũ', () => {
     const node = formNode({ slots: { success: ['s'], error: ['e'], heading: ['h'] }, children: ['h', 's', 'e'] as never });
-    const r = ok(setAfterSubmitOps(node, 'dialog', counter()));
+    const r = ok(setAfterSubmitOps(node, 'dialog', counter(), { s: {}, e: {}, h: {} }));
     expect(r.ops).toHaveLength(1);
     expect(r.ops[0]!.op).toBe('setProps');
     const props = (r.ops[0] as unknown as { props: { slots: Record<string, string[]> } }).props;
@@ -225,12 +229,26 @@ describe('setAfterSubmitOps', () => {
 
   it('chỉ một slot trống → chỉ dựng slot đó', () => {
     const node = formNode({ slots: { success: ['s'] }, children: ['s'] as never });
-    const r = ok(setAfterSubmitOps(node, 'dialog', counter()));
+    const r = ok(setAfterSubmitOps(node, 'dialog', counter(), { s: {} }));
     expect(r.ops.filter((o) => o.op === 'insertNode')).toHaveLength(3);
   });
 
+  it('slot trỏ tới node đã xoá → dựng lại slot đó, và chỉ ghi lại id còn sống', () => {
+    // `removeNode` không dọn id trong `slots`: slot "có id" mà node không còn là slot TRỐNG.
+    const node = formNode({
+      slots: { success: ['gone'], error: ['e'], heading: ['h', 'gone2'] },
+      children: ['h', 'e'] as never,
+    });
+    const r = ok(setAfterSubmitOps(node, 'dialog', counter(), { e: {}, h: {} }));
+    expect(r.ops.filter((o) => o.op === 'insertNode')).toHaveLength(3);
+    const props = (r.ops.at(-1) as unknown as { props: { slots: Record<string, string[]> } }).props;
+    expect(props.slots.success).toEqual(['n1']);
+    expect(props.slots.error).toEqual(['e']);
+    expect(props.slots.heading).toEqual(['h']);
+  });
+
   it('inline / panel → chỉ setProps, không đụng slot', () => {
-    const r = ok(setAfterSubmitOps(formNode(), 'panel', counter()));
+    const r = ok(setAfterSubmitOps(formNode(), 'panel', counter(), {}));
     expect(r.ops).toHaveLength(1);
     const props = (r.ops[0] as unknown as { props: Record<string, unknown> }).props;
     expect((props.params as { afterSubmit: string }).afterSubmit).toBe('panel');
@@ -238,7 +256,7 @@ describe('setAfterSubmitOps', () => {
   });
 
   it('params hiện tại hỏng → ok:false, không sinh op nào', () => {
-    const r = setAfterSubmitOps(formNode({ params: { ...RAW, submitLabel: '' } }), 'dialog', counter());
+    const r = setAfterSubmitOps(formNode({ params: { ...RAW, submitLabel: '' } }), 'dialog', counter(), {});
     expect(r.ok).toBe(false);
   });
 });
@@ -284,5 +302,91 @@ describe('optionsFromText / optionsToText', () => {
       { value: 'fund', label: 'Quỹ khác' },
     ];
     expect(optionsFromText(optionsToText(opts))).toEqual(opts);
+  });
+});
+
+describe('reconcileOptions — sửa nhãn KHÔNG đổi giá trị gửi lên', () => {
+  const prev = [
+    { value: 'quy_mo', label: 'Quỹ mở' },
+    { value: 'tiet_kiem', label: 'Tiết kiệm' },
+    { value: 'khac', label: 'Khác' },
+  ];
+
+  it('đổi nhãn tại chỗ giữ giá trị cũ của dòng đó', () => {
+    const r = reconcileOptions('Quỹ đóng\nTiết kiệm\nKhác', prev);
+    expect(r.options[0]).toEqual({ value: 'quy_mo', label: 'Quỹ đóng' });
+    expect(r.map).toEqual([0, 1, 2]);
+  });
+
+  it('đảo thứ tự dòng: giá trị đi theo nhãn, map ghi lại chỗ mới', () => {
+    const r = reconcileOptions('Khác\nQuỹ mở\nTiết kiệm', prev);
+    expect(r.options.map((o) => o.value)).toEqual(['khac', 'quy_mo', 'tiet_kiem']);
+    expect(r.map).toEqual([1, 2, 0]);
+  });
+
+  it('bỏ một dòng giữa: dòng sau không "kế thừa" giá trị của dòng bị bỏ', () => {
+    const r = reconcileOptions('Quỹ mở\nKhác', prev);
+    expect(r.options.map((o) => o.value)).toEqual(['quy_mo', 'khac']);
+    expect(r.map).toEqual([0, null, 1]);
+  });
+
+  it('dòng mới thì suy giá trị, và không trùng giá trị đã có', () => {
+    const r = reconcileOptions('Quỹ mở\nTiết kiệm\nKhác\nquy mo', prev);
+    expect(r.options[3]!.value).toBe('quy_mo_2');
+    expect(new Set(r.options.map((o) => o.value)).size).toBe(4);
+  });
+
+  it('không có lựa chọn cũ → như optionsFromText', () => {
+    expect(reconcileOptions('A\nB', undefined).options).toEqual(optionsFromText('A\nB'));
+  });
+});
+
+describe('giá trị lựa chọn trùng nhau bị schema từ chối', () => {
+  it('lỗi ở fields.N.options', () => {
+    const two = ok(addField(RAW, 'select')).params;
+    const r = updateField(two, 'select', { options: [{ value: 'a', label: 'A' }, { value: 'a', label: 'B' }] });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.issues.map((i) => i.path)).toContain('fields.1.options');
+  });
+});
+
+describe('dời bản dịch theo chỉ số ô', () => {
+  const before = { fields: [{ name: 'a' }, { name: 'b' }, { name: 'c' }] };
+
+  it('fieldIndexMap theo tên: kéo, bỏ', () => {
+    expect(fieldIndexMap(before, { fields: [{ name: 'c' }, { name: 'a' }, { name: 'b' }] })).toEqual([1, 2, 0]);
+    expect(fieldIndexMap(before, { fields: [{ name: 'a' }, { name: 'c' }] })).toEqual([0, null, 1]);
+  });
+
+  it('remapParamPath: ô dời, ô bị bỏ, lựa chọn dời, đường khác giữ nguyên', () => {
+    const remap = paramPathRemapper([1, null, 0], { 0: [1, 0] });
+    expect(remap('fields.0.label')).toBe('fields.1.label');
+    expect(remap('fields.1.help')).toBeNull();
+    expect(remap('fields.2.placeholder')).toBe('fields.0.placeholder');
+    expect(remap('fields.0.options.0.label')).toBe('fields.1.options.1.label');
+    expect(remap('submitLabel')).toBe('submitLabel');
+  });
+
+  it('kế hoạch ghi: hoán đổi hai ô ghi đè đúng chỗ, không xoá đích vừa ghi; ô bị bỏ thì xoá', () => {
+    const rows = [
+      { locale: 'en', field: 'param:fields.0.label', value: 'A' },
+      { locale: 'en', field: 'param:fields.1.label', value: 'B' },
+      { locale: 'en', field: 'param:fields.2.label', value: 'C' },
+      { locale: 'en', field: 'param:submitLabel', value: 'Send' },
+    ];
+    const plan = translationRemapPlan(rows, paramPathRemapper([1, 0, null], {}));
+    expect(plan.upserts).toEqual([
+      { locale: 'en', field: 'param:fields.1.label', value: 'A' },
+      { locale: 'en', field: 'param:fields.0.label', value: 'B' },
+    ]);
+    expect(plan.deletes).toEqual([{ locale: 'en', field: 'param:fields.2.label' }]);
+  });
+
+  it('không có gì dời → kế hoạch rỗng', () => {
+    const plan = translationRemapPlan(
+      [{ locale: 'en', field: 'param:fields.0.label', value: 'A' }],
+      paramPathRemapper([0, 1], {}),
+    );
+    expect(plan).toEqual({ upserts: [], deletes: [] });
   });
 });

@@ -196,6 +196,146 @@ export function optionsFromText(text: string): Option[] {
     });
 }
 
+/**
+ * Đọc lại ô "Lựa chọn" so với lựa chọn ĐANG CÓ — sửa nhãn không được đổi giá trị gửi lên.
+ *
+ * Giá trị là thứ BE lưu; đổi nó vì người dựng sửa chính tả nhãn là làm dữ liệu cũ và mới
+ * lệch nhau mà không ai thấy. Thứ tự khớp:
+ *
+ *  1. Dòng `giá trị | nhãn` → đúng giá trị đó (khớp lựa chọn cũ cùng giá trị nếu có).
+ *  2. Dòng trùng NHÃN một lựa chọn cũ chưa dùng → giữ giá trị của nó (dòng bị đảo chỗ).
+ *  3. Dòng còn lại mà lựa chọn cũ ở CÙNG VỊ TRÍ chưa được dòng nào nhận → giữ giá trị đó
+ *     (sửa nhãn tại chỗ).
+ *  4. Còn lại là dòng mới → suy giá trị từ nhãn, thêm hậu tố nếu trùng.
+ *
+ * `map[chỉ số cũ] = chỉ số mới | null` — để bản dịch `fields.N.options.M.*` đi theo dòng.
+ */
+export function reconcileOptions(
+  text: string,
+  prev: readonly Option[] | undefined,
+): { options: Option[]; map: (number | null)[] } {
+  const old = prev ?? [];
+  const lines = text.split('\n').map((l) => l.trim()).filter(Boolean);
+  const parsed = lines.map((line) => {
+    const bar = line.indexOf('|');
+    return bar >= 0
+      ? { explicit: line.slice(0, bar).trim(), label: line.slice(bar + 1).trim() }
+      : { explicit: null as string | null, label: line };
+  });
+
+  const from: (number | null)[] = parsed.map(() => null);
+  const used = new Set<number>();
+  const claim = (line: number, oldIndex: number) => {
+    from[line] = oldIndex;
+    used.add(oldIndex);
+  };
+  // 1 + 2: khớp theo giá trị tường minh, rồi theo nhãn.
+  parsed.forEach((p, i) => {
+    const j = p.explicit !== null
+      ? old.findIndex((o, k) => !used.has(k) && o.value === p.explicit)
+      : old.findIndex((o, k) => !used.has(k) && o.label === p.label);
+    if (j >= 0) claim(i, j);
+  });
+  // 3: sửa nhãn tại chỗ.
+  parsed.forEach((p, i) => {
+    if (from[i] === null && p.explicit === null && i < old.length && !used.has(i)) claim(i, i);
+  });
+
+  const taken = new Set<string>();
+  for (const [i, p] of parsed.entries()) {
+    if (p.explicit !== null) taken.add(p.explicit);
+    else if (from[i] !== null) taken.add(old[from[i]!]!.value);
+  }
+  const options = parsed.map((p, i) => {
+    if (p.explicit !== null) return { value: p.explicit, label: p.label };
+    if (from[i] !== null) return { value: old[from[i]!]!.value, label: p.label };
+    // 4: dòng mới.
+    const base = optionValue(p.label) || `lua_chon_${i + 1}`;
+    let value = base;
+    for (let n = 2; taken.has(value); n++) value = `${base}_${n}`;
+    taken.add(value);
+    return { value, label: p.label };
+  });
+
+  const map: (number | null)[] = old.map(() => null);
+  from.forEach((j, i) => {
+    if (j !== null) map[j] = i;
+  });
+  return { options, map };
+}
+
+/* ── Bản dịch đi theo ô ───────────────────────────────────────────── */
+
+/**
+ * Bản dịch chữ trong params được đánh địa chỉ theo CHỈ SỐ (`param:fields.2.label`, xem
+ * `render/param-paths.ts`). Kéo hay bỏ một ô thì chỉ số đổi, và bản tiếng Anh của ô 0 sẽ
+ * nằm lên ô khác đang đứng ở chỗ 0. Ba hàm dưới đây tính chỗ mới; `FormPanel` ghi lại
+ * qua đường ghi bản dịch có sẵn (`/api/translations`) sau khi op đã lưu.
+ */
+
+/** `map[chỉ số cũ] = chỉ số mới | null` (bị bỏ), so theo TÊN ô — tên là định danh bền. */
+export function fieldIndexMap(before: unknown, after: unknown): (number | null)[] {
+  const next = fieldsOf(after).map((f) => f.name);
+  return fieldsOf(before).map((f) => {
+    const i = next.indexOf(f.name);
+    return i >= 0 ? i : null;
+  });
+}
+
+/**
+ * Hàm đổi đường dẫn params: `fields.N.…` theo `fieldMap`, `fields.N.options.M.…` thêm theo
+ * `optionMaps[N cũ]`. Trả `null` khi ô/lựa chọn đã bị bỏ; đường ngoài `fields` giữ nguyên.
+ */
+export function paramPathRemapper(
+  fieldMap: readonly (number | null)[],
+  optionMaps: Readonly<Record<number, readonly (number | null)[]>>,
+): (path: string) => string | null {
+  return (path) => {
+    const m = /^fields\.(\d+)(?:\.(.*))?$/.exec(path);
+    if (!m) return path;
+    const oldField = Number(m[1]);
+    const newField = oldField < fieldMap.length ? fieldMap[oldField] : oldField;
+    if (newField === null || newField === undefined) return null;
+    let rest = m[2] ?? '';
+    const opt = /^options\.(\d+)(\..*)?$/.exec(rest);
+    const omap = optionMaps[oldField];
+    if (opt && omap) {
+      const oldOpt = Number(opt[1]);
+      const newOpt = oldOpt < omap.length ? omap[oldOpt] : oldOpt;
+      if (newOpt === null || newOpt === undefined) return null;
+      rest = `options.${newOpt}${opt[2] ?? ''}`;
+    }
+    return rest ? `fields.${newField}.${rest}` : `fields.${newField}`;
+  };
+}
+
+export interface TranslationRow { locale: string; field: string; value: unknown }
+
+/**
+ * Những gì phải ghi vào bảng bản dịch: `upserts` (giá trị cũ đặt vào chỗ mới) rồi
+ * `deletes` (chỗ cũ không còn ai dời vào). Đích vừa ghi KHÔNG bao giờ nằm trong `deletes`
+ * — hoán đổi hai ô là hai lần ghi đè, không có lần xoá nào.
+ */
+export function translationRemapPlan(
+  rows: readonly TranslationRow[],
+  remap: (path: string) => string | null,
+): { upserts: TranslationRow[]; deletes: { locale: string; field: string }[] } {
+  const PREFIX = 'param:';
+  const upserts: TranslationRow[] = [];
+  const moved: { locale: string; field: string }[] = [];
+  for (const row of rows) {
+    if (!row.field.startsWith(PREFIX)) continue;
+    const path = row.field.slice(PREFIX.length);
+    const next = remap(path);
+    if (next === path) continue;
+    moved.push({ locale: row.locale, field: row.field });
+    if (next !== null) upserts.push({ locale: row.locale, field: PREFIX + next, value: row.value });
+  }
+  const targets = new Set(upserts.map((u) => `${u.locale}|${u.field}`));
+  const deletes = moved.filter((m) => !targets.has(`${m.locale}|${m.field}`));
+  return { upserts, deletes };
+}
+
 /** Ngược của `optionsFromText`: chỉ viết `giá trị | nhãn` khi giá trị KHÔNG suy được từ nhãn. */
 export function optionsToText(options: readonly Option[] | undefined): string {
   return (options ?? [])
@@ -233,18 +373,29 @@ function textNode(id: NodeId, parentId: NodeId, tag: 'h3' | 'p', name: string, t
  *
  * Slot đã có nội dung thì giữ nguyên — người dùng đã thiết kế nó, chuyển qua lại giữa các
  * chế độ không được xoá công đó.
+ *
+ * `nodes`: các node ĐANG CÓ trong doc. `removeNode` không dọn id trong `slots`, nên một slot
+ * "có id" mà node đã bị xoá thật ra là slot TRỐNG — đếm theo độ dài thì hộp thoại mở ra
+ * rỗng. Id chết bị lọc khỏi mọi slot trước khi quyết, và không được ghi lại.
  */
 export function setAfterSubmitOps(
   node: CompositeNode,
   mode: AfterSubmit,
   newId: () => NodeId,
+  nodes: Readonly<Record<NodeId, unknown>>,
 ): { ok: true; ops: Op[] } | { ok: false; issues: FormParamsIssue[] } {
   const next = { ...rawOf(node.params), afterSubmit: mode };
   const checked = parseFormParamsStrict(next);
   if (!checked.ok) return { ok: false, issues: checked.issues };
 
   const ops: Op[] = [];
-  const slots = { ...node.slots };
+  const slots: Record<string, NodeId[]> = {};
+  let stale = false;
+  for (const [key, ids] of Object.entries(node.slots)) {
+    const alive = ids.filter((id) => Object.hasOwn(nodes, id));
+    if (alive.length !== ids.length) stale = true;
+    slots[key] = alive;
+  }
   let index = node.children.length;
 
   if (mode === 'dialog') {
@@ -266,7 +417,7 @@ export function setAfterSubmitOps(
   ops.push({
     op: 'setProps',
     nodeId: node.id,
-    props: slotsChanged || mode === 'dialog' ? { params: next, slots } : { params: next },
+    props: slotsChanged || stale || mode === 'dialog' ? { params: next, slots } : { params: next },
   });
   return { ok: true, ops };
 }

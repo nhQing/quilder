@@ -41,6 +41,9 @@ function formTree(): PresetTree {
       ...base,
       id: 'f1',
       parentId: null,
+      // Node slot là CON THẬT của form: `slots` chỉ định tuyến. Thiếu dòng này thì cây hỏng
+      // bất biến cấu trúc và mọi op trên bản sao của mẫu bị 422 (not-in-parent).
+      children: ['f2', 'f3'],
       type: 'Composite',
       composite: 'Form',
       name: 'Form',
