@@ -708,6 +708,13 @@ model Preset {
    */
   builtin Boolean @default(false)
 
+  /**
+   * Khoá mẫu hệ thống (`'form'`…), null với component thường. Có khoá = builder tự gieo
+   * (`ensureSiteDefaults`), KHÔNG xoá/sửa được và Instance của nó không chèn được vào
+   * trang — chỉ nhân bản. Xem `setup/system-presets.ts`.
+   */
+  system String? @unique
+
   createdAt DateTime @default(now())
   // @default(now()) đi kèm @updatedAt: không có nó thì cột là NOT NULL không
   // default, và migration không chạy được trên các hàng đã có sẵn.

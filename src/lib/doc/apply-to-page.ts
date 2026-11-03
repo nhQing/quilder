@@ -16,6 +16,7 @@ import { prisma } from '@/lib/db';
 import { loadComponents } from '@/lib/render/components';
 import { compileDoc } from '@/lib/render/css';
 import type { SessionPayload } from '@/lib/auth/session';
+import { SYSTEM_PRESET_INSTANCE_REFUSAL } from '@/lib/setup/system-presets';
 import { fixtureRejection } from './fixture-guard';
 import { migrateDoc } from './migrate';
 import { invert, type Op } from './ops';
@@ -178,6 +179,23 @@ export async function applyOpsToPage(args: {
     };
   }
   const clean = result.ops;
+
+  /*
+   * Mẫu hệ thống chỉ nhân bản, không chèn Instance: Instance chỉ ghi đè chữ/ảnh, nên một
+   * form chèn kiểu đó không chỉnh được trường hay nơi nhận. Chỉ xét Instance MỚI — trang
+   * đã có Instance từ trước vẫn sửa bình thường.
+   */
+  const fresh = Object.values(result.doc.nodes)
+    .filter((n) => n.type === 'Instance' && !current.nodes[n.id])
+    .map((n) => (n as { componentId?: string }).componentId)
+    .filter((v): v is string => typeof v === 'string');
+  if (fresh.length) {
+    const sys = await prisma.preset.findMany({
+      where: { id: { in: [...new Set(fresh)] }, system: { not: null } },
+      select: { id: true },
+    });
+    if (sys.length) return { ok: false, status: 422, error: SYSTEM_PRESET_INSTANCE_REFUSAL };
+  }
 
   /*
    * Dừng ở ĐÂY khi dry-run: sau validator, trước mọi lần ghi.

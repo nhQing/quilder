@@ -17,6 +17,7 @@
  * | Trang chủ     | chưa có trang slug `''`                     |
  * | Trang 404     | chưa có trang `system = 'not-found'`        |
  * | Release đầu   | site chưa có `activeReleaseId`              |
+ * | Mẫu hệ thống  | chưa có preset nào mang khoá `system` đó    |
  *
  * Release đầu chỉ tạo khi site CHƯA TỪNG publish. Site đang chạy được bổ sung trang
  * 404 ở dạng nháp; nó lên site thật ở lần Publish kế — tới lúc đó `not-found.tsx`
@@ -25,6 +26,7 @@
 
 import type { Prisma } from '@prisma/client';
 
+import { slugify } from '@/lib/builder/preset-key';
 import type { Doc } from '@/lib/doc/types';
 import {
   DEFAULT_HOME,
@@ -32,6 +34,7 @@ import {
   defaultHomeDoc,
   defaultNotFoundDoc,
 } from './default-docs';
+import { SYSTEM_PRESETS } from './system-presets';
 
 type Tx = Prisma.TransactionClient;
 
@@ -217,6 +220,38 @@ export async function ensureSiteDefaults(
     });
     await tx.site.update({ where: { id: site.id }, data: { activeReleaseId: release.id } });
     created.push('release');
+  }
+
+  /* ── Mẫu hệ thống (component) ─────────────────────────────────────── */
+  // Gieo MỘT LẦN theo khoá `system`: đã có thì bỏ qua, kể cả khi người dùng đã đổi tên —
+  // chạy ở mọi lần deploy nên không được ghi đè gì.
+  for (const seed of SYSTEM_PRESETS) {
+    const had = await tx.preset.findUnique({ where: { system: seed.system }, select: { id: true } });
+    if (had) continue;
+    // Key `mau-form` đã bị component thường chiếm: thêm -2, -3… (key là unique).
+    let key: string = seed.key;
+    for (let n = 2; await tx.preset.findUnique({ where: { key }, select: { id: true } }); n += 1) {
+      key = `${slugify(seed.key)}-${n}`;
+    }
+    await tx.preset.create({
+      data: {
+        key,
+        name: seed.name,
+        category: seed.category,
+        aiDescription: seed.aiDescription,
+        tree: seed.tree as unknown as Prisma.InputJsonValue,
+        builtin: false,
+        system: seed.system,
+        versions: {
+          create: {
+            tree: seed.tree as unknown as Prisma.InputJsonValue,
+            label: 'mẫu hệ thống',
+            createdBy: 'system',
+          },
+        },
+      },
+    });
+    created.push(`preset:${seed.system}`);
   }
 
   return { siteId: site.id, created };

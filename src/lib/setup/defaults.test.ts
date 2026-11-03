@@ -2,7 +2,10 @@ import { describe, expect, it } from 'vitest';
 
 import { zDoc } from '@/lib/doc/schema';
 import { defaultHomeDoc, defaultNotFoundDoc } from './default-docs';
+import { presetTreeToDoc } from '@/lib/doc/migrate';
+import { parseFormParamsStrict } from '@/lib/composites/registry';
 import { ensureSiteDefaults } from './defaults';
+import { SYSTEM_PRESETS } from './system-presets';
 
 /**
  * Prisma giả, giữ dữ liệu trong bộ nhớ — chỉ đủ các phương thức `ensureSiteDefaults`
@@ -18,6 +21,7 @@ function fakeDb() {
     pages: [] as Record<string, unknown>[],
     versions: [] as Record<string, unknown>[],
     releases: [] as Record<string, unknown>[],
+    presets: [] as Record<string, unknown>[],
   };
   const match = (row: Record<string, unknown>, where: Record<string, unknown>) =>
     Object.entries(where).every(([k, v]) => row[k] === v);
@@ -61,6 +65,15 @@ function fakeDb() {
         return row;
       },
     },
+    preset: {
+      findUnique: async ({ where }: { where: Record<string, unknown> }) =>
+        db.presets.find((p) => match(p, where)) ?? null,
+      create: async ({ data }: { data: Record<string, unknown> }) => {
+        const row = { id: id('preset'), ...data };
+        db.presets.push(row);
+        return row;
+      },
+    },
     release: {
       create: async ({ data }: { data: Record<string, unknown> }) => {
         const row = { id: id('rel'), ...data };
@@ -77,7 +90,9 @@ describe('ensureSiteDefaults', () => {
     const { db, tx } = fakeDb();
     const r = await ensureSiteDefaults(tx, { name: 'Tiệm Bánh', siteUrl: 'https://banh.vn' });
 
-    expect(r.created).toEqual(['locale:vi', 'site', 'page:home', 'page:not-found', 'release']);
+    expect(r.created).toEqual([
+      'locale:vi', 'site', 'page:home', 'page:not-found', 'release', 'preset:form',
+    ]);
     expect(db.sites[0]).toMatchObject({
       name: 'Tiệm Bánh',
       siteUrl: 'https://banh.vn',
@@ -107,7 +122,7 @@ describe('ensureSiteDefaults', () => {
 
     const r = await ensureSiteDefaults(tx);
 
-    expect(r.created).toEqual(['page:not-found']);
+    expect(r.created).toEqual(['page:not-found', 'preset:form']);
     expect(db.releases).toHaveLength(0);
     expect(db.sites[0]!.activeReleaseId).toBe('relLive');
     expect(db.sites[0]!.name).toBe('Cũ');
@@ -128,6 +143,38 @@ describe('ensureSiteDefaults', () => {
     await ensureSiteDefaults(tx);
     await ensureSiteDefaults(tx, { name: 'Mới', siteUrl: 'https://moi.vn' });
     expect(db.sites[0]).toMatchObject({ name: 'Mới', siteUrl: 'https://moi.vn', primaryDomain: 'moi.vn' });
+  });
+});
+
+describe('mẫu hệ thống', () => {
+  it('tạo mẫu hệ thống form một lần, không ghi đè bản đã có', async () => {
+    const { db, tx } = fakeDb();
+    const first = await ensureSiteDefaults(tx);
+    expect(first.created).toContain('preset:form');
+    const second = await ensureSiteDefaults(tx);
+    expect(second.created).not.toContain('preset:form');
+    expect(db.presets.filter((p) => p.system === 'form')).toHaveLength(1);
+
+    db.presets[0]!.name = 'Tên đã sửa';
+    const third = await ensureSiteDefaults(tx);
+    expect(third.created).not.toContain('preset:form');
+    expect(db.presets[0]!.name).toBe('Tên đã sửa');
+    expect(db.presets).toHaveLength(1);
+  });
+
+  it('key mau-form đã bị người dùng chiếm: mẫu lấy hậu tố -2', async () => {
+    const { db, tx } = fakeDb();
+    db.presets.push({ id: 'mine', key: 'mau-form', system: null });
+    await ensureSiteDefaults(tx);
+    expect(db.presets.find((p) => p.system === 'form')?.key).toBe('mau-form-2');
+  });
+
+  it('cây mẫu qua zDoc và parseFormParamsStrict, không có URL', () => {
+    const [form] = SYSTEM_PRESETS;
+    expect(zDoc.safeParse(presetTreeToDoc(form!.tree)).success).toBe(true);
+    const root = form!.tree.nodes[form!.tree.rootId] as unknown as { params: unknown };
+    expect(parseFormParamsStrict(root.params).ok).toBe(true);
+    expect(JSON.stringify(form)).not.toMatch(/https?:/);
   });
 });
 

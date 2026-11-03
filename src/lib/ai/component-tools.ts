@@ -96,7 +96,7 @@ const listComponents: ToolDef = {
       orderBy: [{ category: 'asc' }, { name: 'asc' }],
       select: {
         id: true, key: true, name: true, category: true,
-        aiDescription: true, builtin: true, tree: true, updatedAt: true,
+        aiDescription: true, builtin: true, system: true, tree: true, updatedAt: true,
       },
     });
 
@@ -113,6 +113,8 @@ const listComponents: ToolDef = {
         // Component builtin bị `extract-presets.ts` ghi đè khi chạy lại. Model
         // cần biết trước khi khuyên người dùng sửa thẳng vào nó.
         builtin: r.builtin,
+        // Khoá mẫu hệ thống (vd 'form') hoặc null. Có khoá = không sửa/xoá được, chỉ nhân bản.
+        system: r.system,
         updatedAt: r.updatedAt.toISOString(),
       })),
     };

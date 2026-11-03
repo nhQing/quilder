@@ -29,6 +29,7 @@ import { revalidateTag } from 'next/cache';
 import { prisma } from '@/lib/db';
 import { COMPONENTS_TAG } from '@/lib/render/components';
 import type { SessionPayload } from '@/lib/auth/session';
+import { SYSTEM_PRESET_REFUSAL } from '@/lib/setup/system-presets';
 import { presetTreeToDoc } from './migrate';
 import { invert, type Op } from './ops';
 import { validateOps, type Actor, type ValidationIssue } from './validate';
@@ -102,9 +103,11 @@ export async function applyOpsToPreset(args: {
 
   const preset = await prisma.preset.findUnique({
     where: { id: presetId },
-    select: { id: true, key: true, tree: true, updatedAt: true },
+    select: { id: true, key: true, system: true, tree: true, updatedAt: true },
   });
   if (!preset) return { ok: false, status: 404, error: 'Không tìm thấy component' };
+  // Một chỗ cho cả `/api/presets/[id]/ops` và MCP `apply_component_ops`.
+  if (preset.system) return { ok: false, status: 409, error: SYSTEM_PRESET_REFUSAL };
 
   const current = treeToDoc(preset.tree as unknown as PresetTree);
 

@@ -28,7 +28,7 @@ export async function GET() {
     orderBy: [{ category: 'asc' }, { name: 'asc' }],
     select: {
       id: true, key: true, name: true, category: true, aiDescription: true,
-      builtin: true, updatedAt: true, tree: true,
+      builtin: true, system: true, updatedAt: true, tree: true,
       _count: { select: { versions: true } },
     },
   });
@@ -38,7 +38,7 @@ export async function GET() {
       const tree = r.tree as unknown as PresetTree;
       return {
         id: r.id, key: r.key, name: r.name, category: r.category,
-        aiDescription: r.aiDescription, builtin: r.builtin,
+        aiDescription: r.aiDescription, builtin: r.builtin, system: r.system,
         updatedAt: r.updatedAt.toISOString(),
         nodeCount: Object.keys(tree.nodes ?? {}).length,
         versionCount: r._count.versions,

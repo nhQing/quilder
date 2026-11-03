@@ -12,6 +12,7 @@ import { prisma } from '@/lib/db';
 import { componentUsers } from '@/lib/builder/component-detail';
 import { slugify } from '@/lib/builder/preset-key';
 import type { PresetTree } from '@/lib/doc/preset';
+import { SYSTEM_PRESET_REFUSAL } from '@/lib/setup/system-presets';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -28,7 +29,7 @@ export async function GET(
     where: { id },
     select: {
       id: true, key: true, name: true, category: true, aiDescription: true,
-      builtin: true, tree: true, createdAt: true, updatedAt: true,
+      builtin: true, system: true, tree: true, createdAt: true, updatedAt: true,
       versions: {
         orderBy: { createdAt: 'desc' },
         take: 20,
@@ -64,9 +65,10 @@ export async function PATCH(
 
   const preset = await prisma.preset.findUnique({
     where: { id },
-    select: { id: true, key: true, name: true },
+    select: { id: true, key: true, name: true, system: true },
   });
   if (!preset) return NextResponse.json({ error: 'Không tìm thấy component' }, { status: 404 });
+  if (preset.system) return NextResponse.json({ error: SYSTEM_PRESET_REFUSAL }, { status: 409 });
 
   const data: { name?: string; category?: string; aiDescription?: string } = {};
 
@@ -144,9 +146,11 @@ export async function DELETE(
   const { id } = await params;
   const preset = await prisma.preset.findUnique({
     where: { id },
-    select: { id: true, key: true, name: true, builtin: true, tree: true },
+    select: { id: true, key: true, name: true, builtin: true, system: true, tree: true },
   });
   if (!preset) return NextResponse.json({ error: 'Không tìm thấy component' }, { status: 404 });
+  // Mẫu hệ thống kiểm TRƯỚC rào "còn trang dùng": nó không bao giờ xoá được.
+  if (preset.system) return NextResponse.json({ error: SYSTEM_PRESET_REFUSAL }, { status: 409 });
 
   // Rào là "còn trang dùng", không phải "có sẵn".
   //

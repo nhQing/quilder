@@ -349,3 +349,79 @@ test.describe('AI qua tool', () => {
     expect(result.component.name).toBe('E2E AI nhân bản (bản sao)');
   });
 });
+
+test.describe('mẫu hệ thống', () => {
+  async function systemPreset(request: APIRequestContext) {
+    const res = await request.get('/api/presets');
+    const { presets } = await res.json();
+    const p = presets.find((x: { system: string | null }) => x.system === 'form');
+    expect(p, 'chưa có mẫu hệ thống form — ensureSiteDefaults chưa chạy?').toBeTruthy();
+    return p as { id: string; system: string };
+  }
+
+  test('xoá, đổi tên, sửa cây đều bị 409; MCP cũng bị từ chối', async ({ request }) => {
+    const p = await systemPreset(request);
+
+    const del = await request.delete(`/api/presets/${p.id}`);
+    expect(del.status()).toBe(409);
+    expect((await del.json()).error).toMatch(/Mẫu hệ thống/);
+
+    const patch = await request.patch(`/api/presets/${p.id}`, { data: { name: 'Đổi tên' } });
+    expect(patch.status()).toBe(409);
+
+    const ops = await request.post(`/api/presets/${p.id}/ops`, {
+      data: { ops: [{ op: 'setName', nodeId: 'f1', name: 'X' }] },
+    });
+    expect(ops.status()).toBe(409);
+
+    const mcp = await tool(request, 'apply_component_ops', {
+      componentId: p.id,
+      ops: [{ op: 'setName', nodeId: 'f1', name: 'X' }],
+    });
+    expect(mcp.ok).toBe(false);
+    expect(mcp.error).toMatch(/Mẫu hệ thống/);
+
+    const list = await tool(request, 'list_components', {});
+    expect(list.components.find((c: { id: string }) => c.id === p.id).system).toBe('form');
+  });
+
+  test('nhân bản được, bản sao không mang cờ system và xoá được', async ({ request }) => {
+    const p = await systemPreset(request);
+    const res = await request.post('/api/presets', { data: { from: p.id } });
+    expect(res.ok(), await res.text()).toBe(true);
+    const { preset } = await res.json();
+    created.push(preset.id);
+
+    const { presets } = await (await request.get('/api/presets')).json();
+    expect(presets.find((x: { id: string }) => x.id === preset.id).system).toBeNull();
+  });
+
+  test('chèn Instance của mẫu vào trang bị từ chối, nhắc nhân bản', async ({ request }) => {
+    const p = await systemPreset(request);
+    const slug = `e2e-mau-he-thong-${Date.now().toString(36)}`;
+    const pageRes = await request.post('/api/pages', { data: { title: 'E2E mẫu hệ thống', slug } });
+    expect(pageRes.ok(), await pageRes.text()).toBe(true);
+    const pageId = (await pageRes.json()).page.id as string;
+    try {
+      const { rootId } = await tool(request, 'get_page_outline', { pageId });
+      const r = await request.post('/api/ops', {
+        data: {
+          pageId,
+          ops: [{
+            op: 'insertNode', parentId: rootId, index: 0,
+            node: {
+              id: 'e2esysinst', parentId: rootId, type: 'Instance', componentId: p.id, overrides: {},
+              children: [], effects: [], style: { base: {} },
+            },
+          }],
+        },
+      });
+      expect(r.status()).toBeGreaterThanOrEqual(400);
+      expect(r.status()).toBeLessThan(500);
+      expect((await r.json()).error).toMatch(/bản sao/);
+    } finally {
+      await request.delete(`/api/pages/${pageId}`);
+      await request.delete(`/api/pages/${pageId}?purge=1`);
+    }
+  });
+});
