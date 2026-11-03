@@ -69,6 +69,17 @@ export interface FormProps extends FormParams {
    */
   success?: React.ReactNode;
   error?: React.ReactNode;
+  /**
+   * Đang render trong KHUNG XEM TRƯỚC của builder (route `/render/...`, cờ `canvas` của
+   * RenderContext) — site thật không bao giờ đặt cờ này.
+   *
+   * Khi bật và form ở chế độ `dialog`, hai slot được render thêm một lần, TẠI CHỖ và ẩn
+   * (`hidden`), trong khối `.mm-form__preview`. Lý do: hộp thoại thật chỉ mount slot sau
+   * khi gửi, mà trong builder không ai gửi được (canvas chặn submit) — node slot sẽ không
+   * bao giờ có trên canvas để thấy và bấm chọn. Công tắc "Xem trước" của sidebar bật khối
+   * tương ứng bằng CSS chèn vào khung (`formPreviewCss`), không cần nạp lại trang.
+   */
+  canvasPreview?: boolean;
 }
 
 function inputMode(kind: FormFieldDef['kind']): 'email' | 'tel' | 'numeric' | undefined {
@@ -92,6 +103,7 @@ export function Form({
   note,
   success,
   error,
+  canvasPreview = false,
 }: FormProps) {
   const uid = useId();
   const [status, setStatus] = useState<Status>('idle');
@@ -317,6 +329,30 @@ export function Form({
           </p>
         )}
       </form>
+
+      {canvasPreview && mode === 'dialog' && (
+        <>
+          {(
+            [
+              ['success', success],
+              ['error', error],
+            ] as const
+          ).map(([kind, content]) => (
+            // `div`, không phải `<dialog open>`: dialog không modal mặc định nằm `absolute`
+            // đè lên trang. Cùng class `mm-form__dialog` để style phần "Hộp thoại" áp y như thật.
+            <div key={kind} className="mm-form__preview" data-preview={kind} hidden>
+              <div className="mm-form__dialog" data-part="dialog">
+                <div className="mm-form__dialog-body" data-part="dialog-body">
+                  <span className="mm-form__dialog-close" aria-hidden="true">
+                    ×
+                  </span>
+                  {content}
+                </div>
+              </div>
+            </div>
+          ))}
+        </>
+      )}
 
       {note}
 

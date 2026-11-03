@@ -125,10 +125,19 @@ const formObject = z
         (fs) => new Set(fs.map((f) => f.name)).size === fs.length,
         'tên trường bị lặp — BE sẽ chỉ nhận được một giá trị',
       )
-      .refine(
-        (fs) => fs.every((f) => f.kind !== 'select' || (f.options?.length ?? 0) > 0),
-        'field select phải có options, nếu không nó là một menu rỗng',
-      )
+      // `superRefine` chứ không `refine`: lỗi phải mang đường dẫn TỚI ĐÚNG Ô
+      // (`fields.N.options`) để sidebar báo cạnh ô đó, không phải chung chung "fields".
+      .superRefine((fs, ctx) => {
+        fs.forEach((f, i) => {
+          if (f.kind === 'select' && (f.options?.length ?? 0) === 0) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              path: [i, 'options'],
+              message: 'field select phải có options, nếu không nó là một menu rỗng',
+            });
+          }
+        });
+      })
       .default(FORM_DEFAULTS.fields),
     submitLabel: z.string().min(1).max(80).default(FORM_DEFAULTS.submitLabel),
     successMessage: z.string().min(1).max(300).default(FORM_DEFAULTS.successMessage),
@@ -181,8 +190,22 @@ export function parseFormParamsStrict(
   if (r.success) return { ok: true, params: r.data };
   return {
     ok: false,
-    issues: r.error.issues.map((i) => ({ path: i.path.join('.'), message: i.message })),
+    issues: r.error.issues.map((i) => ({ path: i.path.join('.'), message: issueMessage(i) })),
   };
+}
+
+/**
+ * Câu lỗi người dựng trang đọc được. Lời mặc định của zod là tiếng Anh kỹ thuật
+ * ("String must contain at least 1 character(s)") và hiện ngay cạnh ô nhập của sidebar.
+ */
+function issueMessage(i: z.ZodIssue): string {
+  if (i.code === z.ZodIssueCode.too_small && i.type === 'string') {
+    return Number(i.minimum) <= 1 ? 'Không được để trống.' : `Cần ít nhất ${i.minimum} ký tự.`;
+  }
+  if (i.code === z.ZodIssueCode.too_big && i.type === 'string') return `Tối đa ${i.maximum} ký tự.`;
+  if (i.code === z.ZodIssueCode.too_small && i.type === 'array') return `Cần ít nhất ${i.minimum} mục.`;
+  if (i.code === z.ZodIssueCode.too_big && i.type === 'array') return `Tối đa ${i.maximum} mục.`;
+  return i.message;
 }
 
 /* ── Accordion ────────────────────────────────────────────────────────── */

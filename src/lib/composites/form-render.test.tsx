@@ -197,3 +197,29 @@ describe('Form — hộp thoại trên SSR', () => {
     expect(html()).not.toContain('<dialog');
   });
 });
+
+describe('Form — xem trước hộp thoại trong khung builder (canvasPreview)', () => {
+  const slots = {
+    success: createElement('p', null, 'Cảm ơn'),
+    error: createElement('p', null, 'Hỏng rồi'),
+  };
+
+  it('site thật (không cờ): không có khối xem trước nào', () => {
+    const out = html({ ...params({ afterSubmit: 'dialog' }), ...slots });
+    expect(out).not.toContain('mm-form__preview');
+  });
+
+  it('khung builder + dialog: cả hai slot có trong HTML, ẩn bằng hidden, mỗi khối một loại', () => {
+    const out = html({ ...params({ afterSubmit: 'dialog' }), ...slots, canvasPreview: true });
+    expect(out).toMatch(/<div class="mm-form__preview" data-preview="success" hidden="">/);
+    expect(out).toMatch(/<div class="mm-form__preview" data-preview="error" hidden="">/);
+    expect(out).toContain('Cảm ơn');
+    expect(out).toContain('Hỏng rồi');
+    // Không mở hộp thoại thật: khối xem trước là div, không phải <dialog open>.
+    expect(out).not.toContain(' open');
+  });
+
+  it('khung builder nhưng không phải dialog: không có khối xem trước', () => {
+    expect(html({ ...slots, canvasPreview: true })).not.toContain('mm-form__preview');
+  });
+});

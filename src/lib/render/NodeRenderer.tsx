@@ -259,6 +259,12 @@ export interface RenderContext {
    * nhận `data: null`.
    */
   projectData?: ReadonlyMap<NodeId, unknown>;
+  /**
+   * Đang render cho KHUNG XEM TRƯỚC của builder (`/render/...`). Chỉ hai route đó đặt cờ;
+   * site thật và "Xem nháp" thì không. Hiện chỉ Form dùng: render sẵn (ẩn) slot hộp thoại
+   * để công tắc "Xem trước" của sidebar bật lên được — xem `FormProps.canvasPreview`.
+   */
+  canvas?: boolean;
 }
 
 /**
@@ -554,6 +560,7 @@ function renderComposite(
           note={<Slot ids={node.slots.note} renderChild={renderChild} />}
           success={<Slot ids={node.slots.success} renderChild={renderChild} />}
           error={<Slot ids={node.slots.error} renderChild={renderChild} />}
+          canvasPreview={ctx.canvas === true}
         />
       </div>
     );

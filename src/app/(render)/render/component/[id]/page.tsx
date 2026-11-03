@@ -56,6 +56,8 @@ export default async function ComponentRender({
     doc,
     scope: { site: await draftSiteGlobals(), page: { title: preset.name, slug: '' } },
     assets,
+    // Khung xem trước của builder — slot hộp thoại của Form render sẵn (ẩn) để xem trước.
+    canvas: true,
   };
 
   return (

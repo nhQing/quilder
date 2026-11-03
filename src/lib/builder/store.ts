@@ -24,6 +24,7 @@ import {
 import type { Op } from '@/lib/doc/ops';
 import type { Doc, NodeId } from '@/lib/doc/types';
 import type { SaveState } from './save-state';
+import type { FormPreview } from './form-edit';
 import { recordTiming } from './timing';
 import { presetTreeToDoc } from '@/lib/doc/migrate';
 import {
@@ -154,6 +155,16 @@ export interface EditorState {
    * khi hai lần lưu ra cùng một chuỗi CSS. Xem `ApplyResult.css`.
    */
   liveCss: { css: string; at: number } | null;
+
+  /**
+   * Form nào đang XEM TRƯỚC slot hộp thoại nào trên canvas — công tắc "Xem trước: Form /
+   * Thành công / Thất bại" của khối Form ở sidebar. Vắng = 'form'.
+   *
+   * Trạng thái của GIAO DIỆN, không phải của doc: không đi vào op, không lưu, xoá khi đổi
+   * trang/component (`init`). `Canvas` đọc nó và chèn CSS vào khung (`formPreviewCss`).
+   */
+  formPreview: Record<NodeId, FormPreview>;
+  setFormPreview: (id: NodeId, value: FormPreview) => void;
 
   init: (target: EditTarget, doc: Doc, seq: number | null) => void;
   /**
@@ -322,11 +333,21 @@ export const useEditor = create<EditorState>((set, get) => ({
   save: { k: 'clean', seq: null },
   draftSeq: null,
   liveCss: null,
+  formPreview: {},
+
+  setFormPreview: (id, value) =>
+    set((s) => {
+      const next = { ...s.formPreview };
+      if (value === 'form') delete next[id];
+      else next[id] = value;
+      return { formPreview: next };
+    }),
 
   init: (target, doc, seq) =>
     set({
       target, savedDoc: doc, candidateDoc: doc,
       undoStack: [], redoStack: [], save: { k: 'clean', seq }, draftSeq: seq, liveCss: null,
+      formPreview: {},
     }),
 
   /*

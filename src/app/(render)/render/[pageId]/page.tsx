@@ -87,6 +87,8 @@ export default async function BuilderRender({
     // Globals live, không phải của release: canvas là bản NHÁP — xem `draftSiteGlobals`.
     scope: { site: await draftSiteGlobals(), page: { title: page.title, slug: page.slug } },
     assets,
+    // Khung xem trước của builder — slot hộp thoại của Form render sẵn (ẩn) để xem trước.
+    canvas: true,
   };
 
   return (

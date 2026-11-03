@@ -55,6 +55,7 @@ import { breakpointForWidth, type Screen } from '@/lib/design/breakpoints';
 import { useEditor } from '@/lib/builder/store';
 import { cn } from '@/lib/builder/cn';
 import { freezeViewportUnits } from '@/lib/builder/freeze-viewport';
+import { formPreviewCss } from '@/lib/builder/form-edit';
 import { readFlag, safeStorage, STORAGE_KEYS, write } from '@/lib/builder/persisted';
 import { clipSpan, glideStart, revealCandidates, revealScroll } from '@/lib/builder/reveal';
 import { recordTiming } from '@/lib/builder/timing';
@@ -234,6 +235,33 @@ export function attachInert(
     win.removeEventListener('scroll', onScroll);
     style.remove();
   };
+}
+
+/**
+ * Đặt CSS "xem trước slot hộp thoại" của Form vào tài liệu trong khung (`formPreviewCss`).
+ *
+ * Chèn CSS chứ không nạp lại khung với một tham số mới: đổi `src` là dựng lại iframe và
+ * mất vị trí cuộn — bấm "Xem trước: Thành công" ở một form giữa trang mà bị đá lên đầu
+ * trang thì không còn thấy được thứ vừa bật. Nội dung slot đã nằm sẵn (ẩn) trong HTML của
+ * khung, nên bật/tắt chỉ là đổi một dòng CSS, tức thì.
+ *
+ * Gọi lại được bao nhiêu lần cũng được; CSS rỗng thì gỡ thẻ.
+ */
+export function applyFormPreview(frame: HTMLIFrameElement | null, css: string): void {
+  const fdoc = frame?.contentDocument;
+  const root = fdoc?.documentElement;
+  if (!fdoc || !root) return;
+  let style = fdoc.querySelector<HTMLStyleElement>('style[data-mm-form-preview]');
+  if (!css) {
+    style?.remove();
+    return;
+  }
+  if (!style) {
+    style = fdoc.createElement('style');
+    style.dataset.mmFormPreview = '';
+    root.appendChild(style);
+  }
+  if (style.textContent !== css) style.textContent = css;
 }
 
 /**
@@ -578,11 +606,20 @@ export function Canvas({
     if (readFlag(safeStorage(), STORAGE_KEYS.canvasFullPage)) setFullPageChosen(true);
   }, []);
   const fullPage = fullPageChosen && !fitContent;
-  const live = useRef({ fullPage, vh: screen.height });
-  live.current = { fullPage, vh: screen.height };
+  /** CSS xem trước slot hộp thoại của Form — xem `applyFormPreview`. */
+  const formPreview = useEditor((s) => s.formPreview);
+  const previewCss = formPreviewCss(formPreview);
+  const live = useRef({ fullPage, vh: screen.height, previewCss });
+  live.current = { fullPage, vh: screen.height, previewCss };
 
-  /** Đóng băng `vh` + tắt cuộn trong một khung, nếu đang ở chế độ Toàn trang. */
+  /**
+   * Chuẩn bị một khung TRƯỚC khi nó lên hiện: xem trước slot hộp thoại (nếu có), và đóng
+   * băng `vh` + tắt cuộn nếu đang ở chế độ Toàn trang.
+   */
   const prepareFrame = useCallback((frame: HTMLIFrameElement | null) => {
+    // Khung bản mới (sau mỗi lần lưu) phải mang sẵn xem trước, không thì nó lên hiện với
+    // form thường rồi mới bật sang hộp thoại — một cú chớp sau mỗi lần sửa chữ trong slot.
+    applyFormPreview(frame, live.current.previewCss);
     const fdoc = frame?.contentDocument;
     if (!live.current.fullPage || !fdoc?.documentElement) return;
     freezeViewportUnits(fdoc, live.current.vh);
@@ -693,7 +730,10 @@ export function Canvas({
     return { top: r.top, left: r.left, width: r.width, height: r.height };
   }, []);
 
-  useEffect(() => { setSelBox(measure(selectedId)); }, [selectedId, measure, loaded, scale]);
+  // Công tắc xem trước đổi: đặt CSS vào khung đang hiện. Khai TRƯỚC effect đo viền chọn để
+  // lượt đo ngay sau đó đọc bố cục đã đổi (khối slot vừa hiện, form vừa ẩn).
+  useEffect(() => { applyFormPreview(frameRef.current, previewCss); }, [previewCss, loaded]);
+  useEffect(() => { setSelBox(measure(selectedId)); }, [selectedId, measure, loaded, scale, previewCss]);
   useEffect(() => { setHovBox(measure(hoveredId)); }, [hoveredId, measure]);
 
   /* ── Chọn / hover / vô hiệu hoá tương tác ──────────────────────────── */
@@ -784,7 +824,7 @@ export function Canvas({
       clearTimeout(t);
       ro?.disconnect();
     };
-  }, [fitContent, fullPage, loaded, reloadToken, shownKey, doc.rootId, screen.height, prepareFrame]);
+  }, [fitContent, fullPage, loaded, reloadToken, shownKey, doc.rootId, screen.height, prepareFrame, previewCss]);
 
   const frameHeight = fitContent || fullPage ? (contentHeight ?? screen.height) : screen.height;
 

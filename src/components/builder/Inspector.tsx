@@ -30,6 +30,7 @@ import { labelOf } from '@/lib/builder/node-label';
 import type { EndpointTable } from '@/lib/doc/endpoint-table';
 import { ContentPanel } from './ContentPanel';
 import { EndpointPicker } from './EndpointPicker';
+import { FormPanel } from './FormPanel';
 import { ExtraFields } from './ExtraFields';
 import { LayerMap } from './LayerMap';
 import { TailwindPanel } from './TailwindPanel';
@@ -474,6 +475,13 @@ function NodeInspector({
         im lặng mà `selectStyleLocked` tồn tại để chặn.
       */}
       {node.type === 'Composite' && !locale && <EndpointPicker node={node} endpoints={endpoints} />}
+
+      {/*
+        Form: ô nhập, nút gửi, "Sau khi gửi" — ngay sau "Gửi tới", trước Nội dung (nhãn và
+        chữ nút dạng chữ phẳng, thứ DỊCH được). Ẩn ở chế độ bản dịch cùng lý do với ô chọn
+        nơi nhận: cấu trúc form dùng chung mọi ngôn ngữ, chữ của bản dịch sửa ở Nội dung.
+      */}
+      {node.type === 'Composite' && node.composite === 'Form' && !locale && <FormPanel node={node} doc={doc} />}
 
       {/*
         Chữ đứng TRƯỚC mọi ô style — cùng lý lẽ với bộ chọn ảnh ngay dưới đây.
