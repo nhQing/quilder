@@ -20,7 +20,8 @@ import { useEffect, useMemo, useState } from 'react';
 
 import { cn } from '@/lib/builder/cn';
 import { focusRing, ui } from '@/lib/builder/ui';
-import { fieldState } from '@/lib/builder/style-resolve';
+import { fieldState, scopedSetStyleOp } from '@/lib/builder/style-resolve';
+import { useStyleScope } from './StyleScope';
 import { cssAlias, cssLabel, propertiesFor } from '@/lib/builder/style-css-map';
 import { declaredProperties } from '@/lib/render/sanitize-css';
 import { scopeForTarget } from '@/lib/builder/css-scope';
@@ -156,17 +157,18 @@ function useShadowedBy(node: Node, group: Group, field: string): string | null {
 /** Gửi một thay đổi style vào lớp đang xem. `null` = gỡ khỏi lớp này. */
 function useSetStyle(node: Node, breakpoint: Breakpoint, group: Group, field: string) {
   const dispatch = useEditor((s) => s.dispatch);
+  const scope = useStyleScope();
 
   return (value: unknown, label: string) =>
     dispatch(
       [
-        {
-          op: 'setStyle',
-          nodeId: node.id,
-          target: breakpoint,
+        scopedSetStyleOp(
+          node.id,
+          breakpoint,
+          scope,
           // `null` ở một key nghĩa là XOÁ key đó (xem mergeDeep trong ops.ts).
-          patch: { [group]: { [field]: value } } as Partial<StyleProps>,
-        },
+          { [group]: { [field]: value } } as Partial<StyleProps>,
+        ),
       ],
       { label },
     );

@@ -18,7 +18,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { breakpointInfo, type Breakpoint } from '@/lib/design/breakpoints';
 import { cn } from '@/lib/builder/cn';
 import { focusRing, ui } from '@/lib/builder/ui';
-import { effectiveStyle, ownLayer } from '@/lib/builder/style-resolve';
+import { effectiveStyle, ownLayer, scopedSetStyleOp, scopedView, NO_SCOPE, type StyleScope } from '@/lib/builder/style-resolve';
+import { stylePartsOf } from '@/lib/composites/registry';
+import { ScopePicker, StyleScopeProvider, useStyleScope } from './StyleScope';
 import { declaredProperties, sanitizeCustomCss } from '@/lib/render/sanitize-css';
 import { scopeForTarget } from '@/lib/builder/css-scope';
 import { STYLE_CSS_PROPERTY, propertiesFor, searchKeysFor } from '@/lib/builder/style-css-map';
@@ -394,9 +396,22 @@ function NodeInspector({
   const breakpoint = useEditor((s) => s.breakpoint);
   const locale = useEditor((s) => s.locale);
 
-  const effective = effectiveStyle(node, breakpoint);
-  const own = ownLayer(node, breakpoint) ?? {};
-  const common = { node, breakpoint, tokens };
+  /*
+   * Phạm vi đang chỉnh (phần con / trạng thái). State cục bộ: NodeInspector có key={node.id}
+   * nên đổi node là mount lại và scope tự về NO_SCOPE — không cần effect reset.
+   * Phần đã chọn mà node không còn có (đổi composite) thì coi như cả khối.
+   */
+  const [rawScope, setScope] = useState<StyleScope>(NO_SCOPE);
+  const parts = stylePartsOf(node);
+  const scope: StyleScope = {
+    part: rawScope.part && parts.some((p) => p.key === rawScope.part) ? rawScope.part : null,
+    state: rawScope.state,
+  };
+  /** Node + khổ màn đưa cho control ĐỌC: style của lớp đang chỉnh (xem scopedView). */
+  const view = scopedView(node, scope, breakpoint);
+  const effective = effectiveStyle(view.node, view.breakpoint);
+  const own = ownLayer(view.node, view.breakpoint) ?? {};
+  const common = { node: view.node, breakpoint: view.breakpoint, tokens };
 
   /*
    * Ô tìm thuộc tính.
@@ -421,6 +436,7 @@ function NodeInspector({
      * khung định vị thì nhãn đó thoát khỏi vùng cuộn này. `[&>*]:shrink-0`: trong một
      * cột flex có cuộn, khối nào có `overflow` riêng sẽ bị bóp lại thay vì để cột cuộn.
      */
+    <StyleScopeProvider value={scope}>
     <div className="relative flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto pt-3 pb-4 [&>*]:shrink-0">
       <section className="grid grid-cols-3 gap-1.5 px-3.5">
         {/* Ô sửa được duy nhất của khối, nên nó đứng đầu và chiếm cả hàng; loại và id
@@ -520,7 +536,12 @@ function NodeInspector({
         </section>
       )}
 
-      {breakpoint !== 'base' && Object.keys(own).length === 0 && (
+      {scope.state && Object.keys(own).length === 0 ? (
+        <p className="bg-shell-raised text-shell-muted mx-3.5 rounded-md px-3 py-2 text-mini leading-relaxed">
+          Chưa có gì riêng ở <strong className="text-shell-ink font-semibold">{scope.state === 'hover' ? 'Di chuột' : 'Focus'}</strong>. Các ô dưới đây
+          hiện giá trị của trạng thái thường; sửa một ô sẽ tạo style chỉ áp khi {scope.state === 'hover' ? 'di chuột vào' : 'focus bàn phím'}.
+        </p>
+      ) : !scope.state && breakpoint !== 'base' && Object.keys(own).length === 0 && (
         <p className="bg-shell-raised text-shell-muted mx-3.5 rounded-md px-3 py-2 text-mini leading-relaxed">
           Chưa có gì riêng ở <strong className="text-shell-ink font-semibold">{breakpointInfo(breakpoint).label}</strong>. Các ô dưới đây
           hiện giá trị đang kế thừa; sửa một ô sẽ tạo override chỉ cho màn này.
@@ -538,7 +559,9 @@ function NodeInspector({
       */}
 
       {/* Bản đồ lớp: node này còn đặt riêng gì ở những khổ đang KHÔNG xem. */}
-      <LayerMap node={node} breakpoint={breakpoint} />
+      <ScopePicker nodeId={node.id} parts={parts} scope={scope} onChange={setScope} />
+      {/* Bản đồ lớp theo khổ màn không nói được về hover/focus — ẩn khi đang chỉnh trạng thái. */}
+      {!scope.state && <LayerMap node={view.node} breakpoint={breakpoint} />}
 
       <div className="px-3.5">
         <SearchField
@@ -738,8 +761,8 @@ function NodeInspector({
         <LenControl {...common} group="border" field="width" />
         <ColorControl {...common} group="border" field="color" />
         <SegmentedControl {...common} group="border" field="style" options={BORDER_STYLE} />
-        <LayerVisibility node={node} breakpoint={breakpoint} effective={effective} />
-        <ShadowControl node={node} breakpoint={breakpoint} tokens={tokens} effective={effective} />
+        <LayerVisibility node={view.node} breakpoint={view.breakpoint} effective={effective} />
+        <ShadowControl node={view.node} breakpoint={view.breakpoint} tokens={tokens} effective={effective} />
       </Section>
 
       <Section title="Hiệu ứng" count={countIn(effective, 'effects')} filter={filter} keys={KEYS.effects}>
@@ -767,6 +790,7 @@ function NodeInspector({
 
       <CustomCssPanel nodeId={node.id} value={node.customCss ?? ''} />
     </div>
+    </StyleScopeProvider>
   );
 }
 
@@ -1078,6 +1102,7 @@ function ShadowControl({
 }) {
   const dispatch = useEditor((s) => s.dispatch);
   const saving = useEditor(selectStyleLocked);
+  const scope = useStyleScope();
 
   const value = effective.shadow;
   const current = value && '$token' in value ? value.$token : '';
@@ -1107,13 +1132,13 @@ function ShadowControl({
           onChange={(e) =>
             void dispatch(
               [
-                {
-                  op: 'setStyle',
-                  nodeId: node.id,
-                  target: breakpoint,
+                scopedSetStyleOp(
+                  node.id,
+                  breakpoint,
+                  scope,
                   // `null` = xoá khoá, về kế thừa — cùng quy ước với mọi ô khác.
-                  patch: { shadow: e.target.value ? { $token: e.target.value } : null } as Partial<StyleProps>,
-                },
+                  { shadow: e.target.value ? { $token: e.target.value } : null } as Partial<StyleProps>,
+                ),
               ],
               { label: `đổ bóng: ${e.target.value || '—'}` },
             )
@@ -1156,7 +1181,7 @@ function ShadowControl({
                   onToggle={() => {
                     const next = value.map((l, j) => (j === i ? withHidden(l, !l.hidden) : l));
                     void dispatch(
-                      [{ op: 'setStyle', nodeId: node.id, target: breakpoint, patch: { shadow: next } as Partial<StyleProps> }],
+                      [scopedSetStyleOp(node.id, breakpoint, scope, { shadow: next } as Partial<StyleProps>)],
                       { label: `${layer.hidden ? 'hiện' : 'ẩn'} lớp bóng ${i + 1}` },
                     );
                   }}
@@ -1247,6 +1272,7 @@ function LayerVisibility({
 }) {
   const dispatch = useEditor((s) => s.dispatch);
   const saving = useEditor(selectStyleLocked);
+  const scope = useStyleScope();
 
   const border = effective.border;
   const hasStroke = !!(border && (border.width || border.style || border.color));
@@ -1255,7 +1281,7 @@ function LayerVisibility({
   if (!hasStroke && !gradient && !image) return null;
 
   const write = (patch: Partial<StyleProps>, label: string) =>
-    void dispatch([{ op: 'setStyle', nodeId: node.id, target: breakpoint, patch }], { label });
+    void dispatch([scopedSetStyleOp(node.id, breakpoint, scope, patch)], { label });
 
   return (
     <div className="flex flex-col gap-1.5" data-layer-visibility="">

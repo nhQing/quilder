@@ -18,7 +18,8 @@
  */
 
 import { BREAKPOINTS, type Breakpoint } from '@/lib/design/breakpoints';
-import type { Node, StyleProps } from '@/lib/doc/types';
+import type { Op } from '@/lib/doc/ops';
+import type { Node, ResponsiveStyle, StyleProps } from '@/lib/doc/types';
 
 /** Các lớp áp dụng tại `bp`, từ dưới lên. `base` luôn đứng đầu. */
 export function layerChain(bp: Breakpoint): Breakpoint[] {
@@ -89,4 +90,65 @@ export function fieldState(
   }
 
   return { value, from, isOwn: from === bp };
+}
+
+/* ── Phạm vi đang chỉnh: phần con của Composite và trạng thái ───────────── */
+
+/**
+ * Lớp inspector đang ghi vào. `part` = phần con của Composite (`style.parts.<part>`),
+ * `state` = lớp hover / focusVisible. Cả hai null = chỉnh node như trước.
+ */
+export interface StyleScope {
+  part: string | null;
+  state: 'hover' | 'focusVisible' | null;
+}
+
+export const NO_SCOPE: StyleScope = { part: null, state: null };
+
+/** Style của thứ đang chỉnh, nhìn như style của một node (chưa tính trạng thái). */
+export function scopedStyle(node: Node, scope: StyleScope): ResponsiveStyle {
+  if (!scope.part) return node.style;
+  return node.style.parts?.[scope.part] ?? { base: {} as StyleProps };
+}
+
+/**
+ * Op ghi style qua đúng một cửa. Trạng thái thì bỏ breakpoint: hover/focus là lớp riêng,
+ * không phải lớp theo khổ màn (validator cũng chỉ nhận target = tên lớp).
+ */
+export function scopedSetStyleOp(
+  nodeId: string,
+  breakpoint: Breakpoint,
+  scope: StyleScope,
+  patch: Partial<StyleProps>,
+): Extract<Op, { op: 'setStyle' }> {
+  return {
+    op: 'setStyle',
+    nodeId,
+    target: scope.state ?? breakpoint,
+    ...(scope.part ? { part: scope.part } : {}),
+    patch,
+  };
+}
+
+/**
+ * Node + breakpoint để ĐƯA CHO CONTROL đọc.
+ *
+ * Control đọc `fieldState(node, bp, …)`; thay vì dạy từng control về scope, ta đưa cho nó
+ * một node mà style chính là lớp đang chỉnh. Với trạng thái: `base` = style có hiệu lực
+ * tại khổ đang xem (giá trị kế thừa), lớp `sm` = lớp hover/focus, và breakpoint đưa đi là
+ * `sm` — nhờ vậy ô nào do trạng thái đặt thì `isOwn`, còn lại hiện "kế thừa từ base".
+ */
+export function scopedView(
+  node: Node,
+  scope: StyleScope,
+  breakpoint: Breakpoint,
+): { node: Node; breakpoint: Breakpoint } {
+  const src = scopedStyle(node, scope);
+  if (!scope.state) return { node: src === node.style ? node : { ...node, style: src }, breakpoint };
+
+  const eff = effectiveStyle({ ...node, style: src }, breakpoint);
+  const layer = src[scope.state];
+  const style: ResponsiveStyle = { base: eff as StyleProps };
+  if (layer) style.sm = layer;
+  return { node: { ...node, style }, breakpoint: 'sm' };
 }

@@ -8,7 +8,7 @@ import { describe, expect, it } from 'vitest';
  * thừa mà không biết.
  */
 
-import { effectiveStyle, fieldState, layerChain, ownLayer } from './style-resolve';
+import { effectiveStyle, fieldState, layerChain, ownLayer, scopedSetStyleOp, scopedStyle, scopedView } from './style-resolve';
 import type { Node } from '@/lib/doc/types';
 
 const node = (style: Record<string, unknown>): Node =>
@@ -118,5 +118,44 @@ describe('ownLayer', () => {
     expect(ownLayer(node({ base: { spacing: { pt: px(1) } } }), 'base')).toEqual({
       spacing: { pt: px(1) },
     });
+  });
+});
+
+describe('phạm vi style (phần con / trạng thái)', () => {
+  const p = { fill: { color: { $token: 'x' } } } as never;
+  const none = { part: null, state: null } as const;
+
+  it('scopedSetStyleOp: phần con giữ breakpoint, thêm part', () => {
+    expect(scopedSetStyleOp('f1', 'md', { part: 'submit', state: null }, p)).toEqual({
+      op: 'setStyle', nodeId: 'f1', target: 'md', part: 'submit', patch: p,
+    });
+  });
+
+  it('scopedSetStyleOp: trạng thái bỏ breakpoint, không có part thì không có khoá part', () => {
+    expect(scopedSetStyleOp('f1', 'md', { part: 'submit', state: 'hover' }, p)).toEqual({
+      op: 'setStyle', nodeId: 'f1', target: 'hover', part: 'submit', patch: p,
+    });
+    const op = scopedSetStyleOp('f1', 'lg', { part: null, state: 'focusVisible' }, p);
+    expect(op).toEqual({ op: 'setStyle', nodeId: 'f1', target: 'focusVisible', patch: p });
+    expect('part' in op).toBe(false);
+    expect(scopedSetStyleOp('f1', 'sm', none, p)).toEqual({
+      op: 'setStyle', nodeId: 'f1', target: 'sm', patch: p,
+    });
+  });
+
+  it('scopedStyle: trả parts[part] hoặc {base:{}}, không phần thì style của node', () => {
+    const sub = { base: { fill: { color: '#fff' } } };
+    const n = node({ base: {}, parts: { submit: sub } });
+    expect(scopedStyle(n, { part: 'submit', state: null })).toBe(sub);
+    expect(scopedStyle(n, { part: 'input', state: null })).toEqual({ base: {} });
+    expect(scopedStyle(n, none)).toBe(n.style);
+  });
+
+  it('scopedView: trạng thái = base đã gộp + lớp state, đặt ở lớp sm để isOwn đúng', () => {
+    const n = node({ base: { spacing: { pt: px(1) } }, md: { spacing: { pb: px(2) } }, hover: { spacing: { pt: px(9) } } });
+    const v = scopedView(n, { part: null, state: 'hover' }, 'md');
+    expect(v.breakpoint).toBe('sm');
+    expect(effectiveStyle(v.node, 'sm').spacing).toEqual({ pt: px(9), pb: px(2) });
+    expect(ownLayer(v.node, 'sm')).toEqual({ spacing: { pt: px(9) } });
   });
 });

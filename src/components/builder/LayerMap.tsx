@@ -28,7 +28,8 @@ import { useState } from 'react';
 import { cn } from '@/lib/builder/cn';
 import { focusRing, ui } from '@/lib/builder/ui';
 import { selectSaving, useEditor } from '@/lib/builder/store';
-import { ownLayer } from '@/lib/builder/style-resolve';
+import { ownLayer, scopedSetStyleOp } from '@/lib/builder/style-resolve';
+import { useStyleScope } from './StyleScope';
 import { cssLabel } from '@/lib/builder/style-css-map';
 import { formatLen } from '@/lib/builder/value-io';
 import { BREAKPOINTS, breakpointInfo, type Breakpoint } from '@/lib/design/breakpoints';
@@ -77,6 +78,7 @@ function entriesAt(node: Node, bp: Breakpoint): Entry[] {
 
 export function LayerMap({ node, breakpoint }: { node: Node; breakpoint: Breakpoint }) {
   const dispatch = useEditor((s) => s.dispatch);
+  const scope = useStyleScope();
   const saving = useEditor(selectSaving);
   const [openLayer, setOpenLayer] = useState<Breakpoint | null>(null);
 
@@ -89,14 +91,14 @@ export function LayerMap({ node, breakpoint }: { node: Node; breakpoint: Breakpo
   const remove = (entry: Entry, bp: Breakpoint) => {
     void dispatch(
       [
-        {
-          op: 'setStyle',
-          nodeId: node.id,
-          target: bp,
-          patch: (entry.field
+        scopedSetStyleOp(
+          node.id,
+          bp,
+          scope,
+          (entry.field
             ? { [entry.group]: { [entry.field]: null } }
             : { [entry.group]: null }) as Partial<StyleProps>,
-        },
+        ),
       ],
       { label: `gỡ ${entry.label} khỏi ${bp}` },
     );
