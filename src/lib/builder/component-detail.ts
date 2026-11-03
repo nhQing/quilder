@@ -78,6 +78,31 @@ export interface ComponentUsage {
  * trần thực tế là vài chục. Một chỉ mục JSONB ở quy mô đó là chi phí bảo trì
  * không đổi lấy gì.
  */
+/**
+ * Đường dẫn các trang mà bản nháp còn Instance trỏ tới component — rào của lệnh xoá.
+ *
+ * Khác `componentUsage` ở một chỗ: tính cả trang ĐÃ LƯU TRỮ. Khôi phục một trang như
+ * thế sau khi component đã xoá thì Instance trong nó trỏ vào khoảng trống, và lúc đó
+ * không còn ai nhớ vì sao khối biến mất. Release cũ không cần quét: release chụp cả cây
+ * component lúc publish (`componentsFromSnapshot`), nên lùi bản vẫn vẽ đúng.
+ */
+export async function componentUsers(componentId: string): Promise<string[]> {
+  const pages = await prisma.page.findMany({
+    orderBy: { slug: 'asc' },
+    select: { slug: true, archivedAt: true, draftVersion: { select: { doc: true } } },
+  });
+  const out: string[] = [];
+  for (const p of pages) {
+    const doc = p.draftVersion?.doc as unknown as Doc | undefined;
+    if (!doc?.nodes) continue;
+    const used = Object.values(doc.nodes).some(
+      (n) => n.type === 'Instance' && n.componentId === componentId,
+    );
+    if (used) out.push(`/${p.slug}${p.archivedAt ? ' (đã lưu trữ)' : ''}`);
+  }
+  return out;
+}
+
 export async function componentUsage(componentId: string): Promise<ComponentUsage[]> {
   const site = await prisma.site.findFirst({ select: { id: true } });
   if (!site) return [];

@@ -38,7 +38,7 @@ function useAction() {
       const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
       if (!res.ok) {
         // Hiện đúng thông điệp của server. Nó nói được vì sao — ví dụ component
-        // builtin sẽ bị trích xuất tạo lại — còn "Lỗi 409" thì không.
+        // còn đang dùng ở trang nào — còn "Lỗi 409" thì không.
         setNote({ ok: false, text: String(data.error ?? `Không thực hiện được (${res.status})`) });
         return;
       }
@@ -322,11 +322,12 @@ export function NewComponentButton() {
 export function ComponentActions({
   id,
   name,
-  builtin,
+  usedOn,
 }: {
   id: string;
   name: string;
-  builtin: boolean;
+  /** Đường dẫn các trang (kể cả đã lưu trữ) còn Instance trỏ tới — xem `componentUsers`. */
+  usedOn: string[];
 }) {
   const { busy, note, run, router } = useAction();
   const [confirming, setConfirming] = useState(false);
@@ -353,22 +354,22 @@ export function ComponentActions({
         <Button variant="secondary" icon="copy" full disabled={busy} onClick={duplicate}>
           Nhân bản
         </Button>
-        {/* Builtin: server từ chối xoá (409). Khoá sẵn ở đây và nói lý do ngay dưới,
-            thay vì để người dùng xác nhận xong mới biết là không được. */}
+        {/* Còn trang dùng: server từ chối xoá (409). Khoá sẵn ở đây và nói lý do ngay
+            dưới, thay vì để người dùng xác nhận xong mới biết là không được. */}
         <Button
           variant="danger"
           icon="trash"
           full
-          disabled={busy || builtin}
+          disabled={busy || usedOn.length > 0}
           onClick={() => setConfirming(true)}
         >
           Xoá component
         </Button>
       </div>
-      {builtin && (
+      {usedOn.length > 0 && (
         <p className={ui.hint}>
-          Component có sẵn của hệ thống không xoá được, vì lần nạp lại bộ component có sẵn sẽ
-          tạo lại nó. Muốn đổi thì nhân bản rồi sửa bản sao.
+          Đang dùng ở {usedOn.join(', ')}. Gỡ Instance của nó khỏi các trang đó trước rồi mới
+          xoá được.
         </p>
       )}
       <Note note={note} />

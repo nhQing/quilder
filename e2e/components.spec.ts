@@ -9,7 +9,7 @@ import { expect, test, type APIRequestContext } from '@playwright/test';
  *
  * Hợp đồng đang kiểm:
  *  - thẻ ở bảng điều khiển bấm vào được
- *  - component builtin KHÔNG xoá được, và thông điệp nói rõ vì sao
+ *  - component còn trang dùng thì KHÔNG xoá được (có sẵn hay tự tạo), và thông điệp nêu trang
  *  - nhân bản là bản sao ĐỘC LẬP
  *  - sửa cây node đi qua đúng validator của trang
  *  - AI thấy và sửa được qua tool
@@ -137,15 +137,49 @@ test.describe('thư viện component', () => {
     await expect(page.getByText('ĐANG SỬA COMPONENT')).toBeHidden();
   });
 
-  test('builtin KHÔNG xoá được, và server nói rõ vì sao', async ({ request }) => {
-    // Xoá được thì lần chạy extract-presets.ts sau sẽ tạo lại y nguyên — tức là
-    // một thao tác không có tác dụng lâu dài, và im lặng làm thế tệ hơn từ chối.
+  test('component còn trang dùng thì KHÔNG xoá được, và server nêu tên trang', async ({ request }) => {
+    // Rào là "đang dùng", không phải "có sẵn" (03/11/2026): không bước triển khai nào
+    // tạo lại component có sẵn đã xoá, nên chặn chúng chỉ để lại rác trong thư viện —
+    // còn xoá component mà Instance trên trang còn trỏ tới thì khối đó mất khỏi bản nháp.
+    // Header (có sẵn) đang cắm ở trang chủ của dữ liệu mẫu.
     const { components } = await tool(request, 'list_components', {});
-    const builtin = components.find((c: { builtin: boolean }) => c.builtin);
+    const header = components.find((c: { key: string }) => c.key === 'header');
 
-    const res = await request.delete(`/api/presets/${builtin.id}`);
+    const res = await request.delete(`/api/presets/${header.id}`);
     expect(res.status()).toBe(409);
-    expect((await res.json()).error).toMatch(/Nhân bản/);
+    expect((await res.json()).error).toMatch(/đang dùng ở \d+ trang/);
+  });
+
+  test('gỡ Instance cuối cùng khỏi trang thì xoá được', async ({ request }) => {
+    const id = await createComponent(request, 'E2E Xoá khi hết dùng');
+    const { pages } = await tool(request, 'list_pages', {});
+    const target = pages.find((p: { path: string }) => p.path === '/gioi-thieu');
+    const { rootId } = await tool(request, 'get_page_outline', { pageId: target.id });
+    const nodeId = `e2edelinst${Date.now().toString(36)}`;
+    const ops = async (label: string, list: unknown[]) => {
+      const r = await request.post('/api/ops', { data: { pageId: target.id, label, ops: list } });
+      expect(r.ok(), await r.text()).toBe(true);
+    };
+
+    await ops('e2e cắm instance', [
+      {
+        op: 'insertNode', parentId: rootId, index: 0,
+        node: {
+          id: nodeId, parentId: rootId, type: 'Instance', componentId: id, overrides: {},
+          children: [], effects: [], style: { base: {} },
+        },
+      },
+    ]);
+    try {
+      const blocked = await request.delete(`/api/presets/${id}`);
+      expect(blocked.status()).toBe(409);
+      expect((await blocked.json()).error).toMatch(/\/gioi-thieu/);
+    } finally {
+      await ops('e2e gỡ instance', [{ op: 'removeNode', nodeId }]);
+    }
+
+    const res = await request.delete(`/api/presets/${id}`);
+    expect(res.status(), await res.text()).toBe(200);
   });
 });
 

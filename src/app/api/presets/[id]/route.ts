@@ -9,6 +9,7 @@ import { NextResponse } from 'next/server';
 
 import { requireAuth } from '@/lib/auth/guard';
 import { prisma } from '@/lib/db';
+import { componentUsers } from '@/lib/builder/component-detail';
 import { slugify } from '@/lib/builder/preset-key';
 import type { PresetTree } from '@/lib/doc/preset';
 
@@ -147,15 +148,21 @@ export async function DELETE(
   });
   if (!preset) return NextResponse.json({ error: 'Không tìm thấy component' }, { status: 404 });
 
-  if (preset.builtin) {
-    // Component builtin do `extract-presets.ts` sinh ra. Xoá nó thì lần trích
-    // xuất sau tạo lại y nguyên — nên "xoá" ở đây chỉ là một hành động không có
-    // tác dụng lâu dài, và im lặng làm thế thì tệ hơn từ chối.
+  // Rào là "còn trang dùng", không phải "có sẵn".
+  //
+  // Trước 03/11/2026 component có sẵn bị chặn xoá vì "lần trích xuất sau tạo lại nó".
+  // Nhưng không bước triển khai nào chạy trích xuất (bootstrap không đụng tới Preset),
+  // nên rào đó chỉ để lại component nháp không ai dùng trong thư viện. Còn rào thật
+  // thì thiếu: xoá component mà Instance trên trang còn trỏ tới làm khối đó biến mất
+  // khỏi bản nháp, và lần publish kế đưa chỗ trống ra site.
+  const users = await componentUsers(id);
+  if (users.length) {
     return NextResponse.json(
       {
         error:
-          `"${preset.name}" là component có sẵn của hệ thống; xoá đi thì lần nạp lại bộ `
-          + 'component có sẵn sẽ tạo lại nó. Nhân bản rồi sửa bản sao thì hơn.',
+          `"${preset.name}" đang dùng ở ${users.length} trang: ${users.join(', ')}. `
+          + 'Gỡ Instance của nó khỏi các trang đó trước rồi mới xoá.',
+        pages: users,
       },
       { status: 409 },
     );

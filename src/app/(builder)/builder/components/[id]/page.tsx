@@ -41,7 +41,7 @@ import { cn } from '@/lib/builder/cn';
 import { ui } from '@/lib/builder/ui';
 import { plainText } from '@/lib/render/richtext';
 import { listPages } from '@/lib/builder/queries';
-import { componentUsage, overrideSlots } from '@/lib/builder/component-detail';
+import { componentUsage, componentUsers, overrideSlots } from '@/lib/builder/component-detail';
 import { Badge } from '@/components/builder/ui/Badge';
 import { ButtonLink } from '@/components/builder/ui/Button';
 import { Icon } from '@/components/builder/ui/Icon';
@@ -126,7 +126,7 @@ export default async function ComponentDetail({
 }) {
   const { id } = await params;
 
-  const [preset, usage, pages] = await Promise.all([
+  const [preset, usage, pages, users] = await Promise.all([
     prisma.preset.findUnique({
       where: { id },
       select: {
@@ -141,6 +141,7 @@ export default async function ComponentDetail({
     }),
     componentUsage(id),
     listPages(),
+    componentUsers(id),
   ]);
   if (!preset) notFound();
 
@@ -382,7 +383,7 @@ export default async function ComponentDetail({
           </SideCard>
 
           <SideCard title="Thao tác">
-            <ComponentActions id={preset.id} name={preset.name} builtin={preset.builtin} />
+            <ComponentActions id={preset.id} name={preset.name} usedOn={users} />
           </SideCard>
 
           <SideCard title="Lịch sử" count={preset.versions.length}>
