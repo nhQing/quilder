@@ -28,7 +28,7 @@
  */
 
 import { useRouter } from 'next/navigation';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useTransition } from 'react';
 
 import { cn } from '@/lib/builder/cn';
 import {
@@ -138,7 +138,14 @@ export function FormPanel({
    * khi xong: lần kéo kế tiếp phải tính trên bản dịch ĐÃ dời, không phải bản cũ.
    */
   const [remapping, setRemapping] = useState(false);
-  const locked = saving || remapping;
+  /**
+   * `router.refresh()` không trả promise; bọc trong transition thì `refreshing` giữ đúng
+   * tới khi bản dịch MỚI về tới props — lần sửa kế tiếp không lập kế hoạch trên hàng cũ.
+   */
+  const [refreshing, startRefresh] = useTransition();
+  /** Lần dời bản dịch gần nhất có hàng ghi hỏng — nói ra, không nuốt. */
+  const [remapError, setRemapError] = useState<string | null>(null);
+  const locked = saving || remapping || refreshing;
 
   /*
    * Form trong component: hỏi server có trang nào giữ chữ theo chỉ số ô không (bản dịch,
@@ -209,16 +216,31 @@ export function FormPanel({
     );
     const plan = translationRemapPlan(rows, remap);
     if (!plan.upserts.length && !plan.deletes.length) return;
-    const write = (locale: string, field: string, value: unknown) =>
-      fetch('/api/translations', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ pageId, locale, nodeId: node.id, field, value }),
-      }).catch(() => undefined);
+    const failed: string[] = [];
+    const write = async (locale: string, field: string, value: unknown) => {
+      try {
+        const res = await fetch('/api/translations', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ pageId, locale, nodeId: node.id, field, value }),
+        });
+        if (!res.ok) {
+          const body = (await res.json().catch(() => ({}))) as { error?: string };
+          failed.push(`${locale} ${field}: ${body.error ?? res.status}`);
+        }
+      } catch (error) {
+        failed.push(`${locale} ${field}: ${error instanceof Error ? error.message : 'lỗi mạng'}`);
+      }
+    };
     // Ghi đích TRƯỚC rồi mới xoá: lỡ đứt giữa chừng thì còn bản thừa, không mất bản nào.
     for (const u of plan.upserts) await write(u.locale, u.field, u.value);
     for (const d of plan.deletes) await write(d.locale, d.field, null);
-    router.refresh();
+    setRemapError(
+      failed.length
+        ? `Không dời được ${failed.length} bản dịch theo ô — kiểm lại ở bảng Văn bản: ${failed.join('; ')}`
+        : null,
+    );
+    startRefresh(() => router.refresh());
   };
 
   /**
@@ -413,6 +435,11 @@ export function FormPanel({
           ))}
         </ol>
         {listError && <p className={ui.error} data-form-list-error="">{listError}</p>}
+        {remapError && (
+          <p className={ui.error} role="alert" data-form-remap-error="">
+            {remapError}
+          </p>
+        )}
         {indexBlock && !listError && locks !== 'loading' && (
           <p className={WARN} data-form-index-lock="">{indexBlock}</p>
         )}

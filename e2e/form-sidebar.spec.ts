@@ -357,6 +357,8 @@ async function renderEn(request: APIRequestContext, pageId: string) {
 }
 
 test('khối Form trên trang: kéo ô thì bản dịch tiếng Anh đi theo ô', async ({ page, request }) => {
+  // Nhiều lần lưu + dời bản dịch + nạp lại: vượt trần 30 giây mặc định khi stack bận.
+  test.setTimeout(90_000);
   const pageId = await newPage(request, 'tr');
   try {
     const formId = await insertAndSelectForm(page, request, pageId);
@@ -460,5 +462,52 @@ test('khối Form trong component có bản dịch trên trang: chặn kéo/bỏ
   } finally {
     await dropPage(request, pageId);
     await request.delete(`/api/presets/${copyId}`);
+  }
+});
+
+test('khối Form trên trang: bỏ ô thì bản dịch của nó đi theo, ô thêm sau không thừa kế', async ({ page, request }) => {
+  // Nhiều lần lưu + dời bản dịch + nạp lại: vượt trần 30 giây mặc định khi stack bận.
+  test.setTimeout(90_000);
+  const pageId = await newPage(request, 'trdel');
+  try {
+    const formId = await insertAndSelectForm(page, request, pageId);
+    const panel = page.locator('[data-form-panel]');
+    await panel.getByLabel('Thêm ô').selectOption({ label: 'Số điện thoại' });
+    await expect
+      .poll(async () => (await formNode(request, pageId, formId)).params.fields.map((f) => f.name), SAVE_POLL)
+      .toEqual(['email', 'tel']);
+
+    await setTranslation(request, { pageId, locale: 'en', nodeId: formId, field: 'param:fields.0.label', value: 'Email EN' });
+    await setTranslation(request, { pageId, locale: 'en', nodeId: formId, field: 'param:fields.1.label', value: 'Phone EN' });
+
+    const enFields = async () =>
+      ((await tool(request, 'list_translations', { pageId, locale: 'en' })).translations as { nodeId: string; field: string }[])
+        .filter((t) => t.nodeId === formId)
+        .map((t) => t.field)
+        .sort();
+
+    await page.reload();
+    await page.locator(`[data-layer-row="${formId}"]`).click();
+    await page.locator('[data-form-panel]').getByRole('button', { name: 'Bỏ ô "Email"' }).click();
+    await expect
+      .poll(async () => (await formNode(request, pageId, formId)).params.fields.map((f) => f.name), SAVE_POLL)
+      .toEqual(['tel']);
+
+    // Nhãn tiếng Anh của ô SĐT dời về chỉ số 0; hàng ở chỉ số 1 (ô đã bỏ) bị xoá.
+    await expect.poll(enFields, SAVE_POLL).toEqual(['param:fields.0.label']);
+    expect(await renderEn(request, pageId)).toMatch(/for="[^"]*-tel"[^>]*>Phone EN/);
+    await expect(panel.locator('[data-form-remap-error]')).toHaveCount(0);
+
+    // Ô thêm sau vào chỉ số 1 không mang nhãn tiếng Anh của ô đã bỏ.
+    await panel.getByLabel('Thêm ô').selectOption({ label: 'Chữ' });
+    await expect
+      .poll(async () => (await formNode(request, pageId, formId)).params.fields.map((f) => f.name), SAVE_POLL)
+      .toEqual(['tel', 'text']);
+    const html = await renderEn(request, pageId);
+    expect(html).toMatch(/for="[^"]*-text"[^>]*>Họ và tên/);
+    expect(html).not.toContain('Email EN');
+    expect(await enFields()).toEqual(['param:fields.0.label']);
+  } finally {
+    await dropPage(request, pageId);
   }
 });

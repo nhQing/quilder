@@ -177,6 +177,16 @@ export async function setTranslation(args: {
       (u) => unitKey(u.nodeId, u.field) === unitKey(nodeId, nodeField),
     );
     if (!unit) {
+      /*
+       * XOÁ không đòi đơn vị còn tồn tại (luật 2 chỉ áp cho GHI). Bỏ một ô form làm các
+       * ô sau lùi chỉ số: hàng `param:fields.<cuối>.label` không còn đơn vị nào, và nếu
+       * không xoá được thì ô mới thêm vào đúng chỉ số đó "thừa kế" bản dịch của ô đã bỏ.
+       * Xoá là `deleteMany` gói trong đúng trang/node/trường/ngôn ngữ — không tạo rác nào.
+       */
+      if (args.value === null) {
+        await prisma.translation.deleteMany({ where: { locale, pageId, nodeId, field } });
+        return { ok: true, deleted: true };
+      }
       return { ok: false, status: 404, error: `Trang này không có đơn vị chữ ${nodeId}:${field}` };
     }
     if (unit.locked) {
