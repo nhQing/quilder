@@ -75,6 +75,10 @@
 - API công khai lấy field của bản ghi được liên kết bằng `populate[field]=a,b` (một cấp, chỉ
   field nhẹ); app gọi bộ tham số dài qua view đặt sẵn `/api/public/v1/views/<khoá>` — admin
   tạo ở Kho dữ liệu → View của API, AI không có tool ghi view. Xem `docs/API-PUBLIC.md` §2.5.
+- Form: style các phần con (field|label|input|help|submit|status|dialog) bằng `setStyle {part}` (lưu ở `style.parts`), không dùng customCss; customCss vẫn thắng nếu có. Danh sách phần: `get_node_schema` → `style.parts`.
+- Form `afterSubmit` (`inline`|`panel`|`dialog`): `dialog` dùng slot `success` / `error` cho nội dung hộp thoại; form cũ không có `afterSubmit` giữ hành vi cũ.
+- Form hệ thống (`mau-form`, `system` ≠ null) chỉ nhân bản: `duplicate_component` / chèn như bản sao; sửa, xoá, ops, Instance đều bị 409 `Mẫu hệ thống — nhân bản rồi sửa bản sao.`
+- Bản sao Form bắt đầu KHÔNG có nơi nhận (`endpointKey: ''`); URL nhận dữ liệu đặt ở sidebar do admin — AI không đặt được, hãy báo người dùng.
 - Chạy thử local với dữ liệu MaiMoney cần `QUILDER_PROJECT=maimoney`, nếu không header/menu
   của gói dự án không nạp và trông như "chưa dịch".
 - Không publish; người dùng tự bấm Publish sau khi xem bản nháp.

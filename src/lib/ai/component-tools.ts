@@ -83,13 +83,22 @@ const STAMP_NOTE =
   + 'cho cả site phải là Instance. Component không chứa được Instance lồng nhau, và '
   + 'effect gắn trên node trong component chạy một lần cho mỗi Instance không lặp.';
 
+/*
+ * Mẫu hệ thống (`system` khác null): server từ chối sửa/xoá/ops/Instance, nên AI phải biết
+ * TRƯỚC khi thử — nếu không nó sẽ gọi apply_component_ops rồi nhận 409.
+ */
+const SYSTEM_NOTE =
+  'Mẫu hệ thống: component có `system` khác null (vd "form") là Mẫu hệ thống — chỉ đọc. '
+  + 'Dùng `duplicate_component` (hoặc chèn bằng insertNode như bản sao) rồi sửa BẢN SAO; '
+  + 'KHÔNG apply_component_ops / update_component / xoá / cắm Instance của nó, server từ chối.';
+
 const listComponents: ToolDef = {
   name: 'list_components',
   title: 'Thư viện component',
   description:
     'Liệt kê component dựng sẵn: id, key, tên, nhóm, mô tả và số node.\n\n'
     + 'Gọi trước tiên để lấy `componentId` cho các tool component khác.\n\n'
-    + STAMP_NOTE,
+    + STAMP_NOTE + '\n\n' + SYSTEM_NOTE,
   input: z.object({}).strict(),
   readOnly: true,
   async run() {
@@ -103,7 +112,7 @@ const listComponents: ToolDef = {
 
     return {
       count: rows.length,
-      note: STAMP_NOTE,
+      note: `${STAMP_NOTE}\n\n${SYSTEM_NOTE}`,
       components: rows.map((r) => ({
         id: r.id,
         key: r.key,

@@ -410,6 +410,15 @@ test.describe('mẫu hệ thống', () => {
     expect(list.components.find((c: { id: string }) => c.id === r.component.id).system).toBeNull();
   });
 
+  test('list_components báo system trên mẫu và note dặn chỉ nhân bản', async ({ request }) => {
+    const p = await systemPreset(request);
+    const list = await tool(request, 'list_components', {});
+    const row = list.components.find((c: { id: string }) => c.id === p.id);
+    expect(row.system).toBe('form');
+    expect(list.note).toMatch(/Mẫu hệ thống/);
+    expect(list.note).toMatch(/duplicate_component/);
+  });
+
   test('chèn Instance của mẫu vào trang bị từ chối, nhắc nhân bản', async ({ request }) => {
     const p = await systemPreset(request);
     const slug = `e2e-mau-he-thong-${Date.now().toString(36)}`;

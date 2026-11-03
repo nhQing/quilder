@@ -26,7 +26,7 @@
 
 import { z } from 'zod';
 
-import { BREAKPOINTS } from '@/lib/design/breakpoints';
+import { BREAKPOINTS, BREAKPOINT_PX } from '@/lib/design/breakpoints';
 import { isKnownParamPath } from '@/lib/render/param-paths';
 import {
   CURRENT_SCHEMA_VERSION, LEAF_TYPES, MAX_QUERY_LIMIT, NODE_TYPES, SORTABLE_COLUMNS, partTokens,
@@ -1085,7 +1085,7 @@ export const zOp = z.discriminatedUnion('op', [
     nodeId: zNodeId,
     target: zStyleTarget.describe(
       'base = nền mobile-first mà mọi lớp khác kế thừa. sm/md/lg/xl là override ' +
-        'theo min-width (560/900/1200/1560). hover/focusVisible/inView là state. ' +
+        `theo min-width (${BREAKPOINT_PX.sm}/${BREAKPOINT_PX.md}/${BREAKPOINT_PX.lg}/${BREAKPOINT_PX.xl}). hover/focusVisible/inView là state. ` +
         'Còn { state: "<tên>" } ghi vào style.states — state do effect gắn trên node ' +
         'điều khiển, tên phải có trong statesWritten của nó (đọc list_effects). ' +
         'Ra CSS [data-n="<id>"][data-<tên>="true"].',

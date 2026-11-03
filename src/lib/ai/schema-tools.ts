@@ -31,7 +31,7 @@ import { z } from 'zod';
  * mục ở đây, để một type mới không lặng lẽ thiếu tài liệu.
  */
 
-import { compositeCatalog } from '@/lib/composites/registry';
+import { compositeCatalog, STYLE_PARTS } from '@/lib/composites/registry';
 import { BREAKPOINT_PX, type Breakpoint } from '@/lib/design/breakpoints';
 import { AI_CSS_ALLOWLIST } from '@/lib/doc/ai-css-allowlist';
 import { NODE_TYPES, isLeafType, type NodeType } from '@/lib/doc/types';
@@ -151,7 +151,7 @@ const nodeSchema: ToolDef = {
           id: 'chuỗi duy nhất trong trang, ≤ 40 ký tự. Đặt tên gợi nhớ, ví dụ "tt-grid"',
           parentId: 'id node cha, null với node gốc',
           children: 'mảng NodeId có thứ tự. insertNode BẮT BUỘC truyền [] — con thêm bằng op riêng',
-          style: 'ResponsiveStyle: { base, sm, md, lg, xl, hover, focusVisible, inView, states }. Field của từng nhóm: xem `style` bên dưới.',
+          style: 'ResponsiveStyle: { base, sm, md, lg, xl, hover, focusVisible, inView, states, parts }. Field của từng nhóm: xem `style` bên dưới.',
           effects: 'mảng, [] khi chưa gắn gì',
         },
         optional: {
@@ -191,6 +191,23 @@ const nodeSchema: ToolDef = {
           'hover/focusVisible/inView = state cố định. ' +
           'states = { "<tên>": StyleProps } cho state do effect ghi ra, ra CSS ' +
           '[data-n="<id>"][data-<tên>="true"] — setStyle vào đó bằng target { state: "<tên>" }.',
+        /*
+         * Phần con của composite — SINH từ `STYLE_PARTS`, không chép tay. `setStyle` nhận
+         * `part` + target base|sm|md|lg|xl|hover|focusVisible, ghi vào `style.parts[<phần>]`.
+         * customCss vẫn thắng `style.parts` (lớp doc-custom sau doc).
+         */
+        parts: {
+          note:
+            'style.parts = { "<phần>": { base, sm, md, lg, xl, hover, focusVisible } } trên node Composite — ' +
+            'style cho phần tử composite tự render. Ghi bằng setStyle { nodeId, part, target, patch }; ' +
+            'ưu tiên hơn customCss cho các phần này (customCss vẫn thắng nếu có).',
+          composites: Object.fromEntries(
+            Object.entries(STYLE_PARTS).map(([composite, parts]) => [
+              composite,
+              Object.fromEntries(Object.entries(parts).map(([key, p]) => [key, p.label])),
+            ]),
+          ),
+        },
         groups: styleShape().groups,
         // Thuộc tính cấp cao nhất — giá trị không phải object có field, nên nó KHÔNG
         // nằm trong `groups`. `shadow` là cái duy nhất hiện nay, và nó từng biến mất
