@@ -367,15 +367,15 @@ export function ComponentActions({
         {/* Còn trang dùng: server từ chối xoá (409). Khoá sẵn ở đây và nói lý do ngay
             dưới, thay vì để người dùng xác nhận xong mới biết là không được. */}
         {!system && (
-        <Button
-          variant="danger"
-          icon="trash"
-          full
-          disabled={busy || usedOn.length > 0}
-          onClick={() => setConfirming(true)}
-        >
-          Xoá component
-        </Button>
+          <Button
+            variant="danger"
+            icon="trash"
+            full
+            disabled={busy || usedOn.length > 0}
+            onClick={() => setConfirming(true)}
+          >
+            Xoá component
+          </Button>
         )}
       </div>
       {system && (

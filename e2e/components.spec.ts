@@ -453,6 +453,8 @@ test.describe('mẫu hệ thống', () => {
     await page.goto(`/builder/components/${p.id}`);
     await expect(page.getByText('Mẫu hệ thống', { exact: true }).first()).toBeVisible();
     await expect(page.getByRole('button', { name: 'Xoá component' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Lưu', exact: true })).toHaveCount(0);
+    await expect(page.getByLabel(/Mô tả cho AI/)).toHaveCount(0);
     await expect(page.getByRole('link', { name: 'Sửa trong trang' })).toHaveCount(0);
     await expect(page.getByRole('link', { name: 'Mở canvas' })).toHaveCount(0);
     await expect(

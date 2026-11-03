@@ -203,6 +203,9 @@ function ComponentPopover({
             <span className="flex min-w-0 flex-1 flex-col gap-0.5">
               <span className="flex items-baseline gap-2">
                 <span className="truncate text-small font-semibold">{preset.name}</span>
+                {preset.system && (
+                  <span className="shrink-0 text-mini text-shell-accent">Mẫu hệ thống · chèn bản sao</span>
+                )}
                 <span className="ml-auto shrink-0 text-mini text-shell-muted tabular-nums">
                   {preset.nodeCount} node
                 </span>

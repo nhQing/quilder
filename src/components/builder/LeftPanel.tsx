@@ -515,26 +515,26 @@ function ComponentList({
                       Chèn bản sao
                     </Button>
                   ) : (
-                  <>
-                  <Button
-                    size="sm"
-                    icon="plus"
-                    disabled={saving}
-                    onClick={() => void insert(preset, true)}
-                    title="Giữ liên kết: sửa component thì trang này đổi theo. Chữ và ảnh vẫn sửa riêng được."
-                  >
-                    Chèn
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    disabled={saving}
-                    onClick={() => void insert(preset, false)}
-                    title="Tách rời hẳn: sửa được mọi thứ, nhưng component đổi thì trang này KHÔNG đổi theo."
-                  >
-                    Bản sao
-                  </Button>
-                  </>
+                    <>
+                      <Button
+                        size="sm"
+                        icon="plus"
+                        disabled={saving}
+                        onClick={() => void insert(preset, true)}
+                        title="Giữ liên kết: sửa component thì trang này đổi theo. Chữ và ảnh vẫn sửa riêng được."
+                      >
+                        Chèn
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        disabled={saving}
+                        onClick={() => void insert(preset, false)}
+                        title="Tách rời hẳn: sửa được mọi thứ, nhưng component đổi thì trang này KHÔNG đổi theo."
+                      >
+                        Bản sao
+                      </Button>
+                    </>
                   )}
                   {/* Mở component ra sửa. Nằm CẠNH hai nút chèn vì nó là lựa chọn
                       thứ ba của cùng một câu hỏi — dùng, tách ra, hay sửa nó. */}

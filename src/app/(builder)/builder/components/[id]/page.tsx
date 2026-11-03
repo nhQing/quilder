@@ -376,12 +376,21 @@ export default async function ComponentDetail({
           </SideCard>
 
           <SideCard title="Thông tin">
-            <ComponentMetaForm
-              id={preset.id}
-              name={preset.name}
-              category={preset.category}
-              about={preset.aiDescription}
-            />
+            {preset.system ? (
+              // Mẫu hệ thống: chỉ đọc — mọi lần lưu đều 409.
+              <dl className="flex flex-col gap-2 text-small">
+                <div><dt className={ui.eyebrow}>Tên</dt><dd>{preset.name}</dd></div>
+                <div><dt className={ui.eyebrow}>Nhóm</dt><dd className="font-shell-mono">{preset.category}</dd></div>
+                <div><dt className={ui.eyebrow}>Mô tả</dt><dd className="text-shell-muted">{preset.aiDescription}</dd></div>
+              </dl>
+            ) : (
+              <ComponentMetaForm
+                id={preset.id}
+                name={preset.name}
+                category={preset.category}
+                about={preset.aiDescription}
+              />
+            )}
           </SideCard>
 
           <SideCard title="Thao tác">
