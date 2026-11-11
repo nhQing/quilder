@@ -50,7 +50,7 @@ function isFontStack(value: string): boolean {
  */
 export function categorize(name: string, value?: string): { category: string; group: string | null } {
   if (FONT_NAME.test(name)) {
-    const isFont = value === undefined ? !FONT_NON_FAMILY.test(name) : isFontStack(value);
+    const isFont = !FONT_NON_FAMILY.test(name) && (value === undefined || isFontStack(value));
     if (isFont) return { category: 'font', group: null };
   }
   if (name.startsWith('color-') || name.startsWith('surface') || name.startsWith('ink')) {

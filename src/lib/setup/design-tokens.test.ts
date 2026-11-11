@@ -13,6 +13,8 @@ describe('categorize', () => {
   it('giá trị không phải font stack → giữ luật cũ', () => {
     expect(categorize('font-size-l', '1.25rem').category).toBe('typography');
     expect(categorize('font-x', 'var(--font-body)').category).toBe('typography');
+    expect(categorize('font-size-fluid', 'clamp(1rem,2vw,2rem)').category).toBe('typography');
+    expect(categorize('font-weight-bold', 'bold').category).toBe('typography');
     expect(categorize('weight-bold', '700').category).toBe('typography');
     expect(categorize('color-ink', '#000').category).toBe('color');
   });
