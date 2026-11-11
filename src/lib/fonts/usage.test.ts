@@ -14,6 +14,7 @@ const m = vi.hoisted(() => ({
   entries: [] as { pageId: string; versionId: string }[],
   presets: [] as { id: string; name: string; tree: unknown }[],
   releaseComponents: null as unknown,
+  tokens: [] as { name: string; value: string }[],
 }));
 
 vi.mock('@/lib/db', () => ({
@@ -32,10 +33,11 @@ vi.mock('@/lib/db', () => ({
     },
     preset: { findMany: vi.fn(async () => m.presets) },
     release: { findUnique: vi.fn(async () => ({ components: m.releaseComponents })) },
+    token: { findMany: vi.fn(async () => m.tokens) },
   },
 }));
 
-const { tokenUsage } = await import('./usage');
+const { familyVariableRefs, tokenUsage } = await import('./usage');
 
 beforeEach(() => {
   m.pages = [];
@@ -43,6 +45,7 @@ beforeEach(() => {
   m.entries = [];
   m.presets = [];
   m.releaseComponents = null;
+  m.tokens = [];
 });
 
 describe('tokenUsage', () => {
@@ -88,5 +91,46 @@ describe('tokenUsage', () => {
     m.pages = [{ id: 'p1', title: 'A', slug: 'a', draftVersionId: 'v1', archivedAt: null }];
     m.versions.set('v1', doc('font-gilroy-web'));
     expect((await tokenUsage('font-gilroy')).pages).toEqual([]);
+  });
+});
+
+describe('familyVariableRefs — họ được nhắc theo TÊN qua biến CSS', () => {
+  const PACK_CSS = `
+    :root{--lv-font-display:newYork,Georgia,"Times New Roman",serif}
+    :root{--font-display:"SF Pro Display",-apple-system,system-ui,sans-serif;--font-body:"SF Pro Text","SF Pro Display",system-ui}
+    @font-face{font-family:gilroy;src:url(/p/fonts/g.woff2)}
+    .x{--space-l:2rem}`;
+
+  it('Token khác (không phải token của họ) và khai báo --*font* trong CSS gói, không phân biệt hoa thường', async () => {
+    m.tokens = [
+      { name: 'lv-font-head', value: 'GILROY, "Helvetica Neue", Arial, sans-serif' },
+      { name: 'lv-font-display', value: 'newYork, Georgia, serif' },
+      { name: 'font-gilroy', value: '"gilroy", system-ui' }, // token của chính họ: không tính
+      { name: 'font-gilroy-web', value: '"Gilroy Web", system-ui' }, // tên khác: không khớp
+      { name: 'space-l', value: '2rem' },
+    ];
+    const refs = await familyVariableRefs(
+      [
+        { cssName: 'gilroy', token: 'font-gilroy' },
+        { cssName: 'NewYork', token: 'font-newyork' },
+        { cssName: 'SF Pro Display', token: 'font-sf-pro-display' },
+        { cssName: 'Unused', token: 'font-unused' },
+      ],
+      async () => PACK_CSS,
+    );
+    expect(refs.get('font-gilroy')).toEqual(['--lv-font-head']); // @font-face không phải biến
+    expect(refs.get('font-newyork')).toEqual(['--lv-font-display']); // Token và CSS gói cùng tên: một lần
+    expect(refs.get('font-sf-pro-display')).toEqual(['--font-body', '--font-display']);
+    expect(refs.get('font-unused')).toEqual([]);
+  });
+
+  it('CSS tĩnh thật của gói maimoney (QUILDER_PROJECT) đọc được lúc chạy: SF Pro Display dùng bởi --font-display', async () => {
+    vi.stubEnv('QUILDER_PROJECT', 'maimoney');
+    try {
+      const refs = await familyVariableRefs([{ cssName: 'SF Pro Display', token: 'font-sf-pro-display' }]);
+      expect(refs.get('font-sf-pro-display')).toContain('--font-display');
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 });

@@ -33,6 +33,9 @@ describe('list_fonts', () => {
   it('mô tả có ba câu dặn', () => {
     const d = byName('list_fonts').description;
     expect(d).toContain('Kiểm font đã có trước khi tải mới.');
+    // Kết quả chỉ có trang, component và biến — không có "preset" riêng.
+    expect(d).not.toContain('preset');
+    expect(d).toContain('`variables`');
     expect(d).toContain('typography.family: { $token:');
     expect(d).toContain('sau khi người dùng Publish');
     expect(byName('list_fonts').readOnly).toBe(true);

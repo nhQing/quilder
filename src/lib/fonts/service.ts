@@ -34,7 +34,7 @@ import { inspectFont } from './inspect';
 import { fontSealOf } from './seal';
 import { describeFontFamily, fontTokenName, fontTokenValue } from './token';
 import { SUBSET_UNICODE_RANGE } from './unicode';
-import { type TokenUsage, type UsageRef, tokenUsage, tokenUsageMany } from './usage';
+import { type TokenUsage, type UsageRef, familyVariableRefs, tokenUsage, tokenUsageMany } from './usage';
 import {
   type FontSealFace,
   type FontSource,
@@ -106,7 +106,8 @@ export interface FontListItem {
     bytes: number | null;
     warnings: FontWarningCode[];
   }[];
-  usage: { pages: UsageRef[]; components: UsageRef[] };
+  /** `variables`: biến CSS (`--tên`, Token hoặc CSS của gói) nhắc họ này theo TÊN. */
+  usage: FamilyUsage;
   unpublished: boolean;
   licenseNote: string | null;
   licenseConfirmedBy: string | null;
@@ -218,14 +219,31 @@ async function checkFamilyName(name: string, fallback: string, excludeId?: strin
   }
 }
 
-function inUse(what: string, usage: TokenUsage): FontError {
+/** Chỗ dùng của một họ: node trỏ `$token` tới token của họ, và biến CSS nhắc tên họ. */
+export type FamilyUsage = TokenUsage & { variables: string[] };
+
+const isUsed = (u: FamilyUsage) => u.pages.length + u.components.length + u.variables.length > 0;
+
+/** Chỗ dùng đủ của một họ (token + biến nhắc tên) — dùng để chặn xoá. */
+async function familyUsage(fam: { cssName: string; slug: string }): Promise<FamilyUsage> {
+  const token = fontTokenName(fam.slug);
+  const [usage, vars] = await Promise.all([
+    tokenUsage(token),
+    familyVariableRefs([{ cssName: fam.cssName, token }]),
+  ]);
+  return { ...usage, variables: vars.get(token) ?? [] };
+}
+
+function inUse(what: string, usage: FamilyUsage): FontError {
   const parts = [
     usage.pages.length ? `${usage.pages.length} trang` : '',
     usage.components.length ? `${usage.components.length} component` : '',
+    usage.variables.length ? `biến ${usage.variables.join(', ')}` : '',
   ].filter(Boolean);
   return new FontError(
     'in_use',
-    `${what} đang được dùng ở ${parts.join(', ')}. Đổi font ở những chỗ đó trước rồi xoá lại.`,
+    `${what} đang được dùng ở ${parts.join(', ')}. Đổi font ở những chỗ đó trước rồi xoá lại.` +
+      (usage.variables.length ? ' Biến là Token ở Design system hoặc khai báo trong CSS của gói dự án.' : ''),
     { usage },
   );
 }
@@ -622,8 +640,8 @@ export async function deleteFace(familyId: string, faceId: string, actor: Actor)
 
   const tokenName = fontTokenName(fam.slug);
   if (fam.faces.length === 1) {
-    const usage = await tokenUsage(tokenName);
-    if (usage.pages.length || usage.components.length) {
+    const usage = await familyUsage(fam);
+    if (isUsed(usage)) {
       throw inUse(`Đây là face cuối của họ "${fam.cssName}", và họ này`, usage);
     }
   }
@@ -652,8 +670,8 @@ export async function deleteFace(familyId: string, faceId: string, actor: Actor)
 export async function deleteFamily(id: string, actor: Actor): Promise<void> {
   const fam = await loadFamily(id);
   const tokenName = fontTokenName(fam.slug);
-  const usage = await tokenUsage(tokenName);
-  if (usage.pages.length || usage.components.length) {
+  const usage = await familyUsage(fam);
+  if (isUsed(usage)) {
     throw inUse(`Họ font "${fam.cssName}"`, usage);
   }
 
@@ -718,9 +736,10 @@ export async function listFonts(): Promise<FontListItem[]> {
   );
 
   const builtinTokens = BUILTIN_FAMILIES.flatMap((f) => f.tokens);
-  const [usage, builtinRows] = await Promise.all([
+  const [usage, builtinRows, variables] = await Promise.all([
     tokenUsageMany([...rows.map((r) => fontTokenName(r.slug)), ...builtinTokens]),
     prisma.token.findMany({ where: { name: { in: builtinTokens } }, select: { name: true, value: true } }),
+    familyVariableRefs(rows.map((r) => ({ cssName: r.cssName, token: fontTokenName(r.slug) }))),
   ]);
   const usageOf = (name: string): TokenUsage => usage.get(name) ?? { pages: [], components: [] };
 
@@ -743,7 +762,7 @@ export async function listFonts(): Promise<FontListItem[]> {
         bytes: f.asset.bytes,
         warnings: asWarnings(f.warnings),
       })),
-      usage: usageOf(fontTokenName(r.slug)),
+      usage: { ...usageOf(fontTokenName(r.slug)), variables: variables.get(fontTokenName(r.slug)) ?? [] },
       unpublished: live.get(r.slug) !== draft,
       licenseNote: r.licenseNote,
       licenseConfirmedBy: r.licenseConfirmedBy,
@@ -774,7 +793,8 @@ export async function listFonts(): Promise<FontListItem[]> {
         bytes: null,
         warnings: [],
       })),
-      usage: { pages: [...pages.values()], components: [...components.values()] },
+      // Họ của lõi không xoá được: biến nhắc tên nó (core CSS đầy) không cần liệt kê.
+      usage: { pages: [...pages.values()], components: [...components.values()], variables: [] },
       unpublished: false,
       licenseNote: null,
       licenseConfirmedBy: null,

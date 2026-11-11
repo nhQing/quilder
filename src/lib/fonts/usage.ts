@@ -19,6 +19,9 @@
  */
 
 import { prisma } from '@/lib/db';
+import { currentStaticCss } from '@/lib/render/style-bundle';
+
+import { familyNameKey, fontStackNames } from './css';
 
 export interface UsageRef {
   id: string;
@@ -127,4 +130,60 @@ export async function tokenUsageMany(names: string[]): Promise<Map<string, Token
 /** Trang và component (nháp + release đang active) còn trỏ tới token `name`. */
 export async function tokenUsage(name: string): Promise<TokenUsage> {
   return (await tokenUsageMany([name])).get(name)!;
+}
+
+// ── Nhắc họ font theo TÊN qua biến CSS ───────────────────────────────────────
+//
+// Quét `$token` bỏ sót đúng ca nguy hiểm nhất sau khi chuyển font của gói vào kho: chữ thân
+// của site lấy font từ `--font-body: "SF Pro Display", …` trong CSS của gói, và các Token như
+// `lv-font-head` mang giá trị `gilroy, …`. Không node nào trỏ `$token` tới `font-gilroy`,
+// nên màn Font báo "Chưa dùng ở đâu" và cho xoá một họ cả site đang dùng.
+
+/** Khai báo biến có chữ `font` trong tên: `--font-body: …`, `--lv-font-head: …`. */
+const FONT_VAR_DECL_RE = /(--[\w-]*font[\w-]*)\s*:\s*([^;{}]*)/gi;
+
+/** CSS tĩnh (lõi + gói) của bản code đang chạy; đọc không được thì coi như không có. */
+async function readStaticCss(): Promise<string> {
+  try {
+    return currentStaticCss().css;
+  } catch {
+    return '';
+  }
+}
+
+/** Biến (`--tên`) trong `decls` mà chồng font của nó có tên họ `cssName` (không phân biệt hoa thường). */
+export function variablesNaming(cssName: string, decls: { name: string; value: string }[]): string[] {
+  const key = familyNameKey(cssName);
+  const out = new Set<string>();
+  for (const d of decls) {
+    if (fontStackNames(d.value).some((n) => familyNameKey(n) === key)) out.add(d.name);
+  }
+  return [...out].sort();
+}
+
+/**
+ * Với mỗi họ (khoá = token của họ): các biến CSS nhắc tên họ trong chồng font — Token rows
+ * (trừ token của chính họ) và khai báo `--*font*` trong CSS tĩnh của lõi + gói. Biến của
+ * Token cùng tên với biến trong CSS gói chỉ tính một lần.
+ */
+export async function familyVariableRefs(
+  families: { cssName: string; token: string }[],
+  staticCss: () => Promise<string> = readStaticCss,
+): Promise<Map<string, string[]>> {
+  const out = new Map<string, string[]>(families.map((f) => [f.token, []]));
+  if (!families.length) return out;
+
+  const [tokens, css] = await Promise.all([
+    prisma.token.findMany({ select: { name: true, value: true } }),
+    staticCss(),
+  ]);
+  const decls = [
+    ...tokens.map((t) => ({ name: `--${t.name}`, value: t.value })),
+    ...[...css.matchAll(FONT_VAR_DECL_RE)].map((m) => ({ name: m[1]!, value: m[2]! })),
+  ];
+  for (const f of families) {
+    const own = `--${f.token}`;
+    out.set(f.token, variablesNaming(f.cssName, decls.filter((d) => d.name !== own)));
+  }
+  return out;
 }
