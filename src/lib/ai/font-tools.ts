@@ -28,7 +28,8 @@ const listFontsTool: ToolDef = {
   title: 'Liệt kê font',
   description:
     'Liệt kê các họ font của site: tên CSS, token, nguồn (builtin | upload | google), các face, ' +
-    'fallback, nơi đang dùng (trang, component, preset), cảnh báo và cờ chưa publish.\n\n' +
+    'fallback, nơi đang dùng (`usage`: trang, component, và `variables` — biến CSS như ' +
+    '`--font-body` nhắc tên họ trong Token hoặc CSS của gói), cảnh báo và cờ chưa publish.\n\n' +
     'Kiểm font đã có trước khi tải mới.\n\n' +
     'Gán font bằng `apply_ops`, `setStyle` với `typography.family: { $token: \'<token>\' }`.\n\n' +
     'Font mới chỉ lên site thật sau khi người dùng Publish.',

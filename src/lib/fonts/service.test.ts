@@ -27,6 +27,7 @@ const m = vi.hoisted(() => {
     toWoff2: fn(),
     tokenUsage: fn(),
     tokenUsageMany: fn(),
+    familyVariableRefs: fn(),
     revalidateTag: fn(),
   };
 });
@@ -35,7 +36,11 @@ vi.mock('@/lib/db', () => ({ prisma: m.prisma }));
 vi.mock('@/lib/builder/upload-asset', () => ({ uploadAsset: m.uploadAsset }));
 vi.mock('./inspect', () => ({ inspectFont: m.inspectFont }));
 vi.mock('./convert', () => ({ toWoff2: m.toWoff2 }));
-vi.mock('./usage', () => ({ tokenUsage: m.tokenUsage, tokenUsageMany: m.tokenUsageMany }));
+vi.mock('./usage', () => ({
+  tokenUsage: m.tokenUsage,
+  tokenUsageMany: m.tokenUsageMany,
+  familyVariableRefs: m.familyVariableRefs,
+}));
 vi.mock('next/cache', () => ({
   unstable_cache: (f: (...a: unknown[]) => unknown) => f,
   revalidateTag: m.revalidateTag,
@@ -76,6 +81,9 @@ beforeEach(() => {
   });
   m.tokenUsage.mockResolvedValue(NONE);
   m.tokenUsageMany.mockImplementation(async (names: string[]) => new Map(names.map((n) => [n, NONE])));
+  m.familyVariableRefs.mockImplementation(
+    async (fams: { token: string }[]) => new Map(fams.map((f) => [f.token, [] as string[]])),
+  );
 });
 
 const upload = (over: Record<string, unknown> = {}) =>
@@ -474,6 +482,13 @@ describe('deleteFace', () => {
     expect(m.prisma.fontFace.delete).not.toHaveBeenCalled();
   });
 
+  it('face cuối của họ chỉ được nhắc qua biến → in_use', async () => {
+    m.prisma.fontFamily.findUnique.mockResolvedValue(family([{ id: 'face0' }]));
+    m.familyVariableRefs.mockResolvedValue(new Map([['font-gilroy', ['--font-display']]]));
+    expect(await codeOf(deleteFace('f1', 'face0', actor))).toBe('in_use');
+    expect(m.prisma.fontFace.delete).not.toHaveBeenCalled();
+  });
+
   it('face không phải cuối → xoá, audit, revalidate', async () => {
     m.prisma.fontFamily.findUnique.mockResolvedValue(family([{ id: 'face0' }, { id: 'face1', weight: '700' }]));
     m.tokenUsage.mockResolvedValue(USED);
@@ -498,8 +513,25 @@ describe('deleteFamily', () => {
     }
     expect(err).toBeInstanceOf(FontError);
     expect((err as FontError).code).toBe('in_use');
-    expect((err as FontError).extra?.usage).toEqual(USED);
+    expect((err as FontError).extra?.usage).toEqual({ ...USED, variables: [] });
     expect(m.prisma.fontFamily.delete).not.toHaveBeenCalled();
+  });
+
+  it('họ chỉ được nhắc TÊN qua biến (CSS gói / Token khác) → vẫn in_use, lời nhắn nêu biến', async () => {
+    m.prisma.fontFamily.findUnique.mockResolvedValue(family([{ id: 'face0' }]));
+    m.familyVariableRefs.mockResolvedValue(new Map([['font-gilroy', ['--lv-font-head']]]));
+    let err: unknown;
+    try {
+      await deleteFamily('f1', actor);
+    } catch (e) {
+      err = e;
+    }
+    expect(m.familyVariableRefs).toHaveBeenCalledWith([{ cssName: 'gilroy', token: 'font-gilroy' }]);
+    expect((err as FontError).code).toBe('in_use');
+    expect((err as FontError).message).toContain('--lv-font-head');
+    expect((err as FontError).extra?.usage).toEqual({ pages: [], components: [], variables: ['--lv-font-head'] });
+    expect(m.prisma.fontFamily.delete).not.toHaveBeenCalled();
+    expect(m.prisma.token.deleteMany).not.toHaveBeenCalled();
   });
 
   it('họ không còn dùng → xoá họ và token, audit, revalidate', async () => {
@@ -577,6 +609,18 @@ describe('listFonts', () => {
     ]);
     expect(list[0]).toMatchObject({ id: 'id-a', token: 'font-a', faces: [{ id: 'face-a', bytes: 10 }] });
     expect(list[2]).toMatchObject({ id: null, token: 'font-body' });
+    expect(list[2]!.usage.variables).toEqual([]);
+  });
+
+  it('usage.variables của họ tải lên lấy từ familyVariableRefs', async () => {
+    m.prisma.fontFamily.findMany.mockResolvedValue([{
+      id: 'g', slug: 'gilroy', cssName: 'gilroy', fallback: FALLBACKS.sans, source: 'upload', licenseNote: null, licenseConfirmedBy: null,
+      faces: [{ id: 'face-g', weight: '400', style: 'normal', unicodeRange: '', subset: '', warnings: [], asset: { key: 'public/g.woff2', bytes: 1 } }],
+    }]);
+    m.familyVariableRefs.mockResolvedValue(new Map([['font-gilroy', ['--lv-font-head']]]));
+    const list = await listFonts();
+    expect(m.familyVariableRefs).toHaveBeenCalledWith([{ cssName: 'gilroy', token: 'font-gilroy' }]);
+    expect(list[0]!.usage).toEqual({ pages: [], components: [], variables: ['--lv-font-head'] });
   });
 });
 

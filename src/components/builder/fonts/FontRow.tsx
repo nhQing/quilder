@@ -37,8 +37,11 @@ const count = (n: number, noun: string) => `${n} ${noun}`;
 function usageSummary(font: FontListItem): string {
   const p = font.usage.pages.length;
   const c = font.usage.components.length;
-  if (p + c === 0) return 'Chưa dùng ở đâu';
-  return `Dùng ở ${[p ? count(p, 'trang') : '', c ? count(c, 'component') : ''].filter(Boolean).join(' · ')}`;
+  const v = font.usage.variables.length;
+  if (p + c + v === 0) return 'Chưa dùng ở đâu';
+  return `Dùng ở ${[p ? count(p, 'trang') : '', c ? count(c, 'component') : '', v ? count(v, 'biến CSS') : '']
+    .filter(Boolean)
+    .join(' · ')}`;
 }
 
 async function call(url: string, init: RequestInit): Promise<string | null> {
@@ -177,7 +180,7 @@ function FontDetail({
   const replaceInput = useRef<HTMLInputElement>(null);
   const replaceTarget = useRef<FontListItem['faces'][number] | null>(null);
 
-  const used = font.usage.pages.length + font.usage.components.length;
+  const used = font.usage.pages.length + font.usage.components.length + font.usage.variables.length;
   const dirty =
     cssName.trim() !== font.cssName || fallback.trim() !== font.fallback || note !== (font.licenseNote ?? '');
 
@@ -405,6 +408,12 @@ function FontDetail({
                 <Link href={u.href} className="text-shell-accent hover:text-shell-ink">
                   {u.title}
                 </Link>
+              </li>
+            ))}
+            {/* Biến nhắc tên họ: Token ở Design system hoặc CSS của gói — không có trang để mở. */}
+            {font.usage.variables.map((v) => (
+              <li key={v} data-font-usage-var>
+                dùng bởi biến <code className="font-shell-mono">{v}</code>
               </li>
             ))}
           </ul>

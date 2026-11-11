@@ -21,7 +21,7 @@ const FONT: FontListItem = {
   source: 'upload',
   fallback: 'system-ui, sans-serif',
   faces: [{ id: 'face0', weight: '400', style: 'normal', subset: '', bytes: 2048, warnings: [] }],
-  usage: { pages: [], components: [] },
+  usage: { pages: [], components: [], variables: [] },
   unpublished: false,
   licenseNote: null,
   licenseConfirmedBy: 'a@b.c',
@@ -51,6 +51,18 @@ afterEach(async () => {
   await act(async () => root.unmount());
   host.remove();
   vi.unstubAllGlobals();
+});
+
+describe('FontRow — Chỗ dùng qua biến CSS', () => {
+  it('họ chỉ được nhắc tên qua biến: tóm tắt đếm biến, "Chỗ dùng" liệt kê, Xoá họ bị khoá', async () => {
+    await mount({ ...FONT, usage: { pages: [], components: [], variables: ['--font-display', '--lv-font-head'] } });
+    expect(host.textContent).toContain('Dùng ở 2 biến CSS');
+    await act(async () => host.querySelector<HTMLButtonElement>('button[aria-expanded]')!.click());
+    const vars = [...host.querySelectorAll('[data-font-usage-var]')].map((li) => li.textContent);
+    expect(vars).toEqual(['dùng bởi biến --font-display', 'dùng bởi biến --lv-font-head']);
+    expect(host.textContent).not.toContain('Chưa dùng ở đâu');
+    expect(buttons('Xoá họ')[0]!.disabled).toBe(true);
+  });
 });
 
 describe('FontRow — Thay file', () => {

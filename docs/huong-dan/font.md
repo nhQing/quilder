@@ -28,8 +28,10 @@ phục vụ ở `/mm-font/…`, URL có hash nên cache `immutable`.
 
 ## Xoá font
 
-- **Xoá họ** bị khoá khi còn trang hay component dùng token của họ đó (nút mờ, kèm lý do). Gỡ họ
-  khỏi các chỗ đó trước.
+- **Xoá họ** bị khoá khi còn trang hay component dùng token của họ đó, hoặc còn **biến CSS nhắc tên
+  họ** — một Token khác (ví dụ `lv-font-head: gilroy, …`) hay khai báo `--font-*` trong CSS của gói
+  (ví dụ `--font-body: "SF Pro Display", …`). Mục *Chỗ dùng* ghi "dùng bởi biến `--…`". Gỡ họ khỏi
+  các chỗ đó trước (Token ở Design system; CSS của gói sửa ở repo gói).
 - **Xoá một face** xoá được bình thường, trừ **face cuối** của một họ đang được dùng.
 - Xoá xong vẫn cần Publish; bản đã publish giữ font đến lúc đó.
 
