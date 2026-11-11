@@ -40,7 +40,8 @@
  *
  * CHẶN là mọi thứ hiện ra mà không cần ai bấm gì: bản nháp (kể cả trang lưu trữ —
  * khôi phục là nó quay lại), entry (bảng live, "bấm Đăng là lên site"), component,
- * effect preset, cấu hình site, token, ảnh đại diện, và release ĐANG CHẠY. Release
+ * effect preset, cấu hình site, token, face font (`FontFace`), ảnh đại diện, và release
+ * ĐANG CHẠY (kể cả bản niêm phong font `Release.fonts` của nó). Release
  * đang chạy là release mà `Site.activeReleaseId` trỏ tới — không phải release mới
  * nhất: sau một lần lùi bản, release mới hơn là ĐÍCH của rollback, cùng hạng với
  * release cũ.
@@ -174,6 +175,21 @@ export interface ReleaseSource {
   translations: unknown;
   tokens: unknown;
   globals: unknown;
+  /**
+   * `Release.fonts` thô — FontSeal, khoá file nằm ở `families[].faces[].key`. `null` với
+   * release tạo trước tính năng font. Quét theo key như `tokens`: file font của release
+   * cũ vẫn phải còn trên S3 thì lùi bản mới ra đúng chữ.
+   */
+  fonts: unknown;
+}
+
+/** Một hàng `FontFace` của bản nháp: trỏ thẳng tới asset bằng id. */
+export interface FontFaceSource {
+  assetId: string;
+  /** `FontFamily.cssName` — để nhãn nói được "Font “Gilroy”". */
+  family: string;
+  weight: string;
+  style: string;
 }
 
 export interface ReferenceSources {
@@ -185,6 +201,8 @@ export interface ReferenceSources {
   sites: SiteSource[];
   users: UserSource[];
   tokens: TokenSource[];
+  /** Face font của bản nháp (bảng `FontFace`) — đang dùng, CHẶN như token. */
+  fontFaces: FontFaceSource[];
   /** Release mà `Site.activeReleaseId` trỏ tới — thứ site thật đang phục vụ. */
   liveReleases: ReleaseSource[];
   /** Mọi release KHÁC: đích của rollback, chỉ cảnh báo. Mới nhất trước. */
@@ -449,6 +467,9 @@ function releaseHits(
 
   hits.push({ where: 'token', ids: idsInJson(rel.tokens, ctx) });
   hits.push({ where: 'thông tin chung', ids: idsInJson(rel.globals, ctx) });
+  // Bản niêm phong font: khoá file là chuỗi, nên lớp quét key thấy nó; `null`/rác
+  // (release trước tính năng) chỉ là không khớp gì.
+  hits.push({ where: 'font', ids: idsInJson(rel.fonts, ctx) });
   return hits;
 }
 
@@ -614,6 +635,18 @@ export function scanAssetReferences(
 
   for (const t of src.tokens) {
     block(idsInJson(t.value, ctx), { kind: 'token', label: `Token --${t.name}`, href: '/builder/settings' });
+  }
+
+  /*
+   * Face font của bản nháp. Loại `token` chứ không một loại riêng: font là một phần của
+   * hệ token (token `font-<slug>`), và nhãn đã nói rõ đây là font.
+   */
+  for (const f of src.fontFaces) {
+    block([f.assetId], {
+      kind: 'token',
+      label: `Font “${f.family}” ${f.weight} ${f.style}`,
+      href: '/builder/settings/fonts',
+    });
   }
 
   // --- Release đang chạy: CHẶN -------------------------------------------------

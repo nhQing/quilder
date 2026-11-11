@@ -55,6 +55,7 @@ const sources = (over: Partial<ReferenceSources> = {}): ReferenceSources => ({
   sites: [],
   users: [],
   tokens: [],
+  fontFaces: [],
   liveReleases: [],
   oldReleases: [],
   versionDocs: new Map(),
@@ -93,6 +94,8 @@ const release = (over: Partial<ReleaseSource> = {}): ReleaseSource => ({
   translations: {},
   tokens: {},
   globals: {},
+  // Release tạo trước tính năng font: cột `fonts` là null.
+  fonts: null,
   ...over,
 });
 
@@ -432,6 +435,71 @@ describe('scanAssetReferences — release', () => {
       versionDocs: new Map([['v0', docWithImg()]]),
     });
     expect(m.get(IMG)!.oldReleases).toHaveLength(1);
+  });
+});
+
+/*
+ * Review Focus 4: file font đã bị thay/xoá khỏi bản nháp nhưng vẫn nằm trong
+ * `Release.fonts` của một release cũ thì KHÔNG được coi là "không ai dùng" — nếu không,
+ * dọn thùng rác xoá nó khỏi S3 và lùi về release đó là chữ rơi về fallback.
+ */
+describe('scanAssetReferences — font', () => {
+  const FONT = 'cfont000000000000000000001';
+  const FONT_KEY = 'public/fonts/gilroy-700-1a2b3c4d.woff2';
+  const FONT_ASSETS = [...ASSETS, { id: FONT, key: FONT_KEY }];
+  const sealWith = (key: string) => ({
+    families: [
+      {
+        slug: 'gilroy',
+        cssName: 'Gilroy',
+        faces: [{ key, weight: '700', style: 'normal', unicodeRange: '' }],
+      },
+    ],
+  });
+  const scanFont = (over: Partial<ReferenceSources>) =>
+    scanAssetReferences([FONT], FONT_ASSETS, sources(over));
+
+  it('face đang có trong FontFace (bản nháp) chặn xoá', () => {
+    const m = scanFont({
+      fontFaces: [{ assetId: FONT, family: 'Gilroy', weight: '700', style: 'normal' }],
+    });
+    expect(m.get(FONT)!.blocking).toEqual([
+      { kind: 'token', label: 'Font “Gilroy” 700 normal', href: '/builder/settings/fonts' },
+    ]);
+    expect(m.get(FONT)!.oldReleases).toEqual([]);
+  });
+
+  it('khoá chỉ còn trong Release.fonts của release cũ → cảnh báo rollback, không chặn', () => {
+    const m = scanFont({
+      fontFaces: [],
+      oldReleases: [
+        release({
+          id: 'r0',
+          label: 'Publish cũ',
+          createdAt: new Date('2026-09-01T00:00:00.000Z'),
+          fonts: sealWith(FONT_KEY),
+        }),
+      ],
+    });
+    expect(m.get(FONT)!.blocking).toEqual([]);
+    expect(m.get(FONT)!.oldReleases).toEqual([
+      { id: 'r0', label: 'Publish cũ', createdAt: '2026-09-01T00:00:00.000Z' },
+    ]);
+  });
+
+  it('khoá trong Release.fonts của release đang chạy chặn xoá', () => {
+    const m = scanFont({ liveReleases: [release({ fonts: sealWith(FONT_KEY) })] });
+    expect(m.get(FONT)!.blocking).toEqual([
+      { kind: 'live-release', label: 'Site đang chạy — font', href: '/builder/releases' },
+    ]);
+  });
+
+  it('release trước tính năng (fonts null) và fonts rác không ném, không khớp gì', () => {
+    const m = scanFont({
+      liveReleases: [release({ fonts: null })],
+      oldReleases: [release({ id: 'r0', fonts: 'rác' }), release({ id: 'r00', fonts: { families: 5 } })],
+    });
+    expect(m.get(FONT)).toEqual({ blocking: [], oldReleases: [] });
   });
 });
 

@@ -6,6 +6,7 @@ import '@project/styles.css';
 import { getDraftPage } from '@/lib/builder/queries';
 import { compileDoc } from '@/lib/render/css';
 import { customTokensCss } from '@/lib/render/custom-tokens';
+import { draftFontFaceCss } from '@/lib/fonts/seal';
 import { loadComponents } from '@/lib/render/components';
 import { draftSiteGlobals } from '@/lib/render/draft-globals';
 import { NodeRenderer, type RenderContext } from '@/lib/render/NodeRenderer';
@@ -80,6 +81,9 @@ export default async function BuilderRender({
   // Token người dùng tự tạo không có trong tokens.css tĩnh. Không phát ở đây thì
   // var(--tên) resolve rỗng, thuộc tính bị bỏ qua, màu biến mất không báo lỗi.
   const tokenCss = await customTokensCss();
+  // `@font-face` của kho font BẢN NHÁP — thêm/thay face là canvas thấy ngay, không chờ
+  // Publish. Site thật đọc bản niêm phong trong `Release.fonts`.
+  const fontCss = await draftFontFaceCss();
 
   const ctx: RenderContext = {
     doc,
@@ -93,6 +97,13 @@ export default async function BuilderRender({
 
   return (
     <>
+      {fontCss && (
+        <style
+          data-mm-fonts=""
+          // eslint-disable-next-line react/no-danger
+          dangerouslySetInnerHTML={{ __html: fontCss }}
+        />
+      )}
       {tokenCss && (
         <style
           data-mm-tokens=""
