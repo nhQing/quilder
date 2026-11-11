@@ -1,14 +1,30 @@
 # Font động — tải font lên và dùng mà không build lại — thiết kế
 
-Ngày 16/10/2026 · nhánh đề xuất `feat/dynamic-fonts` (tách từ `ui/v2`) · trạng thái: **chờ duyệt**
+Ngày 16/10/2026, **sửa lại 11/11/2026** · nhánh `feat/dynamic-fonts` (tách từ `main`) ·
+trạng thái: **đã duyệt 11/11/2026**
+
+> **Bản sửa 11/11/2026 đổi gì so với 16/10:**
+> - Không font nào nằm trong gói dự án. Ba họ của MaiMoney (SF Pro Display, newYork, gilroy)
+>   chuyển vào kho font (S3 + DB) bằng một script chạy một lần cho mỗi môi trường (mục 5.2).
+>   Bản 16/10 giữ cả bốn họ trong code ở dạng chỉ đọc.
+> - Cập nhật hiện trạng sau 47 commit: font của MaiMoney đã dời từ lõi sang gói hôm 21/10,
+>   token tự tạo đã nhận font stack từ 21/10, phần nhập token đã dời sang
+>   `src/lib/setup/design-tokens.ts`, Inspector không còn bộ chọn họ font.
 
 ## 1. Mục tiêu
 
-Hôm nay mọi font của site nằm cứng trong image Docker. File ở `public/fonts/`,
-`@font-face` viết tay trong `src/styles/base/typography.css`, biến khai trong
-`src/styles/tokens.css`. Muốn thêm một font thì phải sửa code, build và deploy. Sanitizer
-cũng gỡ `@font-face` khỏi `customCss` (`src/lib/render/sanitize-css.ts:45`), nên không có
-đường nào thêm font qua dữ liệu.
+Hôm nay mọi font của site nằm cứng trong code và đi theo image Docker:
+
+- **Lõi Quilder:** Inter. File ở `public/fonts/`, `@font-face` trong
+  `src/styles/base/typography.css`, biến `--font-display` / `--font-body` trong
+  `src/styles/tokens.css`.
+- **Gói MaiMoney** (dời từ lõi sang hôm 21/10/2026): SF Pro Display, newYork, gilroy. File ở
+  `projects/maimoney/public/fonts/` (phục vụ ở `/p/fonts/…`), `@font-face` trong
+  `projects/maimoney/styles/fonts.css`. File đó cũng đè `--font-display` / `--font-body`
+  sang SF Pro.
+
+Muốn thêm một font thì phải sửa code, build và deploy. Sanitizer cũng gỡ `@font-face` khỏi
+`customCss` (`src/lib/render/sanitize-css.ts`), nên không có đường nào thêm font qua dữ liệu.
 
 Cần: **sau một lần deploy, thêm một họ font hoàn toàn mới rồi dùng nó trên trang đang
 chạy, bằng màn Cài đặt hoặc bằng Claude qua MCP, không build lại.**
@@ -22,8 +38,13 @@ Người dùng đã chốt (16/10/2026):
    release.
 3. **File font phục vụ qua chính domain site** (`/mm-font/…`). Cùng nguồn nên không cần cấu
    hình CORS ở môi trường nào.
-4. **4 họ đang đóng cứng giữ nguyên trong code:** Gilroy, New York, Inter, SF Pro Display.
-   Màn Font liệt kê chúng ở dạng chỉ đọc.
+4. ~~4 họ đang đóng cứng giữ nguyên trong code.~~ **Đổi 11/11/2026:** người dùng không
+   muốn file nằm trong gói dự án. Ba họ của gói MaiMoney (SF Pro Display, newYork, gilroy)
+   **chuyển vào kho font**, sau đó xoá file khỏi gói (mục 5.2).
+   **Inter ở lại lõi** làm font mặc định của engine, chỉ đọc (người dùng chốt 11/11/2026).
+   Lý do: Inter không thuộc gói dự án mà là font dự phòng
+   của mọi site Quilder. Một bản cài mới, DB trống, vẫn phải có chữ đúng trước khi ai kịp
+   tải font lên.
 5. Mục **Font** nằm trong **Cài đặt**.
 
 Thành công nghĩa là:
@@ -43,7 +64,8 @@ Thành công nghĩa là:
 
 - **Font mặc định cho cả site (theme).** Mục Nền tảng đã gỡ ngày 13/10/2026. Đây là **kho
   font để chọn**, không đặt font mặc định.
-- **Chuyển 4 họ có sẵn sang dữ liệu** (seed lên S3, gỡ khỏi `typography.css`).
+- **Chuyển Inter của lõi sang dữ liệu.** Ba họ của gói MaiMoney thì **trong** phạm vi
+  (mục 5.2).
 - **Giảm nhảy layout khi font nạp:** preload font, chỉnh metric fallback
   (`size-adjust`, `ascent-override`).
 - **Tự nhập font khi clone website.** `clone_website` hiện chỉ báo "font không có".
@@ -57,9 +79,12 @@ Thành công nghĩa là:
 |---|---|---|
 | `Asset` (`prisma/schema.prisma:442`) | Đã có `kind = 'font'`; `kind.ts:75` map woff, woff2, ttf, otf | Dùng lại kho asset; không cần kho mới |
 | `sniff.ts:159-160` | Chỉ nhận ra `wOF2` và `wOFF` | Phải thêm TTF (`00 01 00 00`, `true`) và OTF (`OTTO`) |
-| `custom-tokens.ts:116,190` | Token tự tạo **chỉ phát khi là mã màu hex** | Token font sẽ không bao giờ tới trang, nên phải mở cho hạng `font` |
-| `scripts/import-tokens.ts:37-39` | `font-*` vào hạng `typography`, `lv-font-*` vào `other` | Bộ chọn `typography.family` lọc `category === 'font'` (`controls.tsx:422`), nên đang **rỗng**. Phải xếp lại hạng |
-| `Release` (`schema.prisma:230`) | Niêm phong `tokens`, `assets`, `cssHash` → `StyleBundle` | Thêm cột `fonts`. **Không** cho font vào `StyleBundle`, vì bundle là CSS dẫn xuất từ code, băm theo file |
+| `custom-tokens.ts` + `design/token-value.ts` | Từ 21/10 token tự tạo nhận mọi giá trị qua `isSafeTokenValue`, kể cả font stack có nháy; `url(` bị chặn | **Không cần mở thêm.** Token font tới trang được ngay |
+| `src/lib/setup/design-tokens.ts` `categorize()` | `font*` vào hạng `typography` (thay cho `scripts/import-tokens.ts` cũ) | Token họ font do module font tạo, mang hạng `font`. `categorize` trả `font` cho tên `font-*` / `lv-font-*` có giá trị là font stack, còn `font-size-*`… giữ `typography` |
+| Inspector (`Inspector.tsx:750`, mục "Chữ") | **Không có** bộ chọn họ font. `typography.family` có trong schema (`doc/types.ts:229`) và renderer (`css.ts:430`) nhưng chỉ gán được qua AI | Thêm `TokenSelectControl` cho `family`, lọc hạng `font` (mục 11.5) |
+| Token `font-newyork`, `font-gilroy` | Token tự tạo trong DB, trỏ vào tên họ khai ở `fonts.css` của gói. `lv-font-display` / `lv-font-head` trong `projects/maimoney/styles/tokens.css` cũng trỏ vào hai tên đó | Script chuyển (mục 5.2) **nhận lại** hai hàng token này, không tạo token mới, nên node đang trỏ vào không gãy |
+| `Release` (`schema.prisma:288`) | Niêm phong `tokens`, `assets`, `cssHash` → `StyleBundle` | Thêm cột `fonts`. **Không** cho font vào `StyleBundle`, vì bundle là CSS dẫn xuất từ code, băm theo file |
+| `StyleBundle` của release cũ | CSS gộp từ lõi + `styles/index.css` của gói (`static-css.ts`), nên chứa `@font-face` trỏ `/p/fonts/…` | Sau khi xoá file khỏi gói, lùi về release tạo trước lần chuyển thì font rơi về fallback (mục 5.2, hệ quả đã chấp nhận) |
 | `(site)/[[...slug]]/page.tsx:432-484` | In `<style data-mm-tokens>` từ bản niêm phong | In `<style data-mm-fonts>` ngay cạnh |
 | `/render/[pageId]`, `/render/component/[id]`, `/preview/[pageId]` | Đọc token tự tạo trực tiếp từ DB | Đọc font trực tiếp từ DB theo cùng cách |
 | `asset-references-scan.ts` | Quét `Token.value` và `Release.tokens` tìm khoá asset | Thêm `Release.fonts` và `FontFace`, để file không bị dọn khi release cũ còn trỏ tới |
@@ -145,37 +170,89 @@ type FontSeal = {
   "Xoá ở màn Font".
 
 **Slug** sinh từ `cssName`: bỏ dấu tiếng Việt, chữ thường, nối bằng `-`. Slug mới bị từ
-chối khi trùng tên một token đã có, kể cả token tĩnh như `font-display` hay `font-gilroy`.
+chối khi trùng tên một token đã có, kể cả token tĩnh như `font-display`. Ngoại lệ duy nhất là
+script chuyển font của gói (mục 5.2): nó được nhận lại hàng token tự tạo cùng tên
+(`font-newyork`, `font-gilroy`) thay vì bị từ chối.
 
 **Tên họ dành riêng.** Trong CSS, tên họ font không phân biệt hoa thường. Một họ tải lên
 tên "Gilroy" sẽ **trộn** với `@font-face` tĩnh tên `gilroy`. Vì vậy `cssName` bị từ chối
 (mã `name_reserved`) khi trùng, không phân biệt hoa thường, với:
-- một họ có sẵn trong `builtin.ts` (mục 5);
-- một tên đứng trong chuỗi dự phòng của các biến `--font-*` và `--lv-font-*` ở `tokens.css`,
-  ví dụ "Inter", "New York", "Helvetica Neue", "Arial". Một họ tải lên tên "Inter" sẽ được
-  chuỗi `--font-gilroy` dùng làm dự phòng và đổi âm thầm cách hiện của trang đang chạy;
+- một họ có sẵn trong `builtin.ts` (mục 5), tức là Inter / Inter Variable;
+- một tên đứng trong chuỗi dự phòng của các biến `--font-*` ở `src/styles/tokens.css` của
+  lõi, ví dụ "Inter", "Helvetica Neue", "Arial". Một họ tải lên tên "Inter" sẽ được các chuỗi
+  dự phòng dùng tới và đổi âm thầm cách hiện của trang đang chạy;
+- **không** tính tên trong CSS của gói. "SF Pro Display", "newYork", "gilroy" đứng trong
+  chuỗi của gói chính vì gói chờ kho font cung cấp chúng. Sau mục 5.2, gói không còn
+  `@font-face` nào để trộn vào;
 - một từ khoá chung (`serif`, `sans-serif`, `monospace`, `system-ui`…);
 - một `FontFamily` khác.
 
 Lời nhắn gợi ý tên khác, ví dụ "Gilroy Web".
 
-## 5. Họ font có sẵn (chỉ đọc)
+## 5. Họ font có sẵn và font của gói
 
-`src/lib/fonts/builtin.ts` khai danh sách tĩnh. Mỗi họ gồm: `cssName`, token đang dùng,
-các weight và style, đường dẫn file trong `/fonts/…`.
+### 5.1 Họ có sẵn của lõi (chỉ đọc)
 
-| Họ | Token |
-|---|---|
-| SF Pro Display | `font-display` |
-| Inter Variable | `font-body`, `lv-font-body` |
-| newYork | `font-newyork`, `lv-font-display` |
-| gilroy | `font-gilroy`, `lv-font-head` |
+`src/lib/fonts/builtin.ts` khai danh sách tĩnh, giờ **chỉ còn Inter**:
 
-- Test `builtin.test.ts` đọc `@font-face` trong `typography.css` rồi so với danh sách này,
-  để hai bên không lệch nhau.
-- `import-tokens.ts` xếp mọi token có tên khớp `/^(lv-)?font-/` vào hạng `'font'`. Script
-  phải **cập nhật hạng cho hàng đã có**, không chỉ hàng mới. Script đã chạy trong
-  `scripts/bootstrap.sh`, nên mỗi môi trường tự sửa khi deploy.
+| Họ | Token | File |
+|---|---|---|
+| Inter Variable | `font-display`, `font-body` (giá trị mặc định của lõi), `lv-font-body` (gói MaiMoney) | `/fonts/inter-*.woff2` |
+
+- Test `builtin.test.ts` đọc `@font-face` trong `src/styles/base/typography.css` rồi so với
+  danh sách này, để hai bên không lệch nhau.
+- `categorize()` trong `src/lib/setup/design-tokens.ts` xếp token tên `font-*` / `lv-font-*`
+  mà giá trị là font stack vào hạng `'font'`; `font-size-*`, `font-weight-*` (nếu có) giữ
+  `typography`. Hàm nhập phải **cập nhật hạng cho hàng đã có**, không chỉ hàng mới. Nhập
+  token đã chạy trong `scripts/bootstrap.sh`, nên mỗi môi trường tự sửa khi deploy.
+- **Luật gói dự án** (ghi vào `projects/example/README.md`): gói **không** mang file font hay
+  `@font-face`. Gói chỉ được đặt biến (`--font-display: "SF Pro Display", …`) trỏ tới tên họ
+  có trong kho font. Thêm font là việc ở Cài đặt › Font.
+
+### 5.2 Chuyển font của gói MaiMoney vào kho (một lần mỗi môi trường)
+
+Script `scripts/fonts-adopt.ts` (chạy bằng `pnpm fonts:adopt`), dùng chung `service.ts` với
+đường tải file nên đi qua đúng các bước kiểm tra, cắt bộ chữ và khoá theo nội dung.
+
+**Đầu vào:** đường dẫn một file CSS có `@font-face` (mặc định
+`projects/<QUILDER_PROJECT>/styles/fonts.css`), `--actor <email>` để ghi
+`licenseConfirmedBy` và AuditLog, `--apply` (không có thì chỉ in kế hoạch).
+
+**Các bước:**
+
+1. Đọc mọi khối `@font-face`: `font-family`, `font-weight`, `font-style`, `unicode-range`,
+   `src: url(...)`. Đổi `/p/<x>` thành `projects/<gói>/public/<x>` để tìm file.
+2. Gom theo tên họ (không phân biệt hoa thường). Ba họ hiện có:
+
+   | Họ (`cssName` giữ nguyên chữ hoa thường như CSS) | `slug` | Token | Face |
+   |---|---|---|---|
+   | SF Pro Display | `sf-pro-display` | `font-sf-pro-display` (mới) | 400/500/600/700, woff2 → giữ nguyên byte, giữ `unicode-range` của CSS |
+   | newYork | `newyork` | `font-newyork` (**nhận lại** hàng có sẵn) | 400 normal + italic, ttf → cắt sang woff2 |
+   | gilroy | `gilroy` | `font-gilroy` (**nhận lại** hàng có sẵn) | 300/400/500/600/700, otf → cắt sang woff2 |
+
+3. Nhận lại token: hàng `Token` cùng tên `font-<slug>` mà `custom: true` thì gắn vào họ, đổi
+   hạng sang `font` và **giữ nguyên `value`**. Giá trị đó đang được trang dùng, và đổi chuỗi
+   fallback là đổi cách hiện của trang. Hàng tĩnh trùng tên thì dừng và báo lỗi.
+4. `source = 'upload'`, `licenseConfirmedBy = <actor>`, `licenseNote` lấy từ comment đầu
+   `fonts.css`. Với SF Pro là "Chủ dự án chọn ship SF Pro để khớp Figma — quyết định pháp
+   lý 08/09/2026".
+5. **Chạy lại không tạo thêm gì.** Họ đã có với cùng tập sha của các face thì bỏ qua và in
+   `đã có`.
+
+**Thứ tự ở mỗi môi trường (local, staging, product):**
+
+1. Deploy bản có tính năng font. Lúc này `fonts.css` của gói vẫn còn `@font-face`.
+2. `pnpm fonts:adopt --actor <email>`, xem kế hoạch, rồi chạy lại với `--apply`. Từ đây
+   canvas có `@font-face` từ cả hai nguồn, cùng tên họ và cùng file gốc, nên chữ không đổi.
+3. Người dùng **Publish** một lần để `Release.fonts` có ba họ.
+4. Ở **repo gói** (người dùng tự làm): xoá các khối `@font-face` trong `fonts.css` (giữ
+   khối `:root` đè `--font-display` / `--font-body`), rồi xoá
+   `projects/maimoney/public/fonts/`. Deploy gói.
+5. Kiểm: trang site không còn request nào tới `/p/fonts/`, mọi file font tải từ `/mm-font/…`.
+
+**Hệ quả đã chấp nhận** (giống lần chuyển ảnh ngày 10/11/2026): lùi về release tạo **trước**
+bước 3 thì `StyleBundle` của release đó trỏ `/p/fonts/…` không còn file, nên chữ rơi về
+fallback (system-ui / Inter). Release từ bước 3 trở đi không bị ảnh hưởng.
 
 ## 6. Đường đi của CSS
 
@@ -224,11 +301,13 @@ Màn Font so phần niêm phong của từng họ trong bản nháp với releas
 
 ### 6.5 Token font trong `custom-tokens.ts`
 
-- `row.custom && row.category === 'font'` được phát khi giá trị qua được
-  `FONT_FORBIDDEN_RE` (`src/lib/design/foundations.ts:50`). Biểu thức này chặn `; { } < > \`,
-  `/*`, `url(` và `expression(`.
-- Áp dụng cho cả nhánh đọc trực tiếp từ DB lẫn `tokenCssFromSeal`.
-- Token màu giữ nguyên luật hex.
+- **Không phải sửa** (cập nhật 11/11/2026). Từ 21/10 mọi token tự tạo qua
+  `isSafeTokenValue` (`src/lib/design/token-value.ts`): chặn `; { } < > \ ! @`, xuống dòng,
+  `url(`, `expression(`, `image-set(`, comment; bắt ngoặc cân và nháy chẵn. Font stack
+  `"Be Vietnam Pro", system-ui, sans-serif` đi qua được, ở cả nhánh đọc DB lẫn
+  `tokenCssFromSeal`.
+- Module font vẫn kiểm `fallback` bằng chính `isSafeTokenValue` **trước khi ghi**, để lỗi
+  hiện ngay ở hộp tải lên thay vì token bị lặng lẽ bỏ khi phát.
 
 ### 6.6 Route `/mm-font/[...key]`
 
@@ -303,7 +382,7 @@ nằm ở `src/lib/fonts/unicode.ts`.
 | Sans (mặc định) | `system-ui, -apple-system, "Segoe UI", Roboto, sans-serif` |
 | Serif | `Georgia, "Times New Roman", serif` |
 | Mono | `ui-monospace, Menlo, Consolas, monospace` |
-| Tự gõ | Kiểm bằng `FONT_FORBIDDEN_RE` |
+| Tự gõ | Kiểm bằng `isSafeTokenValue` (`src/lib/design/token-value.ts`) |
 
 ## 8. Nhập từ Google Fonts
 
@@ -410,8 +489,11 @@ Font                                   [Nhập từ Google Fonts] [Tải file fo
 │ Be Vietnam Pro   [font-be-vietnam-pro ⧉]   Google Fonts   Chưa publish │
 │ 100–900 · italic         Dùng ở 4 trang · 1 component          ▸ │
 ├──────────────────────────────────────────────────────────────────────┤
-│ gilroy           [font-gilroy ⧉]   Có sẵn trong bản build (chỉ đọc)      │
-│ 300 400 500 600 700      Dùng ở 12 trang                               │
+│ gilroy           [font-gilroy ⧉]   Tải lên (chuyển từ gói 11/2026)       │
+│ 300 400 500 600 700      Dùng ở 12 trang                          ▸ │
+├──────────────────────────────────────────────────────────────────────┤
+│ Inter Variable   [font-body ⧉]   Có sẵn trong lõi (chỉ đọc)             │
+│ 100–900                  Font mặc định khi chưa đặt font nào             │
 └──────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -444,8 +526,14 @@ Gồm ô tên hoặc link, các ô chọn weight (mặc định tất cả), cô
 
 ### 11.5 Inspector
 
-Bộ chọn `typography.family` liệt kê token hạng `font`, hiện bằng tên họ, kèm link
-"Quản lý font →" sang `/builder/settings/fonts`.
+Mục "Chữ" của Inspector hiện **chưa có** bộ chọn họ font (cập nhật 11/11/2026), nên phải
+thêm mới:
+
+- Một ô chọn `typography.family` đặt đầu mục "Chữ", liệt kê token hạng `font`. Mỗi dòng
+  hiện tên họ, vẽ bằng chính font đó: vỏ builder in `draftFontFaceCss()` cùng `@font-face`
+  của Inter.
+- Giá trị ghi vào node là `{ $token: 'font-<slug>' }`, như mọi `TokenRef` khác.
+- Cuối danh sách có link "Quản lý font →" sang `/builder/settings/fonts`.
 
 ## 12. MCP
 
@@ -526,7 +614,8 @@ So khớp theo `slug`:
 
 ```
 src/lib/fonts/
-  builtin.ts          4 họ có sẵn (+ builtin.test.ts so với typography.css)
+  builtin.ts          Inter của lõi (+ builtin.test.ts so với typography.css)
+  adopt.ts            đọc @font-face của một file CSS → kế hoạch nhận vào kho (thuần, mục 5.2)
   unicode.ts          tập ký tự latin + latin-ext + vietnamese
   inspect.ts          fontkit → metadata + cảnh báo
   convert.ts          subset-font → woff2
@@ -544,6 +633,7 @@ src/app/(builder)/builder/settings/fonts/page.tsx
 src/components/builder/SettingsTabs.tsx
 src/components/builder/fonts/{FontList,FontRow,FontUploadDialog,GoogleFontDialog}.tsx
 src/lib/ai/font-tools.ts            list_fonts, upload_font
+scripts/fonts-adopt.ts              chuyển @font-face của gói vào kho (mục 5.2)
 prisma/migrations/<ts>_dynamic_fonts/
 ```
 
@@ -552,11 +642,12 @@ prisma/migrations/<ts>_dynamic_fonts/
 | Nhóm | File |
 |---|---|
 | Asset | `src/lib/assets/sniff.ts` (TTF, OTF, TTC), `kind.ts` (`UPLOAD_ACCEPT`) |
-| Token | `src/lib/render/custom-tokens.ts`, `scripts/import-tokens.ts`, `src/app/api/design-tokens/[id]/route.ts` |
+| Token | `src/lib/setup/design-tokens.ts` (`categorize` → hạng `font`), `src/app/api/design-tokens/[id]/route.ts` (chặn xoá token của họ font). `custom-tokens.ts` không đổi |
+| Gói dự án | `projects/example/README.md` (luật: gói không mang file font), `package.json` (`fonts:adopt`) |
 | Phát CSS | publish route, `(site)/[[...slug]]/page.tsx`, `/render/[pageId]`, `/render/component/[id]`, `/preview/[pageId]`, `/preview/release/[id]` |
 | Giữ file | `src/lib/builder/asset-references*.ts` (quét `Release.fonts` và `FontFace`) |
 | Quyền | `src/lib/auth/service-scope.ts` |
-| Builder | `settings/page.tsx` (tab), `controls.tsx` hoặc `Inspector.tsx` (link "Quản lý font →") |
+| Builder | `settings/page.tsx` (tab), `Inspector.tsx` + `controls.tsx` (bộ chọn họ font mới, link "Quản lý font →") |
 | AI/MCP | `src/lib/ai/tools.ts` (đăng ký và mô tả `search_tokens`), `mcp/server.mjs`, `mcp/contract.snapshot.json`, `mcp/README.md` |
 | Xuất/nhập | `src/lib/transfer/{manifest,export,import-plan,commit}.ts` |
 | Hạ tầng | `package.json` (`fontkit`, `subset-font`), `next.config.mjs` (`serverExternalPackages` và tracing `.wasm` của harfbuzz) |
@@ -578,8 +669,11 @@ prisma/migrations/<ts>_dynamic_fonts/
   - bỏ dòng `unicode-range` khi rỗng;
   - có `font-display: swap`;
   - URL dạng `/mm-font/<key>`.
-- **`custom-tokens`:** phát token font hợp lệ; chặn `url(`, `;` và `{`; token màu không
-  đổi hành vi.
+- **`categorize`:** `font-gilroy` có giá trị font stack ra hạng `font`; `font-size-*` giữ
+  `typography`; chạy lại thì cập nhật hạng của hàng cũ.
+- **`adopt`:** đọc `fonts.css` mẫu ra đúng ba họ và đúng số face; đổi `/p/x` sang đường
+  file trong gói; chạy hai lần thì lần hai ra "đã có"; token tự tạo cùng tên được nhận lại
+  và giữ nguyên `value`; token tĩnh trùng tên thì báo lỗi.
 - **Route `/mm-font`:** chặn `../`, đuôi lạ, khoá ngoài `public/`.
 - **`service`:**
   - tạo họ kèm token;
@@ -617,6 +711,8 @@ Nhập Google Fonts thật chỉ kiểm tay trên dev, vì phụ thuộc mạng.
    nghĩa là không có font động, đúng với thực tế.
 2. **Deploy** mỗi môi trường (local, dev, product) một lần. `bootstrap.sh` chạy
    `tokens:import`, nên token font cũ tự sang hạng `font`.
-3. **Không cần** biến môi trường hay cấu hình CORS nào. Nhập Google Fonts cần server ra
+3. **Chuyển font của gói** theo đúng thứ tự ở mục 5.2: `pnpm fonts:adopt` → Publish → người
+   dùng xoá `@font-face` và file font khỏi repo gói → deploy gói.
+4. **Không cần** biến môi trường hay cấu hình CORS nào. Nhập Google Fonts cần server ra
    được Internet; không có thì vẫn dùng được đường tải file.
-4. Sau lần deploy đó, thêm font chỉ là thao tác dữ liệu, rồi Publish.
+5. Sau lần deploy đó, thêm font chỉ là thao tác dữ liệu, rồi Publish.
