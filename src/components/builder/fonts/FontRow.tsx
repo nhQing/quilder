@@ -10,21 +10,19 @@ import Link from 'next/link';
 import { useId, useRef, useState } from 'react';
 
 import { cn } from '@/lib/builder/cn';
+import { cssFamilyName } from '@/lib/fonts/css';
 import type { FontListItem } from '@/lib/fonts/service';
 import { FALLBACKS } from '@/lib/fonts/types';
 
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
-import { TextArea, TextField } from '../ui/Field';
+import { Checkbox, TextArea, TextField } from '../ui/Field';
 import { Icon } from '../ui/Icon';
 import { ConfirmDialog } from '../ui/Overlay';
 
 export const PREVIEW_TEXT = 'Tiền về nhanh — Ắ ẩ ữ ộ ₫ 0123';
 
 const SOURCE_LABEL = { builtin: 'Có sẵn trong lõi', upload: 'Tải lên', google: 'Google Fonts' } as const;
-
-/** `"Tên họ"` có nháy, thoát `"` và `\` — tên lấy từ bảng name của file nên không tin được. */
-const familyCss = (name: string) => `"${name.replace(/[\\"]/g, '\\$&')}"`;
 
 /** 100–900 hoặc "300 400 700": tóm tắt các weight của họ, không lặp. */
 function weightSummary(font: FontListItem): string {
@@ -86,7 +84,7 @@ export function FontRow({
       <span
         data-font-preview
         className="truncate text-[1.5rem] leading-snug text-shell-ink"
-        style={{ fontFamily: `${familyCss(font.cssName)}, ${font.fallback}` }}
+        style={{ fontFamily: `${cssFamilyName(font.cssName)}, ${font.fallback}` }}
       >
         {PREVIEW_TEXT}
       </span>
@@ -202,18 +200,63 @@ function FontDetail({
       }),
     );
 
-  const replaceFile = (file: File) => {
+  /** Thay file: dryRun trước để hiện cảnh báo, rồi chờ người dùng xác nhận giấy phép (§9). */
+  const [pending, setPending] = useState<{
+    face: FontListItem['faces'][number];
+    file: File;
+    warnings: string[];
+    error: string | null;
+    checking: boolean;
+  } | null>(null);
+  const [ack, setAck] = useState(false);
+
+  const replaceForm = (p: { face: FontListItem['faces'][number]; file: File }, dryRun: boolean) => {
+    const form = new FormData();
+    form.set('file', p.file);
+    form.set('family', font.cssName);
+    form.set('weight', p.face.weight);
+    form.set('style', p.face.style);
+    form.set('fallback', font.fallback);
+    // dryRun không ghi gì (kể cả người xác nhận), nên được gửi kèm để server kiểm file thay vì dừng ở giấy phép.
+    form.set('licenseConfirmed', 'true');
+    if (dryRun) form.set('dryRun', 'true');
+    return form;
+  };
+
+  const startReplace = async (file: File) => {
     const face = replaceTarget.current;
     if (!face) return;
-    const form = new FormData();
-    form.set('file', file);
-    form.set('family', font.cssName);
-    form.set('weight', face.weight);
-    form.set('style', face.style);
-    form.set('fallback', font.fallback);
-    form.set('licenseConfirmed', 'true');
-    return run(() => call('/api/fonts', { method: 'POST', body: form }));
+    setAck(false);
+    setError(null);
+    setPending({ face, file, warnings: [], error: null, checking: true });
+    try {
+      const res = await fetch('/api/fonts', { method: 'POST', body: replaceForm({ face, file }, true) });
+      const body = (await res.json().catch(() => null)) as {
+        error?: string;
+        warnings?: { message: string }[];
+      } | null;
+      setPending({
+        face,
+        file,
+        warnings: (body?.warnings ?? []).map((w) => w.message),
+        error: res.ok ? null : (body?.error ?? `Lỗi ${res.status}`),
+        checking: false,
+      });
+    } catch {
+      setPending({ face, file, warnings: [], error: 'Không kết nối được tới server.', checking: false });
+    }
   };
+
+  const confirmReplace = async () => {
+    if (!pending) return;
+    const err = await run(() =>
+      call('/api/fonts', { method: 'POST', body: replaceForm(pending, false) }),
+    );
+    if (!err) setPending(null);
+  };
+
+  // Họ nhập từ Google (OFL) không cần tick giấy phép.
+  const needsAck = font.source !== 'google';
 
   return (
     <div id={id} className="flex flex-col gap-4 border-t border-shell-line bg-shell-raised/40 px-4 py-4">
@@ -267,9 +310,52 @@ function FontDetail({
         onChange={(e) => {
           const f = e.target.files?.[0];
           e.target.value = '';
-          if (f) void replaceFile(f);
+          if (f) void startReplace(f);
         }}
       />
+      {pending && (
+        <div data-font-replace className="flex flex-col gap-2 rounded-lg border border-shell-line p-3 text-small">
+          <p className="font-semibold">
+            Thay {pending.face.weight} {pending.face.style} bằng {pending.file.name}
+          </p>
+          {pending.checking && <p className="text-shell-muted">Đang kiểm tra…</p>}
+          {pending.warnings.map((w) => (
+            <p key={w} className="text-shell-warn">
+              {w}
+            </p>
+          ))}
+          {pending.error && (
+            <p role="alert" className="text-shell-danger">
+              {pending.error}
+            </p>
+          )}
+          {needsAck && !pending.error && !pending.checking && (
+            <Checkbox
+              label={
+                font.licenseConfirmedBy
+                  ? `Giấy phép do ${font.licenseConfirmedBy} xác nhận, áp dụng cho file thay thế`
+                  : 'Tôi xác nhận có giấy phép dùng font này trên web'
+              }
+              checked={ack}
+              onChange={(e) => setAck(e.target.checked)}
+            />
+          )}
+          <div className="flex gap-2">
+            <Button
+              variant="primary"
+              size="sm"
+              loading={busy}
+              disabled={pending.checking || !!pending.error || (needsAck && !ack)}
+              onClick={() => void confirmReplace()}
+            >
+              Thay file
+            </Button>
+            <Button size="sm" disabled={busy} onClick={() => setPending(null)}>
+              Huỷ
+            </Button>
+          </div>
+        </div>
+      )}
 
       <div className="grid gap-3 sm:grid-cols-2">
         <TextField
