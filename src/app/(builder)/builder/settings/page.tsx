@@ -35,6 +35,7 @@ import { prisma } from '@/lib/db';
 import { siteOrigin, siteOriginSource, siteUrlFromEnv } from '@/lib/site/origin';
 import { parseSitemapRules } from '@/lib/site/sitemap-rules';
 import { parseSiteTheme } from '@/lib/site/theme';
+import { SettingsTabs } from '@/components/builder/SettingsTabs';
 import { SiteSeoForm } from '@/components/builder/SiteSeoForm';
 import { SiteEndpointsForm } from '@/components/builder/SiteEndpointsForm';
 import { SiteLocalesForm } from '@/components/builder/SiteLocalesForm';
@@ -77,6 +78,7 @@ export default async function SettingsPage() {
   return (
     <PageShell>
       <PageHeader title="Cài đặt chung" />
+      <SettingsTabs current="general" />
       {/* Hàng chế độ lưu đứng sát tiêu đề, rộng bằng cả màn — mô tả của `PageHeader`
           giới hạn 78ch, hẹp hơn hai thẻ cạnh nhau. */}
       <p className="-mt-3 flex flex-wrap items-center gap-2.5 text-ui text-shell-muted">
