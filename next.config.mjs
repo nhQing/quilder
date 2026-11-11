@@ -93,7 +93,8 @@ const nextConfig = {
     // subset-font đọc `harfbuzzjs/dist/harfbuzz-subset.wasm` bằng readFile(require.resolve(…)) —
     // trình theo vết không thấy cách đọc đó. (wawoff2, phụ thuộc của fontverter, là asm.js:
     // không có file .wasm nào cần khai.) Kiểm trên bản build thật ở Task 15.
-    '/api/fonts': ['./node_modules/**/harfbuzzjs/dist/*.wasm'],
+    '/api/fonts/**': ['./node_modules/**/harfbuzzjs/dist/*.wasm'],
+    '/api/ai/tool': ['./node_modules/**/harfbuzzjs/dist/*.wasm'],
     // CSS và public/ của gói được ĐỌC lúc chạy (static-css.ts, route /p/), không import —
     // trình theo vết không thấy chúng. Khai cho mọi route để bản standalone mang theo.
     ...(project.name ? { '/**': [`./${project.dir}/styles/**`, `./${project.dir}/public/**`] } : {}),
