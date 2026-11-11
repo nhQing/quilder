@@ -23,7 +23,11 @@ export const interLatinExtWoff2 = (): Uint8Array => read(INTER_LATIN_EXT_PATH);
 
 /** TTF sinh từ Inter (giữ chữ Việt + ASCII). */
 export async function interTtf(): Promise<Uint8Array> {
-  const text = 'AaBbCc0123 ạảãếộữơưƯĐ';
+  return interTtfWith('AaBbCc0123 ạảãếộữơưƯĐ');
+}
+
+/** Như `interTtf` nhưng cắt theo `text` riêng — byte khác nhau để thử thay face. */
+export async function interTtfWith(text: string): Promise<Uint8Array> {
   const out = await subsetFont(Buffer.from(interVietnameseWoff2()), text, {
     targetFormat: 'truetype',
   });
