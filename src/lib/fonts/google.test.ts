@@ -5,13 +5,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const m = vi.hoisted(() => ({
   addFace: vi.fn(),
-  findFirst: vi.fn(),
+  previewFaces: vi.fn(),
 }));
 vi.mock('./service', () => ({
   addFace: m.addFace,
+  previewFaces: m.previewFaces,
   slugify: (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''),
 }));
-vi.mock('@/lib/db', () => ({ prisma: { fontFamily: { findFirst: m.findFirst } } }));
 
 import { importGoogleFamily } from './google';
 import { FontError } from './types';
@@ -43,8 +43,7 @@ function ok(family = 'Be Vietnam Pro') {
 beforeEach(() => {
   m.addFace.mockReset();
   m.addFace.mockImplementation(async () => ok());
-  m.findFirst.mockReset();
-  m.findFirst.mockResolvedValue(null);
+  m.previewFaces.mockReset();
 });
 
 describe('importGoogleFamily', () => {
@@ -182,23 +181,55 @@ describe('importGoogleFamily', () => {
     expect(out.warnings.map((w) => w.code)).toContain('google_truncated');
   });
 
-  it('dryRun không tải file, không gọi addFace, trả danh sách face', async () => {
+  it('dryRun không tải file, không gọi addFace, kết quả lấy từ previewFaces', async () => {
     const urls: string[] = [];
     const fetchImpl = (async (u: RequestInfo | URL) => {
       urls.push(String(u));
       return res(200, css);
     }) as typeof fetch;
-    const out = await importGoogleFamily({ family: 'Be Vietnam Pro', dryRun: true }, actor, fetchImpl);
+    m.previewFaces.mockResolvedValue({ ...ok(), dryRun: true, faces: [], warnings: [] });
+    const out = await importGoogleFamily(
+      { family: 'Be Vietnam Pro', dryRun: true, fallback: 'serif' },
+      actor,
+      fetchImpl,
+    );
     expect(urls).toHaveLength(1);
     expect(m.addFace).not.toHaveBeenCalled();
     expect(out.dryRun).toBe(true);
-    expect(out.faces.map((f) => f.subset)).toEqual(['vietnamese', 'latin-ext', 'latin']);
-    expect(out.family).toMatchObject({
-      slug: 'be-vietnam-pro',
-      cssName: 'Be Vietnam Pro',
-      token: 'font-be-vietnam-pro',
-      created: true,
+    const arg = m.previewFaces.mock.calls[0]![0];
+    expect(arg.family).toBe('Be Vietnam Pro');
+    expect(arg.fallback).toBe('serif');
+    expect(arg.faces.map((f: { subset: string }) => f.subset)).toEqual(['vietnamese', 'latin-ext', 'latin']);
+  });
+
+  it('addFace hỏng ở file thứ 2/3 → FontError giữ mã, báo phần đã nhập', async () => {
+    let n = 0;
+    m.addFace.mockImplementation(async () => {
+      n += 1;
+      if (n === 2) throw new FontError('too_large', 'File quá lớn.');
+      return ok();
     });
+    const fetchImpl = (async (u: RequestInfo | URL) =>
+      String(u).includes('css2') ? res(200, css) : res(200, new Uint8Array([1]))) as typeof fetch;
+    const err = await importGoogleFamily({ family: 'Be Vietnam Pro' }, actor, fetchImpl).catch((e) => e);
+    expect(err).toBeInstanceOf(FontError);
+    expect(err.code).toBe('too_large');
+    expect(err.message).toContain('1/3');
+    expect(err.message).toContain('File quá lớn.');
+    expect(err.message).toContain('an toàn');
+    expect(err.extra).toMatchObject({
+      family: 'be-vietnam-pro',
+      imported: [{ weight: '400', style: 'normal', subset: 'x' }],
+    });
+    expect(m.addFace).toHaveBeenCalledTimes(2);
+  });
+
+  it('addFace hỏng ngay file đầu → ném nguyên lỗi gốc', async () => {
+    const boom = new FontError('slug_taken', 'trùng');
+    m.addFace.mockRejectedValue(boom);
+    const fetchImpl = (async (u: RequestInfo | URL) =>
+      String(u).includes('css2') ? res(200, css) : res(200, new Uint8Array([1]))) as typeof fetch;
+    await expect(importGoogleFamily({ family: 'Be Vietnam Pro' }, actor, fetchImpl)).rejects.toBe(boom);
   });
 
   it('gộp kết quả: created nếu có lần tạo, cảnh báo không trùng', async () => {

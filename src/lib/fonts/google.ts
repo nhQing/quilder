@@ -6,12 +6,11 @@
  * dự án/người dùng sang Google: chỉ có tên họ và weight.
  */
 
-import { prisma } from '@/lib/db';
 import { MAX_ASSET_BYTES } from '@/lib/builder/upload-asset';
 
 import { googleCssFamilyName, parseGoogleCss, parseGoogleFamily, type GoogleFace } from './google-parse';
-import { addFace, slugify, type Actor, type FontUploadResult } from './service';
-import { FontError, type FontStyle } from './types';
+import { addFace, previewFaces, slugify, type Actor, type FontUploadResult } from './service';
+import { FontError } from './types';
 
 export interface GoogleImportRequest {
   family: string;
@@ -175,31 +174,13 @@ export async function importGoogleFamily(
   }
 
   if (req.dryRun) {
-    // Không tải file, không ghi gì: chỉ báo trước họ và các face sẽ nhập.
-    const slug = slugify(cssName);
-    const existing = await prisma.fontFamily.findFirst({
-      where: { cssName: { equals: cssName, mode: 'insensitive' } },
-      select: { id: true, slug: true, cssName: true },
+    // Không tải file, không ghi gì. Luật tên/token/fallback và `replaced` do service tính.
+    const preview = await previewFaces({
+      family: cssName,
+      fallback: req.fallback,
+      faces: faces.map((f) => ({ weight: f.weight, style: f.style, unicodeRange: f.unicodeRange, subset: f.subset })),
     });
-    return {
-      ok: true,
-      dryRun: true,
-      family: {
-        ...(existing ? { id: existing.id } : {}),
-        slug: existing?.slug ?? slug,
-        cssName: existing?.cssName ?? cssName,
-        token: `font-${existing?.slug ?? slug}`,
-        created: !existing,
-      },
-      faces: faces.map((f) => ({
-        weight: f.weight,
-        style: f.style as FontStyle,
-        subset: f.subset,
-        bytes: 0,
-        replaced: false,
-      })),
-      warnings: extra,
-    };
+    return { ...preview, warnings: [...preview.warnings, ...extra] };
   }
 
   // Tải hết trước khi ghi: mất mạng giữa chừng không để lại họ nhập dở.
@@ -210,24 +191,37 @@ export async function importGoogleFamily(
 
   // Ghi tuần tự: face đầu có thể tạo họ, các face sau phải thấy họ đó.
   const results: FontUploadResult[] = [];
-  for (const [i, f] of faces.entries()) {
-    results.push(
-      await addFace(
-        {
-          bytes: files[i]!,
-          fileName: `${slugify(cssName)}-${f.subset}-${f.weight.replace(/\s+/g, '-')}-${f.style}.woff2`,
-          family: cssName,
-          weight: f.weight,
-          style: f.style,
-          fallback: req.fallback,
-          licenseConfirmed: true,
-          licenseNote: 'Google Fonts (OFL/Apache)',
-          source: 'google',
-          googleFamily: cssName,
-          prepared: { unicodeRange: f.unicodeRange, subset: f.subset },
-        },
-        actor,
-      ),
+  try {
+    for (const [i, f] of faces.entries()) {
+      results.push(
+        await addFace(
+          {
+            bytes: files[i]!,
+            fileName: `${slugify(cssName)}-${f.subset}-${f.weight.replace(/s+/g, '-')}-${f.style}.woff2`,
+            family: cssName,
+            weight: f.weight,
+            style: f.style,
+            fallback: req.fallback,
+            licenseConfirmed: true,
+            licenseNote: 'Google Fonts (OFL/Apache)',
+            source: 'google',
+            googleFamily: cssName,
+            prepared: { unicodeRange: f.unicodeRange, subset: f.subset },
+          },
+          actor,
+        ),
+      );
+    }
+  } catch (e) {
+    if (!results.length) throw e;
+    // Các face trước đã ghi (kèm họ và token): báo rõ để người gọi biết, thử lại là an toàn.
+    const imported = results.flatMap((r) => r.faces.map(({ weight, style, subset }) => ({ weight, style, subset })));
+    const list = imported.map((f) => `${f.subset} ${f.weight}${f.style === 'italic' ? ' italic' : ''}`).join(', ');
+    const why = e instanceof Error ? e.message : String(e);
+    throw new FontError(
+      e instanceof FontError ? e.code : 'google_unreachable',
+      `Nhập dở họ "${cssName}": đã lưu ${imported.length}/${faces.length} file (${list}), file tiếp theo lỗi: ${why} Nhập lại là an toàn, các face trùng sẽ được thay.`,
+      { ...(e instanceof FontError ? e.extra : {}), imported, family: results[0]!.family.slug },
     );
   }
   return aggregate(results, extra);
