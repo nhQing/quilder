@@ -15,6 +15,8 @@ import { effectAssetIds } from '@/lib/builder/asset-refs';
 import { prisma } from '@/lib/db';
 import { migrateDoc } from '@/lib/doc/migrate';
 import type { Doc } from '@/lib/doc/types';
+import { fontSealOf } from '@/lib/fonts/seal';
+import type { FontSeal } from '@/lib/fonts/types';
 import { instanceAssetIds, styleAssetIds } from './instance';
 import type { AssetSeal } from './release-snapshot';
 
@@ -55,6 +57,13 @@ export interface PublishedPage {
    * nghĩa là "không phát khai báo `:root` nào".
    */
   tokens: Record<string, string>;
+  /**
+   * Bản niêm phong font của chính release này — xem `Release.fonts`.
+   *
+   * `EMPTY_FONT_SEAL` với release tạo trước tính năng font (`fonts = null`) và với JSON
+   * hỏng: trang vẫn render, chỉ không có `@font-face` nào (`fontFaceCss` trả `''`).
+   */
+  fonts: FontSeal;
   /**
    * Ảnh chụp metadata asset của chính release này — xem `Release.assets`.
    *
@@ -114,6 +123,7 @@ async function loadFromRelease(releaseId: string, slug: string): Promise<Publish
           translations: true,
           components: true,
           tokens: true,
+          fonts: true,
           globals: true,
           assets: true,
         },
@@ -146,6 +156,7 @@ async function loadFromRelease(releaseId: string, slug: string): Promise<Publish
     translations: entry.release.translations,
     components: entry.release.components,
     tokens: (entry.release.tokens ?? {}) as Record<string, string>,
+    fonts: fontSealOf(entry.release.fonts),
     assets: (entry.release.assets ?? {}) as unknown as Record<string, AssetSeal>,
     collection: page.collection,
     system: page.system,

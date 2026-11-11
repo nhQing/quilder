@@ -23,6 +23,7 @@ import '@project/styles.css';
 import { prisma } from '@/lib/db';
 import { compileDoc } from '@/lib/render/css';
 import { customTokensCss } from '@/lib/render/custom-tokens';
+import { draftFontFaceCss } from '@/lib/fonts/seal';
 import { draftSiteGlobals } from '@/lib/render/draft-globals';
 import { NodeRenderer, type RenderContext } from '@/lib/render/NodeRenderer';
 import { collectAssetIds, loadAssets } from '@/lib/render/page';
@@ -51,6 +52,8 @@ export default async function ComponentRender({
   const assets = await loadAssets(collectAssetIds(doc));
   const { css } = compileDoc(doc);
   const tokenCss = await customTokensCss();
+  // Kho font bản nháp — giống hệt /render/[pageId].
+  const fontCss = await draftFontFaceCss();
 
   const ctx: RenderContext = {
     doc,
@@ -62,6 +65,13 @@ export default async function ComponentRender({
 
   return (
     <>
+      {fontCss && (
+        <style
+          data-mm-fonts=""
+          // eslint-disable-next-line react/no-danger
+          dangerouslySetInnerHTML={{ __html: fontCss }}
+        />
+      )}
       {tokenCss && (
         <style
           data-mm-tokens=""

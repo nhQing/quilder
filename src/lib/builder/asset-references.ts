@@ -38,7 +38,10 @@ export async function assetReferences(ids: readonly string[]): Promise<AssetRefe
   const unique = [...new Set(ids)];
   if (!unique.length) return new Map();
 
-  const [assets, pages, translations, presets, effectPresets, entries, sites, users, tokens, releases] =
+  const [
+    assets, pages, translations, presets, effectPresets, entries, sites, users, tokens, fontFaces,
+    releases,
+  ] =
     await Promise.all([
       prisma.asset.findMany({ where: { id: { in: unique } }, select: { id: true, key: true } }),
       // MỌI trang, kể cả đã lưu trữ — khôi phục là trang quay lại cùng ảnh của nó.
@@ -71,6 +74,11 @@ export async function assetReferences(ids: readonly string[]): Promise<AssetRefe
         select: { email: true, name: true, avatarAssetId: true },
       }),
       prisma.token.findMany({ select: { name: true, value: true } }),
+      // Cũng trỏ thẳng tới id như avatar: lọc ở DB.
+      prisma.fontFace.findMany({
+        where: { assetId: { in: unique } },
+        select: { assetId: true, weight: true, style: true, family: { select: { cssName: true } } },
+      }),
       /*
        * KHÔNG select `assets`: ảnh chụp đó chép MỌI asset có lúc publish, dùng hay
        * không. Doc thật của release mới là thứ nói ảnh nào đang hiện.
@@ -79,7 +87,7 @@ export async function assetReferences(ids: readonly string[]): Promise<AssetRefe
         orderBy: { createdAt: 'desc' },
         select: {
           id: true, label: true, createdAt: true,
-          components: true, translations: true, tokens: true, globals: true,
+          components: true, translations: true, tokens: true, globals: true, fonts: true,
           entries: { select: { slug: true, versionId: true } },
         },
       }),
@@ -108,6 +116,7 @@ export async function assetReferences(ids: readonly string[]): Promise<AssetRefe
       translations: r.translations,
       tokens: r.tokens,
       globals: r.globals,
+      fonts: r.fonts,
     };
     (liveIds.has(r.id) ? liveReleases : oldReleases).push(source);
   }
@@ -138,6 +147,12 @@ export async function assetReferences(ids: readonly string[]): Promise<AssetRefe
     sites,
     users,
     tokens,
+    fontFaces: fontFaces.map((f) => ({
+      assetId: f.assetId,
+      family: f.family.cssName,
+      weight: f.weight,
+      style: f.style,
+    })),
     liveReleases,
     oldReleases,
     versionDocs: new Map(versions.map((v) => [v.id, v.doc])),

@@ -17,6 +17,7 @@ import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/db';
 import { requireAuth } from '@/lib/auth/guard';
 import { sweepAssetHolds } from '@/lib/builder/asset-trash';
+import { readFontSeal } from '@/lib/fonts/seal';
 import { snapshotKey } from '@/lib/render/translations';
 import { assetSnapshot, tokenSnapshot } from '@/lib/render/release-snapshot';
 import { upsertStyleBundle } from '@/lib/render/style-bundle';
@@ -247,6 +248,14 @@ export async function POST(request: Request) {
     // `render/static-css.ts`.
     const cssHash = await upsertStyleBundle(tx);
 
+    /*
+     * Niêm phong bộ font, ĐỌC THẲNG trong transaction (không qua `draftFontSeal` có
+     * cache): `FontFace` là bản nháp, nên site thật đọc nó là bỏ qua publish — cùng lý do
+     * với `tokens`. Như token, publish bất kỳ trang nào cũng đưa bộ font hiện tại lên
+     * cho cả site; lùi bản dùng bản niêm phong của release được chọn.
+     */
+    const fonts = (await readFontSeal(tx)) as unknown as Prisma.InputJsonObject;
+
     const created = await tx.release.create({
       data: {
         siteId: site.id,
@@ -258,6 +267,7 @@ export async function POST(request: Request) {
         translations: translations as unknown as Prisma.InputJsonObject,
         components,
         tokens,
+        fonts,
         globals,
         assets,
         cssHash,

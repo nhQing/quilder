@@ -32,6 +32,8 @@ import { getSession } from '@/lib/auth/guard';
 import { prisma } from '@/lib/db';
 import { compileDoc } from '@/lib/render/css';
 import { tokenCssFromSeal } from '@/lib/render/custom-tokens';
+import { fontFaceCss } from '@/lib/fonts/css';
+import { fontSealOf } from '@/lib/fonts/seal';
 import { componentsFromSnapshot } from '@/lib/render/components';
 import { NodeRenderer, type RenderContext } from '@/lib/render/NodeRenderer';
 import { getReleasePage, listReleaseSlugs } from '@/lib/render/page';
@@ -86,6 +88,8 @@ export default async function ReleasePreview({
   const components = componentsFromSnapshot(page.components);
   const { css } = compileDoc(page.doc, components);
   const tokenCss = tokenCssFromSeal(page.tokens);
+  // Font của CHÍNH release này, như `PublishedPageView` — xem lý do `fontSealOf` ở đó.
+  const fontCss = fontFaceCss(fontSealOf(page.fonts));
 
   const ctx: RenderContext = {
     doc: page.doc,
@@ -113,6 +117,13 @@ export default async function ReleasePreview({
 
   return (
     <>
+      {fontCss && (
+        <style
+          data-mm-fonts=""
+          // eslint-disable-next-line react/no-danger
+          dangerouslySetInnerHTML={{ __html: fontCss }}
+        />
+      )}
       {tokenCss && (
         <style
           data-mm-tokens=""

@@ -5,6 +5,7 @@ import { EffectRuntime } from '@/lib/motion/EffectRuntime';
 import { getDraftPage } from '@/lib/builder/queries';
 import { compileDoc } from '@/lib/render/css';
 import { customTokensCss } from '@/lib/render/custom-tokens';
+import { draftFontFaceCss } from '@/lib/fonts/seal';
 import { loadComponents } from '@/lib/render/components';
 import { applyTranslations } from '@/lib/render/translations';
 import { getLocales, listDraftTranslations } from '@/lib/i18n/queries';
@@ -225,6 +226,8 @@ export default async function PreviewPage({
   ]);
   const { css } = compileDoc(doc, components);
   const tokenCss = await customTokensCss();
+  // Kho font BẢN NHÁP: xem nháp là thứ SẼ lên ở lần Publish tới, kể cả font.
+  const fontCss = await draftFontFaceCss();
 
   const ctx: RenderContext = {
     doc,
@@ -249,6 +252,13 @@ export default async function PreviewPage({
 
   return (
     <>
+      {fontCss && (
+        <style
+          data-mm-fonts=""
+          // eslint-disable-next-line react/no-danger
+          dangerouslySetInnerHTML={{ __html: fontCss }}
+        />
+      )}
       {tokenCss && (
         <style
           data-mm-tokens=""

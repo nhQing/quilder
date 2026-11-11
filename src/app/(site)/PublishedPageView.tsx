@@ -1,6 +1,8 @@
 import { EffectRuntime } from '@/lib/motion/EffectRuntime';
 import { compileDoc } from '@/lib/render/css';
 import { foundationOverrideCss, tokenCssFromSeal } from '@/lib/render/custom-tokens';
+import { fontFaceCss } from '@/lib/fonts/css';
+import { fontSealOf } from '@/lib/fonts/seal';
 import { componentsFromSnapshot } from '@/lib/render/components';
 import { collectEffects, NodeRenderer, type RenderContext } from '@/lib/render/NodeRenderer';
 import { ViewCounter } from '@/components/site/ViewCounter';
@@ -158,6 +160,12 @@ export async function PublishedPageView({
 
   const { css } = compileDoc(doc, components);
   const tokenCss = tokenCssFromSeal(page.tokens);
+  /*
+   * Bản niêm phong font của release — KHÔNG đọc bảng `FontFace` (bản nháp). Release trước
+   * tính năng font cho chuỗi rỗng, nên không có thẻ nào. `fontSealOf` lần nữa vì
+   * `page` có thể đến từ `unstable_cache` ghi trước lần deploy này, khi đó chưa có `fonts`.
+   */
+  const fontCss = fontFaceCss(fontSealOf(page.fonts));
 
   /*
    * Màu nền tảng đọc bảng LIVE, không đọc ảnh chụp — ngoại lệ có chủ đích.
@@ -204,6 +212,13 @@ export async function PublishedPageView({
     <>
       {/* Inline trong body chứ không phải <head>: Next cho phép, và nó tiết kiệm
           một round-trip. Kích thước bị chặn bởi số node, không phải bởi framework. */}
+      {fontCss && (
+        <style
+          data-mm-fonts=""
+          // eslint-disable-next-line react/no-danger
+          dangerouslySetInnerHTML={{ __html: fontCss }}
+        />
+      )}
       {tokenCss && (
         <style
           data-mm-tokens=""

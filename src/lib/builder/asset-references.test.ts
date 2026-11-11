@@ -64,6 +64,9 @@ const db = {
   },
   user: { findMany: fn([] as unknown[]) },
   token: { findMany: fn([] as unknown[]) },
+  fontFace: {
+    findMany: fn([{ assetId: IMG, weight: '400', style: 'italic', family: { cssName: 'Gilroy' } }]),
+  },
   /*
    * Ba release, mới nhất trước — đúng thứ tự `orderBy` mà hàm hỏi. Site đã LÙI về
    * `r-mid`: `r-new` mới hơn nhưng không chạy. Cả ba trỏ chung version `v1`.
@@ -159,6 +162,23 @@ describe('assetReferences', () => {
     await assetReferences([IMG]);
     const arg = db.release.findMany.mock.calls[0]![0] as { select: Record<string, unknown> };
     expect(arg.select).not.toHaveProperty('assets');
+  });
+
+  it('select Release.fonts — file font của release cũ phải được thấy', async () => {
+    await assetReferences([IMG]);
+    const arg = db.release.findMany.mock.calls[0]![0] as { select: Record<string, unknown> };
+    expect(arg.select).toHaveProperty('fonts', true);
+  });
+
+  it('face trong FontFace đi từ bảng tới kết quả, lọc theo id ở DB', async () => {
+    const out = await assetReferences([IMG]);
+    expect(out.get(IMG)!.blocking).toContainEqual({
+      kind: 'token',
+      label: 'Font “Gilroy” 400 italic',
+      href: '/builder/settings/fonts',
+    });
+    const arg = db.fontFace.findMany.mock.calls[0]![0] as { where: unknown };
+    expect(arg.where).toEqual({ assetId: { in: [IMG] } });
   });
 
   it('nạp mọi trang, kể cả đã lưu trữ', async () => {
