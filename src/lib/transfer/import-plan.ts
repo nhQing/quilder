@@ -10,9 +10,12 @@ import { findOrphanOverrides } from '@/lib/builder/orphan-overrides';
 import { parsePageCollection, type PageCollection } from '@/lib/builder/page-collection';
 import { isTemplateSlug } from '@/lib/builder/slug';
 import { TOKEN_COLOR_RE, TOKEN_NAME_RE } from '@/lib/design/foundations';
+import { isSafeTokenValue } from '@/lib/design/token-value';
 import { endpointFormsIn } from '@/lib/doc/endpoint-usage';
+import { isReservedFamilyName } from '@/lib/fonts/builtin';
+import { fontTokenName, fontTokenValue } from '@/lib/fonts/token';
 import type { CompatResult } from './compat';
-import { tokenRefsOf, type TreeShape } from './collect';
+import { assetUses, tokenRefsOf, type TreeShape } from './collect';
 import { issue, type TransferIssue } from './guides';
 import type { PageBundle } from './manifest';
 
@@ -33,10 +36,16 @@ export interface TargetSnapshot {
   embedHosts: string[];
   collectionTypes: Map<string, { fields: string[] }>;
   folders: string[];
+  /**
+   * Họ font ở đích trùng `slug` hoặc trùng `cssName` (không phân biệt hoa thường) với một họ
+   * trong gói. `key`: khoá file của face — khoá theo nội dung mang 8 hex đầu của sha256.
+   */
+  fontFamilies: { id: string; slug: string; cssName: string; faces: { weight: string; style: string; unicodeRange: string; key: string }[] }[];
 }
 export type ImportTarget = { kind: 'existing'; pageId: string } | { kind: 'new'; slug: string; title: string };
 export interface AssetPlanRow { sourceId: string; name: string; sha256: string; bytes: number; mime: string; folder: string | null; alt: string | null; file: string; status: 'reuse' | 'restore' | 'upload'; targetId: string | null; targetKey: string }
 export interface ComponentPlanRow { sourceId: string; key: string; name: string; action: 'create' | 'use-target'; targetId: string | null; differs: boolean; orphanOverrides: number }
+export interface FontPlanRow { slug: string; cssName: string; action: 'create' | 'use-target'; targetId: string | null }
 export interface ImportPlan {
   source: { siteName: string; origin: string; exportedBy: string; exportedAt: string; slug: string; title: string };
   choices: { id: string; slug: string; title: string }[];   // trang đích chọn được (đã lọc dạng)
@@ -45,6 +54,7 @@ export interface ImportPlan {
   assets: AssetPlanRow[];
   components: ComponentPlanRow[];
   tokens: { name: string; action: 'create' | 'keep'; differs: boolean }[];
+  fonts: FontPlanRow[];
   locales: { code: string; status: 'ok' | 'disabled' | 'missing'; count: number }[];
   folders: string[];
   issues: TransferIssue[];
@@ -65,6 +75,95 @@ function shapeOf(tree: TreeShape): string {
 function sameShape(bundleCol: PageCollection | null, page: { slug: string; collection: PageCollection | null }): boolean {
   if (!bundleCol) return !page.collection && !isTemplateSlug(page.slug);
   return page.collection?.typeKey === bundleCol.typeKey && page.collection.param === bundleCol.param;
+}
+
+type FaceShape = { weight: string; style: string; unicodeRange: string };
+const faceKey = (f: FaceShape) => `${f.weight}|${f.style}|${f.unicodeRange}`;
+const faceLabel = (f: FaceShape) => `weight ${f.weight}${f.style === 'italic' ? ' italic' : ''}`;
+/** 8 hex đầu của sha256 trong khoá theo nội dung (`…-1a2b3c4d.woff2`). */
+const KEY_DIGEST_RE = /-([0-9a-f]{8})(?:\.[a-z0-9]+)?$/;
+
+/**
+ * Họ font của gói so với đích, theo `slug` (spec §13.2):
+ *  - chưa có → tạo họ, face, token (file đi đường ảnh);
+ *  - có → dùng bản ở đích; thiếu face hoặc file khác thì thành việc cần làm (C8), như component trùng khoá;
+ *  - chưa có mà `cssName` trùng họ khác slug, trùng họ có sẵn, hoặc token `font-<slug>` đã bị chiếm → chặn (G11).
+ */
+function planFonts(bundle: PageBundle, snap: TargetSnapshot): { rows: FontPlanRow[]; issues: TransferIssue[] } {
+  const issues: TransferIssue[] = [];
+  const shaOf = new Map(bundle.assets.map((a) => [a.id, a.sha256]));
+
+  const rows: FontPlanRow[] = bundle.fonts.map((f) => {
+    const there = snap.fontFamilies.find((x) => x.slug === f.slug);
+    if (there) {
+      const missing = new Set<string>();
+      const changed = new Set<string>();
+      for (const face of f.faces) {
+        const hit = there.faces.find((x) => faceKey(x) === faceKey(face));
+        if (!hit) {
+          // Đích có cùng weight/style ở dải ký tự khác: nêu dải thiếu; không có gì thì chỉ nêu weight.
+          const partial = there.faces.some((x) => x.weight === face.weight && x.style === face.style);
+          missing.add(partial ? `${faceLabel(face)} (${face.subset || 'dải ký tự khác'})` : faceLabel(face));
+        } else if (KEY_DIGEST_RE.exec(hit.key)?.[1] !== shaOf.get(face.assetRef)?.slice(0, 8)) {
+          changed.add(faceLabel(face));
+        }
+      }
+      const diff = [
+        ...(missing.size ? [`thiếu ${[...missing].join(', ')}`] : []),
+        ...(changed.size ? [`có file ${[...changed].join(', ')} khác bản trong gói`] : []),
+      ];
+      if (diff.length) {
+        issues.push(issue('font-differs', 'todo', {
+          vars: { name: there.cssName, diff: diff.join(' và ') },
+          items: [{ label: 'Mở Cài đặt › Font', href: '/builder/settings/fonts' }],
+        }));
+      }
+      return { slug: f.slug, cssName: f.cssName, action: 'use-target', targetId: there.id };
+    }
+
+    const lower = f.cssName.trim().toLowerCase();
+    const clash = snap.fontFamilies.find((x) => x.cssName.trim().toLowerCase() === lower);
+    const reason = isReservedFamilyName(f.cssName) ? 'đó là tên một font có sẵn hoặc tên dự phòng của hệ thống'
+      : clash ? `ở đây đã có họ "${clash.cssName}" (token font-${clash.slug})`
+      : snap.tokens.has(fontTokenName(f.slug)) ? `ở đây đã có biến "${fontTokenName(f.slug)}" không thuộc họ font nào`
+      : null;
+    if (reason) issues.push(issue('font-name-taken', 'block', { vars: { name: f.cssName, slug: f.slug, reason } }));
+    return { slug: f.slug, cssName: f.cssName, action: 'create', targetId: null };
+  });
+
+  // Họ sẽ TẠO: token của nó đi thẳng vào stylesheet (cùng luật với màn Font), và face hay slug
+  // trùng nhau trong gói sẽ vỡ khoá unique giữa transaction.
+  const bad = bundle.fonts.filter((f, i) =>
+    rows[i]!.action === 'create'
+    && (!TOKEN_NAME_RE.test(fontTokenName(f.slug))
+      || !isSafeTokenValue(fontTokenValue(f.cssName, f.fallback))
+      || new Set(f.faces.map(faceKey)).size !== f.faces.length
+      || bundle.fonts.filter((x) => x.slug === f.slug).length > 1));
+  if (bad.length) {
+    issues.push(issue('file-corrupt', 'block', {
+      detail: `${bad.length} họ font trong gói không hợp lệ.`,
+      items: bad.map((f) => ({ label: `${f.cssName} (${fontTokenName(f.slug)})` })),
+    }));
+  }
+  return { rows, issues };
+}
+
+/**
+ * File font chỉ thuộc họ GIỮ bản ở đích thì không cần lên kho: không ai trỏ tới chúng. Bỏ khỏi
+ * kế hoạch ảnh để không tải lên file mồ côi (trừ khi doc cũng dùng chính file đó).
+ */
+function unneededFontAssets(bundle: PageBundle, compat: CompatResult, rows: FontPlanRow[]): Set<string> {
+  const refs = (action: FontPlanRow['action']) => new Set(bundle.fonts
+    .filter((_, i) => rows[i]!.action === action)
+    .flatMap((f) => f.faces.map((x) => x.assetRef)));
+  const kept = refs('use-target');
+  if (!kept.size || !compat.doc) return new Set();
+  const created = refs('create');
+  const used = assetUses({
+    doc: compat.doc, trees: compat.trees,
+    translations: bundle.translations.map((t) => ({ ...t, value: t.value })), ogImageId: bundle.page.ogImageId,
+  });
+  return new Set([...kept].filter((id) => !created.has(id) && !used.has(id)));
 }
 
 export function buildImportPlan(
@@ -110,7 +209,11 @@ export function buildImportPlan(
     if (!snap.collectionTypes.has(typeKey)) issues.push(issue('collection-missing', 'todo', { vars: { typeKey } }));
   }
 
-  const assets: AssetPlanRow[] = bundle.assets.map((a) => {
+  const fontPlan = planFonts(bundle, snap);
+  issues.push(...fontPlan.issues);
+  const skipAssets = unneededFontAssets(bundle, compat, fontPlan.rows);
+
+  const assets: AssetPlanRow[] = bundle.assets.filter((a) => !skipAssets.has(a.id)).map((a) => {
     const keys = candidateKeys(a);
     const derived = keys[keys.length - 1]!;
     // Khoá suy ra chứa sha nên trùng khoá là trùng nội dung. Khoá nguồn kiểu cũ (không chứa sha)
@@ -143,13 +246,17 @@ export function buildImportPlan(
     }));
   }
 
-  const tokens = bundle.tokens.map((t) => {
+  // Token của họ font do phần font lo (tạo cùng họ, hoặc giữ bản ở đích) — gói sửa tay có nhét nó
+  // vào `tokens[]` cũng không tạo hai lần.
+  const fontTokenNames = new Set(bundle.fonts.map((f) => fontTokenName(f.slug)));
+  const plainTokens = bundle.tokens.filter((t) => !fontTokenNames.has(t.name));
+  const tokens = plainTokens.map((t) => {
     const there = snap.tokens.get(t.name);
     return { name: t.name, action: there === undefined ? ('create' as const) : ('keep' as const), differs: there !== undefined && there !== t.value };
   });
   // Token sẽ TẠO đi thẳng vào stylesheet (`:root { --tên: giá-trị }`): cùng luật với ô tạo token,
   // vì gói sửa tay có thể nhét chuỗi CSS bất kỳ.
-  const badTokens = bundle.tokens.filter((t) =>
+  const badTokens = plainTokens.filter((t) =>
     tokens.find((x) => x.name === t.name)?.action === 'create'
     && (!TOKEN_NAME_RE.test(t.name) || (t.category === 'color' && !TOKEN_COLOR_RE.test(t.value))));
   if (badTokens.length) {
@@ -161,7 +268,7 @@ export function buildImportPlan(
 
   // Token tĩnh nằm trong tokens.css của bản builder; đích chưa có thì `var(--x)` rỗng → G3.
   if (compat.doc) {
-    const own = new Set(bundle.tokens.map((t) => t.name));
+    const own = new Set([...bundle.tokens.map((t) => t.name), ...fontTokenNames]);
     const unknown = tokenRefsOf([compat.doc.nodes, ...[...compat.trees.values()].map((t) => t.nodes)])
       .filter((n) => !own.has(n) && !snap.tokenNames.has(n));
     if (unknown.length) {
@@ -201,7 +308,7 @@ export function buildImportPlan(
       siteName: bundle.source.siteName, origin: bundle.source.origin, exportedBy: bundle.exportedBy,
       exportedAt: bundle.exportedAt, slug: bundle.page.slug, title: bundle.page.title,
     },
-    choices, suggestedPageId, target: resolved, assets, components, tokens, locales,
+    choices, suggestedPageId, target: resolved, assets, components, tokens, fonts: fontPlan.rows, locales,
     folders: snap.folders, issues,
   };
 }

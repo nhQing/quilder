@@ -3,6 +3,35 @@ import { BUNDLE_FORMAT, BUNDLE_FORMAT_VERSION } from './manifest';
 
 export const SHA = 'a'.repeat(64);
 
+/** Hai file font của họ Gilroy trong gói mẫu: weight 300 (sha `b…`) và 400 (sha `c…`). */
+export const FONT_SHA_300 = 'b'.repeat(64);
+export const FONT_SHA_400 = 'c'.repeat(64);
+
+export function fontAsset(id: string, name: string, sha: string) {
+  return {
+    id, key: `public/builder/${name}-${sha.slice(0, 8)}.woff2`, name: `${name}.woff2`,
+    kind: 'font', mime: 'font/woff2', bytes: 20, width: null, height: null, blurhash: null,
+    alt: null, folder: 'fonts/gilroy', sha256: sha, file: `files/${sha}.woff2`,
+  };
+}
+
+export const GILROY_ASSETS = [
+  fontAsset('cfont000000000000000000300', 'gilroy-light', FONT_SHA_300),
+  fontAsset('cfont000000000000000000400', 'gilroy-regular', FONT_SHA_400),
+];
+
+export function sampleFont(over: Record<string, unknown> = {}) {
+  return {
+    slug: 'gilroy', cssName: 'Gilroy', fallback: 'system-ui, sans-serif', source: 'upload',
+    googleFamily: null, licenseNote: 'Mua bản web 2025',
+    faces: [
+      { weight: '300', style: 'normal', unicodeRange: '', subset: '', assetRef: 'cfont000000000000000000300' },
+      { weight: '400', style: 'normal', unicodeRange: '', subset: '', assetRef: 'cfont000000000000000000400' },
+    ],
+    ...over,
+  };
+}
+
 export function sampleBundle(over: Record<string, unknown> = {}) {
   return {
     format: BUNDLE_FORMAT,

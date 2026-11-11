@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { sampleBundle, SHA } from './fixtures';
+import { GILROY_ASSETS, sampleBundle, sampleFont, SHA } from './fixtures';
 import { bundleFileName, fileEntryName, parseBundle, uploadNameOf } from './manifest';
 
 describe('parseBundle', () => {
@@ -83,6 +83,33 @@ describe('đuôi file trong zip', () => {
     expect(fileEntryName(SHA, 'a/b.tar_gz')).toBe(`files/${SHA}`);
     expect(fileEntryName(SHA, 'a/b.abcdefghi')).toBe(`files/${SHA}`);
     expect(fileEntryName(SHA, 'a/b.PNG')).toBe(`files/${SHA}.png`);
+  });
+});
+
+describe('fonts[] (họ font tải lên mà trang dùng)', () => {
+  it('gói cũ không có trường fonts vẫn hợp lệ, fonts = []', () => {
+    const old: Record<string, unknown> = { ...sampleBundle() };
+    expect('fonts' in old).toBe(false);
+    const r = parseBundle(old);
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.bundle.fonts).toEqual([]);
+  });
+
+  it('nhận họ font đúng hình dạng', () => {
+    const r = parseBundle(sampleBundle({ fonts: [sampleFont()], assets: GILROY_ASSETS }));
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.bundle.fonts[0]).toMatchObject({ slug: 'gilroy', cssName: 'Gilroy', faces: [{ weight: '300', assetRef: GILROY_ASSETS[0]!.id }, { weight: '400' }] });
+  });
+
+  it('từ chối slug lạ, style lạ, weight lạ', () => {
+    for (const bad of [
+      sampleFont({ slug: '../x' }),
+      sampleFont({ slug: 'Gilroy' }),
+      sampleFont({ faces: [{ weight: '300', style: 'oblique', unicodeRange: '', subset: '', assetRef: 'a' }] }),
+      sampleFont({ faces: [{ weight: 'bold', style: 'normal', unicodeRange: '', subset: '', assetRef: 'a' }] }),
+    ]) {
+      expect(parseBundle(sampleBundle({ fonts: [bad] })).ok).toBe(false);
+    }
   });
 });
 

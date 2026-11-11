@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import type { AssetUse } from './collect';
 import {
@@ -102,6 +102,80 @@ describe('missingComponentRefs', () => {
       i3: { id: 'i3', type: 'Instance', componentId: 'ok' },
     } as never;
     expect(missingComponentRefs(nodes, new Set(['ok']))).toEqual([{ nodeId: 'i1' }, { nodeId: 'i2' }]);
+  });
+});
+
+describe('buildExport - họ font (spec §13.1)', () => {
+  const base = { children: [], effects: [] };
+  const doc = {
+    schemaVersion: 2, rootId: 'root',
+    nodes: {
+      root: { ...base, id: 'root', type: 'Section', tag: 'main', parentId: null, children: ['h'], style: { base: {} } },
+      h: {
+        ...base, id: 'h', type: 'Text', tag: 'h1', parentId: 'root', content: [{ t: 'text', v: 'Chào' }],
+        style: { base: { typography: { family: { $token: 'font-gilroy' }, color: { $token: 'mau-rieng' } } } },
+      },
+    },
+  };
+  const assets = [
+    { id: 'cfont300', key: 'public/builder/gilroy-light-bbbbbbbb.woff2', url: 'https://s3/public/builder/gilroy-light-bbbbbbbb.woff2', kind: 'font', mime: 'font/woff2', bytes: 3, width: null, height: null, blurhash: null, alt: null, folder: 'fonts/gilroy' },
+    { id: 'cfont400', key: 'public/builder/gilroy-regular-cccccccc.woff2', url: 'https://s3/public/builder/gilroy-regular-cccccccc.woff2', kind: 'font', mime: 'font/woff2', bytes: 3, width: null, height: null, blurhash: null, alt: null, folder: 'fonts/gilroy' },
+  ];
+
+  async function run() {
+    vi.resetModules();
+    const fontQuery = vi.fn(async () => [{
+      slug: 'gilroy', cssName: 'Gilroy', fallback: 'system-ui, sans-serif', source: 'upload', googleFamily: null, licenseNote: 'Mua bản web',
+      faces: [
+        { weight: '400', style: 'normal', unicodeRange: '', subset: '', assetId: 'cfont400' },
+        { weight: '300', style: 'normal', unicodeRange: '', subset: '', assetId: 'cfont300' },
+      ],
+    }]);
+    vi.doMock('@/lib/db', () => ({
+      prisma: {
+        page: {
+          findUnique: async () => ({
+            id: 'p1', slug: 'abc', title: 'ABC', description: null, canonical: null, noindex: false, jsonLd: null,
+            ogImageId: null, collection: null, draftVersion: { doc }, site: { name: 'Demo' },
+          }),
+        },
+        preset: { findMany: async () => [] },
+        translation: { findMany: async () => [] },
+        asset: { findMany: async (q: { where: { id: { in: string[] } } }) => assets.filter((a) => q.where.id.in.includes(a.id)) },
+        token: {
+          findMany: async () => [
+            { name: 'font-gilroy', value: '"Gilroy", system-ui, sans-serif', category: 'font', group: null, aiDescription: null },
+            { name: 'mau-rieng', value: '#112233', category: 'color', group: null, aiDescription: null },
+          ],
+        },
+        locale: { findMany: async () => [] },
+        fontFamily: { findMany: fontQuery },
+      },
+    }));
+    vi.doMock('@/lib/assets/s3', () => ({ getObject: async () => new Uint8Array([1, 2, 3]) }));
+    vi.doMock('@/lib/site/origin', () => ({ configuredSiteOrigin: async () => null }));
+    const { buildExport } = await import('./export');
+    const r = await buildExport('p1', 'a@b.c');
+    return { r, fontQuery };
+  }
+
+  it('trang dùng font-gilroy → fonts có một họ, assetRef trỏ vào assets[], token của họ không nằm trong tokens[]', async () => {
+    const { r, fontQuery } = await run();
+    if (!r.ok) throw new Error(r.error);
+    expect(r.issues).toEqual([]);
+    expect(fontQuery).toHaveBeenCalledWith(expect.objectContaining({ where: { slug: { in: ['gilroy'] } } }));
+    expect(r.bundle.fonts).toEqual([{
+      slug: 'gilroy', cssName: 'Gilroy', fallback: 'system-ui, sans-serif', source: 'upload', googleFamily: null, licenseNote: 'Mua bản web',
+      faces: [
+        { weight: '300', style: 'normal', unicodeRange: '', subset: '', assetRef: 'cfont300' },
+        { weight: '400', style: 'normal', unicodeRange: '', subset: '', assetRef: 'cfont400' },
+      ],
+    }]);
+    const ids = new Set(r.bundle.assets.map((a) => a.id));
+    for (const f of r.bundle.fonts[0]!.faces) expect(ids.has(f.assetRef)).toBe(true);
+    // File font đi cùng đường với ảnh: files/<sha256>.<đuôi>.
+    expect(r.files.map((f) => f.entry)).toEqual([expect.stringMatching(/^files\/[0-9a-f]{64}\.woff2$/)]);
+    expect(r.bundle.tokens.map((t) => t.name)).toEqual(['mau-rieng']);
   });
 });
 

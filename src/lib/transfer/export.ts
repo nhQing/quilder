@@ -25,8 +25,9 @@ import { IMPORT_FILE_LIMIT } from './compat';
 import { issue, type IssueItem, type TransferIssue } from './guides';
 import {
   BUNDLE_FORMAT, BUNDLE_FORMAT_VERSION, MAX_BUNDLE_ASSETS, MAX_MANIFEST_BYTES,
-  fileEntryName, uploadNameOf, type PageBundle,
+  fileEntryName, uploadNameOf, type BundleFont, type PageBundle,
 } from './manifest';
+import { fontTokenName } from '@/lib/fonts/token';
 import { configuredSiteOrigin } from '@/lib/site/origin';
 
 /** Host của site nguồn ghi vào gói; `'localhost'` khi chưa đặt domain (như trước). */
@@ -219,9 +220,32 @@ export async function buildExport(
     where: { pageId },
     select: { locale: true, nodeId: true, field: true, value: true, sourceHash: true },
   });
+  const customTokens = await prisma.token.findMany({
+    where: { custom: true },
+    select: { name: true, value: true, category: true, group: true, aiDescription: true },
+  });
+  const tokenNames = new Set(tokenNamesOf([doc.nodes, ...[...trees.values()].map((t) => t.nodes)], new Set(customTokens.map((t) => t.name))));
+
+  // Họ font tải lên mà trang dùng: token `font-<slug>` (tự tạo) khớp một FontFamily. Họ có sẵn
+  // của lõi không có hàng FontFamily nên tự rơi ra ngoài (spec §13.1). File font đi cùng đường
+  // với ảnh: một dòng trong `assets[]`, nén vào `files/<sha256>.<đuôi>`.
+  const fontSlugs = [...tokenNames].filter((n) => n.startsWith('font-')).map((n) => n.slice('font-'.length));
+  const families = fontSlugs.length
+    ? await prisma.fontFamily.findMany({
+      where: { slug: { in: fontSlugs } },
+      orderBy: { slug: 'asc' },
+      select: {
+        slug: true, cssName: true, fallback: true, source: true, googleFamily: true, licenseNote: true,
+        faces: { select: { weight: true, style: true, unicodeRange: true, subset: true, assetId: true } },
+      },
+    })
+    : [];
+  const fontTokens = new Set(families.map((f) => fontTokenName(f.slug)));
+  const fontAssetIds = families.flatMap((f) => f.faces.map((x) => x.assetId));
+
   const uses = assetUses({ doc, trees, translations, ogImageId: page.ogImageId });
   const assetRows = await prisma.asset.findMany({
-    where: { id: { in: [...uses.keys()] } },
+    where: { id: { in: [...new Set([...uses.keys(), ...fontAssetIds])] } },
     select: { id: true, key: true, url: true, kind: true, mime: true, bytes: true, width: true, height: true, blurhash: true, alt: true, folder: true },
   });
   const rows = new Map(assetRows.map((a) => [a.id, { name: uploadNameOf(a.key), bytes: a.bytes }]));
@@ -231,12 +255,6 @@ export async function buildExport(
     pageId, uses, rows, missingComponents, nodeLabels,
     collection: Boolean(page.collection) || needsOf(doc, trees, null).collectionTypes.length > 0,
   }));
-
-  const customTokens = await prisma.token.findMany({
-    where: { custom: true },
-    select: { name: true, value: true, category: true, group: true, aiDescription: true },
-  });
-  const tokenNames = new Set(tokenNamesOf([doc.nodes, ...[...trees.values()].map((t) => t.nodes)], new Set(customTokens.map((t) => t.name))));
 
   const locales = await prisma.locale.findMany({
     where: { code: { in: [...new Set(translations.map((t) => t.locale))] } },
@@ -293,8 +311,16 @@ export async function buildExport(
     translations,
     locales,
     components: presets.map((p) => ({ id: p.id, key: p.key, name: p.name, category: p.category, aiDescription: p.aiDescription, tree: trees.get(p.id)! })),
-    tokens: customTokens.filter((t) => tokenNames.has(t.name)),
+    // Token của họ font không xuất riêng: đích dựng lại nó từ `fonts[]`.
+    tokens: customTokens.filter((t) => tokenNames.has(t.name) && !fontTokens.has(t.name)),
     assets: bundleAssets,
+    fonts: families.map((f) => ({
+      slug: f.slug, cssName: f.cssName, fallback: f.fallback, source: f.source as BundleFont['source'],
+      googleFamily: f.googleFamily, licenseNote: f.licenseNote,
+      faces: f.faces
+        .map((x) => ({ weight: x.weight, style: x.style as BundleFont['faces'][number]['style'], unicodeRange: x.unicodeRange, subset: x.subset, assetRef: x.assetId }))
+        .sort((a, b) => parseInt(a.weight, 10) - parseInt(b.weight, 10) || a.style.localeCompare(b.style) || a.unicodeRange.localeCompare(b.unicodeRange)),
+    })),
     needs: needsOf(doc, trees, page.collection),
   };
 

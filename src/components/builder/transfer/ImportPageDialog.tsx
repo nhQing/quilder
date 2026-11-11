@@ -276,6 +276,7 @@ function ImportPageDialog({ onClose }: { onClose: () => void }) {
 
             <ul className="text-small">
               {plan.components.map((c) => <li key={c.key}>Component {c.name} — {c.action === 'create' ? 'chưa có, sẽ tạo mới' : `dùng bản đang có ở đây${c.differs ? ' ⚠ khác bản trong file' : ''}`}</li>)}
+              {plan.fonts.map((f) => <li key={f.slug}>Họ font {f.cssName} — {f.action === 'create' ? 'chưa có, sẽ tạo mới' : 'dùng bản đang có ở đây'}</li>)}
               {plan.tokens.length > 0 && <li>Token tự tạo: {plan.tokens.filter((t) => t.action === 'create').length} tạo mới · {plan.tokens.filter((t) => t.action === 'keep').length} đã có (giữ giá trị ở đây)</li>}
               {plan.locales.map((l) => <li key={l.code}>Ngôn ngữ {l.code} — {l.count} bản dịch{l.status === 'missing' ? ' (bỏ qua: chưa có ngôn ngữ này)' : l.status === 'disabled' ? ' (ngôn ngữ đang tắt)' : ''}</li>)}
             </ul>

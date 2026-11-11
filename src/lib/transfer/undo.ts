@@ -2,7 +2,7 @@ import 'server-only';
 
 /**
  * Hoàn tác một lần nhập — spec §10. Chỉ khi chưa ai sửa trang sau lần nhập. Không xoá
- * component / token / ảnh đã tạo (kể cả ảnh lấy ra khỏi thùng rác hay alt đã điền): đó là dữ
+ * component / token / họ font / ảnh đã tạo (kể cả ảnh lấy ra khỏi thùng rác hay alt đã điền): đó là dữ
  * liệu dùng chung, có thể đã được trang khác dùng.
  *
  * "Chưa ai sửa" là BA điều, vì chỉ sửa bố cục mới dời con trỏ nháp:

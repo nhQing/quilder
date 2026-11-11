@@ -29,9 +29,9 @@ import { revalidateTag } from 'next/cache';
 
 import { BUILTIN_FAMILIES, isReservedFamilyName } from './builtin';
 import { toWoff2 } from './convert';
-import { cssFamilyName } from './css';
 import { inspectFont } from './inspect';
 import { fontSealOf } from './seal';
+import { describeFontFamily, fontTokenName, fontTokenValue } from './token';
 import { SUBSET_UNICODE_RANGE } from './unicode';
 import { type TokenUsage, type UsageRef, tokenUsage, tokenUsageMany } from './usage';
 import {
@@ -126,8 +126,6 @@ export function slugify(cssName: string): string {
     .replace(/-+$/g, '');
 }
 
-const tokenNameOf = (slug: string) => `font-${slug}`;
-const tokenValueOf = (cssName: string, fallback: string) => `${cssFamilyName(cssName)}, ${fallback}`;
 const asStyle = (s: string): FontStyle => (s === 'italic' ? 'italic' : 'normal');
 const asWarnings = (codes: string[]): FontWarningCode[] =>
   codes.filter((c): c is FontWarningCode => c in WARNING_MESSAGES);
@@ -181,20 +179,12 @@ async function checkFamilyName(name: string, fallback: string, excludeId?: strin
       `Đã có họ font "${other.cssName}" (tên font không phân biệt hoa thường). Hãy đặt tên khác, ví dụ "${name} Web".`,
     );
   }
-  if (!isSafeTokenValue(tokenValueOf(name, fallback))) {
+  if (!isSafeTokenValue(fontTokenValue(name, fallback))) {
     throw new FontError(
       'name_required',
       'Tên họ có ký tự không dùng được trong CSS (" \\ ; { } < > ! @) hoặc quá dài. Hãy nhập tên khác.',
     );
   }
-}
-
-/** `aiDescription` của token họ (§4): `Họ font <cssName> (<nguồn>), weight …`. */
-function describeFamily(cssName: string, source: string, faces: { weight: string; style: string }[]): string {
-  const label = source === 'google' ? 'Google Fonts' : 'tải lên';
-  const weights = [...new Set(faces.map((f) => (f.style === 'italic' ? `${f.weight} italic` : f.weight)))]
-    .sort((a, b) => parseInt(a, 10) - parseInt(b, 10) || a.localeCompare(b));
-  return `Họ font ${cssName} (${label}), weight ${weights.join(', ') || '(chưa có face)'}`;
 }
 
 function inUse(what: string, usage: TokenUsage): FontError {
@@ -255,7 +245,7 @@ async function planFamily(name: string, fallback: string, adoptToken?: boolean) 
       );
     }
     const token = await prisma.token.findUnique({
-      where: { name: tokenNameOf(slug) },
+      where: { name: fontTokenName(slug) },
       select: { id: true, custom: true },
     });
     if (token) {
@@ -263,7 +253,7 @@ async function planFamily(name: string, fallback: string, adoptToken?: boolean) 
       else {
         throw new FontError(
           'slug_taken',
-          `Đã có biến "${tokenNameOf(slug)}" trong design system. Hãy đặt tên họ khác để không đè lên nó.`,
+          `Đã có biến "${fontTokenName(slug)}" trong design system. Hãy đặt tên họ khác để không đè lên nó.`,
         );
       }
     }
@@ -296,7 +286,7 @@ export async function previewFaces(input: {
       ...(existing ? { id: existing.id } : {}),
       slug,
       cssName: existing?.cssName ?? name,
-      token: tokenNameOf(slug),
+      token: fontTokenName(slug),
       created: !existing,
     },
     faces: input.faces.map((f) => ({
@@ -336,7 +326,7 @@ export async function addFace(input: AddFaceInput, actor: Actor): Promise<FontUp
   const { existing, slug, adopt } = await planFamily(name, fallback, input.adoptToken);
 
   const cssName = existing?.cssName ?? name;
-  const tokenName = tokenNameOf(slug);
+  const tokenName = fontTokenName(slug);
   const subset = input.prepared?.subset ?? '';
   const matchOf = (range: string) =>
     existing?.faces.find((f) => f.weight === weight && f.style === style && f.unicodeRange === range);
@@ -411,7 +401,7 @@ export async function addFace(input: AddFaceInput, actor: Actor): Promise<FontUp
     }
 
     const facesAfter = [...(existing?.faces ?? []).filter((f) => f.id !== match?.id), { weight, style }];
-    const aiDescription = describeFamily(cssName, existing?.source ?? source, facesAfter);
+    const aiDescription = describeFontFamily(cssName, existing?.source ?? source, facesAfter);
     if (existing) {
       await tx.token.updateMany({ where: { name: tokenName }, data: { aiDescription } });
     } else if (adopt) {
@@ -419,7 +409,7 @@ export async function addFace(input: AddFaceInput, actor: Actor): Promise<FontUp
       await tx.token.update({ where: { id: adopt.id }, data: { category: 'font', aiDescription } });
     } else {
       await tx.token.create({
-        data: { name: tokenName, value: tokenValueOf(cssName, fallback), category: 'font', custom: true, aiDescription },
+        data: { name: tokenName, value: fontTokenValue(cssName, fallback), category: 'font', custom: true, aiDescription },
       });
     }
 
@@ -499,7 +489,7 @@ export async function updateFamily(
   }
   if (!Object.keys(data).length) return;
 
-  const tokenName = tokenNameOf(fam.slug);
+  const tokenName = fontTokenName(fam.slug);
   const tokenChanged = data.cssName !== undefined || data.fallback !== undefined;
   await prisma.$transaction(async (tx) => {
     await tx.fontFamily.update({ where: { id }, data });
@@ -513,8 +503,8 @@ export async function updateFamily(
         await tx.token.update({
           where: { id: token.id },
           data: {
-            value: tokenValueOf(cssName, fb),
-            aiDescription: describeFamily(cssName, fam.source, fam.faces),
+            value: fontTokenValue(cssName, fb),
+            aiDescription: describeFontFamily(cssName, fam.source, fam.faces),
           },
         });
       }
@@ -538,7 +528,7 @@ export async function deleteFace(familyId: string, faceId: string, actor: Actor)
   const face = fam.faces.find((f) => f.id === faceId);
   if (!face) throw new FontError('not_found', 'Không tìm thấy face này trong họ font.');
 
-  const tokenName = tokenNameOf(fam.slug);
+  const tokenName = fontTokenName(fam.slug);
   if (fam.faces.length === 1) {
     const usage = await tokenUsage(tokenName);
     if (usage.pages.length || usage.components.length) {
@@ -551,7 +541,7 @@ export async function deleteFace(familyId: string, faceId: string, actor: Actor)
     await tx.fontFace.delete({ where: { id: faceId } });
     await tx.token.updateMany({
       where: { name: tokenName },
-      data: { aiDescription: describeFamily(fam.cssName, fam.source, rest) },
+      data: { aiDescription: describeFontFamily(fam.cssName, fam.source, rest) },
     });
     await tx.auditLog.create({
       data: {
@@ -569,7 +559,7 @@ export async function deleteFace(familyId: string, faceId: string, actor: Actor)
 /** Xoá họ, face và token. Quyền admin kiểm ở route. Chặn (kèm danh sách) khi còn chỗ dùng. */
 export async function deleteFamily(id: string, actor: Actor): Promise<void> {
   const fam = await loadFamily(id);
-  const tokenName = tokenNameOf(fam.slug);
+  const tokenName = fontTokenName(fam.slug);
   const usage = await tokenUsage(tokenName);
   if (usage.pages.length || usage.components.length) {
     throw inUse(`Họ font "${fam.cssName}"`, usage);
@@ -637,7 +627,7 @@ export async function listFonts(): Promise<FontListItem[]> {
 
   const builtinTokens = BUILTIN_FAMILIES.flatMap((f) => f.tokens);
   const [usage, builtinRows] = await Promise.all([
-    tokenUsageMany([...rows.map((r) => tokenNameOf(r.slug)), ...builtinTokens]),
+    tokenUsageMany([...rows.map((r) => fontTokenName(r.slug)), ...builtinTokens]),
     prisma.token.findMany({ where: { name: { in: builtinTokens } }, select: { name: true, value: true } }),
   ]);
   const usageOf = (name: string): TokenUsage => usage.get(name) ?? { pages: [], components: [] };
@@ -650,7 +640,7 @@ export async function listFonts(): Promise<FontListItem[]> {
     return {
       id: r.id,
       cssName: r.cssName,
-      token: tokenNameOf(r.slug),
+      token: fontTokenName(r.slug),
       source: r.source === 'google' ? 'google' : 'upload',
       fallback: r.fallback,
       faces: r.faces.map((f) => ({
@@ -661,7 +651,7 @@ export async function listFonts(): Promise<FontListItem[]> {
         bytes: f.asset.bytes,
         warnings: asWarnings(f.warnings),
       })),
-      usage: usageOf(tokenNameOf(r.slug)),
+      usage: usageOf(fontTokenName(r.slug)),
       unpublished: live.get(r.slug) !== draft,
       licenseNote: r.licenseNote,
       licenseConfirmedBy: r.licenseConfirmedBy,

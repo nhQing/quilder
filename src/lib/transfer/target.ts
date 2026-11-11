@@ -6,6 +6,7 @@ import { parsePageCollection } from '@/lib/builder/page-collection';
 import { prisma } from '@/lib/db';
 import { readEndpointTable } from '@/lib/doc/endpoint-table';
 import { migratePresetTree } from '@/lib/doc/migrate';
+import { fontTokenName } from '@/lib/fonts/token';
 import { allowedEmbedHostnames } from '@/lib/render/embed-origins';
 import { tokenRefsOf } from './collect';
 import { issue } from './guides';
@@ -47,7 +48,25 @@ export async function loadTargetSnapshot(bundle: PageBundle): Promise<TargetSnap
   const keys = bundle.assets.flatMap(candidateKeys);
   const assets = await prisma.asset.findMany({ where: { key: { in: keys } }, select: { id: true, key: true, trashedAt: true, alt: true, bytes: true } });
   const presets = await prisma.preset.findMany({ where: { key: { in: bundle.components.map((c) => c.key) } }, select: { id: true, key: true, tree: true } });
-  const tokens = await prisma.token.findMany({ where: { name: { in: bundle.tokens.map((t) => t.name) } }, select: { name: true, value: true } });
+  // Cả `font-<slug>` của các họ trong gói: họ chưa có mà token đã bị chiếm thì kế hoạch chặn (G11).
+  const tokens = await prisma.token.findMany({
+    where: { name: { in: [...bundle.tokens.map((t) => t.name), ...bundle.fonts.map((f) => fontTokenName(f.slug))] } },
+    select: { name: true, value: true },
+  });
+  const fontFamilies = bundle.fonts.length
+    ? await prisma.fontFamily.findMany({
+      where: {
+        OR: [
+          { slug: { in: bundle.fonts.map((f) => f.slug) } },
+          ...bundle.fonts.map((f) => ({ cssName: { equals: f.cssName.trim(), mode: 'insensitive' as const } })),
+        ],
+      },
+      select: {
+        id: true, slug: true, cssName: true,
+        faces: { select: { weight: true, style: true, unicodeRange: true, asset: { select: { key: true } } } },
+      },
+    })
+    : [];
   // Đọc thẳng từ dữ liệu thô của gói: chỉ cần TÊN, và gói hỏng thì kế hoạch đã chặn ở chỗ khác.
   const refs = tokenRefsOf([bundle.doc, ...bundle.components.map((c) => c.tree)]);
   const known = refs.length
@@ -75,6 +94,10 @@ export async function loadTargetSnapshot(bundle: PageBundle): Promise<TargetSnap
       fields: Array.isArray(t.schema) ? (t.schema as { key?: unknown }[]).map((f) => String(f.key ?? '')).filter(Boolean) : [],
     }])),
     folders: folders.map((f) => f.path),
+    fontFamilies: fontFamilies.map((f) => ({
+      id: f.id, slug: f.slug, cssName: f.cssName,
+      faces: f.faces.map((x) => ({ weight: x.weight, style: x.style, unicodeRange: x.unicodeRange, key: x.asset.key })),
+    })),
   };
 }
 

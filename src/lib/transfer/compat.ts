@@ -114,6 +114,9 @@ export function checkBundle(bundle: PageBundle): CompatResult {
     doc, trees, translations: bundle.translations.map((t) => ({ ...t, value: t.value })), ogImageId: bundle.page.ogImageId,
   });
   for (const id of uses.keys()) if (!ids.has(id)) holes.push(`ảnh ${id}`);
+  for (const f of bundle.fonts) {
+    for (const face of f.faces) if (!ids.has(face.assetRef)) holes.push(`file font ${f.cssName} ${face.weight} ${face.style}`);
+  }
   if (holes.length) {
     issues.push(issue('file-corrupt', 'block', { detail: `Gói thiếu: ${holes.slice(0, 5).join(', ')}${holes.length > 5 ? '…' : ''}` }));
   }
