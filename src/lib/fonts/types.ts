@@ -79,6 +79,9 @@ export const FALLBACKS = {
   mono: 'ui-monospace, Menlo, Consolas, monospace',
 };
 
+/** Trần độ dài ghi chú giấy phép — route và tool MCP cùng dùng. */
+export const MAX_LICENSE_NOTE = 500;
+
 /** Cache của file font trong kho: khoá có hash nội dung nên không bao giờ đổi. */
 export const FONT_CACHE_CONTROL = 'public, max-age=31536000, immutable';
 

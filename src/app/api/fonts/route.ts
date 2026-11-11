@@ -21,6 +21,7 @@ import { importGoogleFamily } from '@/lib/fonts/google';
 import { fontErrorResponse, resolveFallback } from '@/lib/fonts/http';
 import { addFace, listFonts, type AddFaceInput } from '@/lib/fonts/service';
 import {
+  MAX_LICENSE_NOTE,
   parseWeight,
   type FontStyle,
 } from '@/lib/fonts/types';
@@ -45,13 +46,17 @@ function readFields(raw: Record<string, unknown>): Fields {
     throw new BadField('Kiểu chữ (style) chỉ nhận "normal" hoặc "italic".');
   }
   const fb = asString(raw.fallback);
+  const licenseNote = asString(raw.licenseNote);
+  if (licenseNote !== undefined && licenseNote.length > MAX_LICENSE_NOTE) {
+    throw new BadField(`Ghi chú giấy phép tối đa ${MAX_LICENSE_NOTE} ký tự.`);
+  }
   return {
     family: asString(raw.family),
     weight: parseWeight(raw.weight),
     style: style as FontStyle | undefined,
     fallback: fb === undefined ? undefined : resolveFallback(fb),
     licenseConfirmed: asBool(raw.licenseConfirmed),
-    licenseNote: asString(raw.licenseNote),
+    licenseNote,
     dryRun: asBool(raw.dryRun),
     replaceFaceId: asString(raw.replaceFaceId),
   };

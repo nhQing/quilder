@@ -10,6 +10,7 @@ import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/guard';
 import { fontErrorResponse, resolveFallback } from '@/lib/fonts/http';
 import { deleteFamily, updateFamily } from '@/lib/fonts/service';
+import { MAX_LICENSE_NOTE } from '@/lib/fonts/types';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -37,6 +38,9 @@ export async function PATCH(request: Request, { params }: Ctx) {
     if (v === undefined) continue;
     if (typeof v !== 'string' && !(k === 'licenseNote' && v === null)) {
       return NextResponse.json({ error: `"${k}" phải là chuỗi` }, { status: 400 });
+    }
+    if (k === 'licenseNote' && typeof v === 'string' && v.length > MAX_LICENSE_NOTE) {
+      return NextResponse.json({ error: `Ghi chú giấy phép tối đa ${MAX_LICENSE_NOTE} ký tự.` }, { status: 422 });
     }
     if (k === 'fallback') patch.fallback = resolveFallback(v as string);
     else if (k === 'cssName') patch.cssName = v as string;
