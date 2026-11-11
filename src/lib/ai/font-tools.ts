@@ -95,11 +95,14 @@ const uploadFontTool: ToolDef = {
     },
     ctx: ToolContext,
   ) {
-    const sources = [input.filePath, input.sourceUrl, input.google].filter((s) => s !== undefined);
+    // Chuỗi rỗng / toàn khoảng trắng coi như KHÔNG khai nguồn đó.
+    const filePath = input.filePath?.trim() || undefined;
+    const sourceUrl = input.sourceUrl?.trim() || undefined;
+    const sources = [filePath, sourceUrl, input.google].filter((s) => s !== undefined);
     if (sources.length !== 1) {
       return { ok: false, error: 'Cần đúng một trong: filePath, sourceUrl, google' };
     }
-    if (input.filePath) {
+    if (filePath) {
       // Tới đây nghĩa là tool được gọi KHÔNG qua mcp/server.mjs — xem docblock đầu file.
       return {
         ok: false,
@@ -131,7 +134,7 @@ const uploadFontTool: ToolDef = {
         );
       }
 
-      const got = await fetchUrlBytes(input.sourceUrl!, 'Font');
+      const got = await fetchUrlBytes(sourceUrl!, 'Font');
       if (!got.ok) return { ok: false, error: got.error, ...(got.code ? { code: got.code } : {}) };
       return await addFace(
         {
