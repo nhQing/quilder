@@ -1,4 +1,12 @@
+// Import tĩnh có chủ đích: `subset-font` nằm trong `serverExternalPackages` nên webpack chỉ phát
+// một `require` ngoài, và trình theo vết file của Next nhờ đó mang subset-font → fontverter →
+// p-limit/harfbuzzjs vào bản standalone. Nạp nó không có tác dụng phụ (index.js chỉ require
+// fontverter và p-limit; wasm chỉ được khởi tạo lười ở lần gọi đầu) — worker dưới đây mới là
+// nơi chạy thật.
+import 'subset-font';
+
 import { createRequire } from 'node:module';
+import path from 'node:path';
 import { Worker } from 'node:worker_threads';
 
 import type { InspectResult } from './inspect';
@@ -33,18 +41,25 @@ fn(Buffer.from(workerData.bytes), String.fromCodePoint(...workerData.codepoints)
 `;
 
 /**
- * Đường dẫn tuyệt đối tới `subset-font`, resolve theo vị trí module này. Literal
- * `require.resolve('subset-font')` để trình theo vết (nft) của Next mang gói và cây phụ
- * thuộc vào bản standalone — chỉ có `serverExternalPackages` thì KHÔNG đủ.
+ * Đường dẫn tuyệt đối tới `subset-font` để worker `require`. Thử theo vị trí module này; nếu
+ * bundler đã đổi `import.meta.url` thành đường dẫn lúc build (không còn tồn tại) thì thử theo
+ * `process.cwd()` — server standalone của Next chdir vào thư mục của nó, nơi `node_modules`
+ * chứa gói đã được theo vết (nhờ `import 'subset-font'` ở đầu file). Task 15 phải kiểm cách
+ * này trên bản standalone đã chuyển sang thư mục khác. Cả hai thất bại → FontError.
  */
 function subsetModulePath(): string {
-  try {
-    return createRequire(import.meta.url).resolve('subset-font');
-  } catch (e) {
-    throw new FontError('not_font', 'Server thiếu thư viện cắt font (subset-font).', {
-      cause: String((e as Error)?.message ?? e),
-    });
+  const causes: string[] = [];
+  const bases = [() => import.meta.url, () => path.join(process.cwd(), 'package.json')];
+  for (const base of bases) {
+    try {
+      return createRequire(base()).resolve('subset-font');
+    } catch (e) {
+      causes.push(String((e as Error)?.message ?? e));
+    }
   }
+  throw new FontError('not_font', 'Server thiếu thư viện cắt font (subset-font).', {
+    cause: causes.join(' | '),
+  });
 }
 
 function runInWorker(bytes: Uint8Array, timeoutMs: number): Promise<Uint8Array> {
