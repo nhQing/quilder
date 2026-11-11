@@ -6,9 +6,11 @@ const m = vi.hoisted(() => ({
   addFace: vi.fn(),
   listFonts: vi.fn(),
   fetchUrlBytes: vi.fn(),
+  importGoogleFamily: vi.fn(),
 }));
 vi.mock('@/lib/auth/guard', () => ({ requireAuth: m.auth }));
 vi.mock('@/lib/fonts/service', () => ({ addFace: m.addFace, listFonts: m.listFonts }));
+vi.mock('@/lib/fonts/google', () => ({ importGoogleFamily: m.importGoogleFamily }));
 vi.mock('@/lib/assets/fetch-url', () => ({ fetchUrlBytes: m.fetchUrlBytes }));
 
 const { GET, POST } = await import('./route');
@@ -121,9 +123,30 @@ describe('POST /api/fonts', () => {
     expect(m.addFace).not.toHaveBeenCalled();
   });
 
-  it('JSON google → 501 (Task 8)', async () => {
-    const res = await POST(json({ google: { family: 'Inter' }, licenseConfirmed: true }));
-    expect(res.status).toBe(501);
+  it('JSON google → importGoogleFamily với family, weights, italic, fallback, dryRun', async () => {
+    m.importGoogleFamily.mockResolvedValue(RESULT);
+    const res = await POST(
+      json({ google: { family: 'Inter', weights: [400, 700], italic: false }, fallback: 'serif', dryRun: true }),
+    );
+    expect(res.status).toBe(200);
+    expect(m.importGoogleFamily).toHaveBeenCalledWith(
+      { family: 'Inter', weights: [400, 700], italic: false, fallback: FALLBACKS.serif, dryRun: true },
+      { email: 'a@b.c', sub: 'u1' },
+    );
+    expect(m.addFace).not.toHaveBeenCalled();
+  });
+
+  it('JSON google thiếu family hoặc weights sai → 422', async () => {
+    expect((await POST(json({ google: {} }))).status).toBe(422);
+    expect((await POST(json({ google: { family: 'Inter', weights: ['x'] } }))).status).toBe(422);
+    expect(m.importGoogleFamily).not.toHaveBeenCalled();
+  });
+
+  it('JSON google lỗi Google → mã HTTP của FontError', async () => {
+    m.importGoogleFamily.mockRejectedValue(new FontError('google_unreachable', 'không ra được mạng'));
+    const res = await POST(json({ google: { family: 'Inter' } }));
+    expect(res.status).toBe(502);
+    expect((await res.json()).code).toBe('google_unreachable');
   });
 });
 
