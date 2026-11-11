@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
 
-const { fetchUrlBytes } = await import('./fetch-url');
+const { fetchUrlBytes, isPrivateIp } = await import('./fetch-url');
 
 describe('fetchUrlBytes (SSRF)', () => {
   it.each([
@@ -35,5 +35,12 @@ describe('fetchUrlBytes (SSRF)', () => {
   it('URL hỏng → 400', async () => {
     const r = await fetchUrlBytes('không phải url');
     expect(r).toMatchObject({ ok: false, status: 400 });
+  });
+});
+
+describe('isPrivateIp', () => {
+  it('IPv4-mapped IPv6 dạng a.b.c.d: chặn loopback, cho IP công khai', () => {
+    expect(isPrivateIp('::ffff:127.0.0.1')).toBe(true);
+    expect(isPrivateIp('::ffff:8.8.8.8')).toBe(false);
   });
 });
