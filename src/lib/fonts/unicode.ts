@@ -46,3 +46,40 @@ export const SUBSET_CODEPOINTS: number[] = merged.flatMap(([lo, hi]) =>
 
 /** Chữ Việt dùng kiểm font có phủ tiếng Việt (không kiểm ₫, §7.1). */
 export const VIETNAMESE_PROBE = 'ạảãếộữơưƯĐ';
+
+/**
+ * Các khoảng `[lo, hi]` của một `unicode-range` CSS. Khoan dung: phần đọc không được thì bỏ
+ * qua thay vì ném (dải đến từ Google hay CSS của gói). Hiểu cả dạng `U+4??`.
+ */
+export function unicodeRangeSpans(range: string): Array<[number, number]> {
+  const out: Array<[number, number]> = [];
+  for (const part of range.split(',')) {
+    const m = /^\s*U\+([0-9A-F?]{1,6})(?:-([0-9A-F]{1,6}))?\s*$/i.exec(part);
+    if (!m) continue;
+    const head = m[1]!;
+    if (head.includes('?')) {
+      if (m[2]) continue;
+      out.push([parseInt(head.replace(/\?/g, '0'), 16), parseInt(head.replace(/\?/g, 'F'), 16)]);
+    } else {
+      const lo = parseInt(head, 16);
+      out.push([lo, m[2] ? parseInt(m[2], 16) : lo]);
+    }
+  }
+  return out;
+}
+
+/**
+ * Phần của `VIETNAMESE_PROBE` mà một face phải chứa. Face có `unicode-range` (file Google,
+ * woff2 của gói) chỉ phục vụ ký tự trong dải của nó — file `latin` của Google không có `ạ`
+ * và không cần có. Dải rỗng (hoặc không đọc được) = face phục vụ mọi ký tự → kiểm cả bộ.
+ */
+export function vietnameseProbeFor(range: string | undefined): string {
+  const spans = unicodeRangeSpans(range ?? '');
+  if (!spans.length) return VIETNAMESE_PROBE;
+  return [...VIETNAMESE_PROBE]
+    .filter((ch) => {
+      const cp = ch.codePointAt(0)!;
+      return spans.some(([lo, hi]) => cp >= lo && cp <= hi);
+    })
+    .join('');
+}

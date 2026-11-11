@@ -68,6 +68,12 @@ export interface AddFaceInput {
   prepared?: { unicodeRange: string; subset: string };
   /** Chỉ script adopt: nhận lại token tự tạo cùng tên thay vì `slug_taken`. */
   adoptToken?: boolean;
+  /**
+   * Cảnh báo cấp HỌ mà chỉ người gọi biết, gộp vào cảnh báo của face (lưu và trả về như nhau).
+   * Nhập Google: họ không có bộ `vietnamese` thì mọi face mang `missing_vietnamese`, dù từng
+   * file đều đủ chữ trong dải của nó.
+   */
+  extraWarnings?: FontWarningCode[];
 }
 
 /** Đúng hình dạng phản hồi `POST /api/fonts` (§10). */
@@ -126,6 +132,9 @@ export function slugify(cssName: string): string {
     .slice(0, MAX_SLUG)
     .replace(/-+$/g, '');
 }
+
+const warningMessages = (codes: FontWarningCode[]): FontUploadResult['warnings'] =>
+  codes.map((code) => ({ code, message: WARNING_MESSAGES[code] }));
 
 const asStyle = (s: string): FontStyle => (s === 'italic' ? 'italic' : 'normal');
 const asWarnings = (codes: string[]): FontWarningCode[] =>
@@ -282,6 +291,8 @@ export async function previewFaces(input: {
   family: string;
   fallback?: string;
   faces: PreviewFace[];
+  /** Cảnh báo cấp họ, như `AddFaceInput.extraWarnings`. */
+  extraWarnings?: FontWarningCode[];
 }): Promise<FontUploadResult> {
   const fallback = cleanFallback(input.fallback);
   const name = input.family.trim().replace(/\s+/g, ' ');
@@ -305,7 +316,7 @@ export async function previewFaces(input: {
         (x) => x.weight === f.weight && x.style === f.style && x.unicodeRange === f.unicodeRange,
       ),
     })),
-    warnings: [],
+    warnings: warningMessages(input.extraWarnings ?? []),
   };
 }
 
@@ -324,11 +335,14 @@ export async function addFace(input: AddFaceInput, actor: Actor): Promise<FontUp
     );
   }
 
-  const info = inspectFont(input.bytes);
+  // Face mang `unicode-range` (Google, woff2 của gói) chỉ bị kiểm chữ Việt trong dải đó. File
+  // sẽ cắt thì dải là bộ cắt (chứa cả bộ kiểm), woff2 tải lên là "" — cả hai = kiểm cả bộ.
+  const info = inspectFont(input.bytes, { unicodeRange: input.prepared?.unicodeRange });
   const name = (input.family ?? info.family ?? '').trim().replace(/\s+/g, ' ');
   const weight = (input.weight?.trim() || info.weight).replace(/\s+/g, ' ');
   const style: FontStyle = input.style ?? info.style;
-  const warnings = info.warnings.map((code) => ({ code, message: WARNING_MESSAGES[code] }));
+  const warningCodes = [...new Set([...info.warnings, ...(input.extraWarnings ?? [])])];
+  const warnings = warningMessages(warningCodes);
 
   const { existing, slug, adopt } = await planFamily(name, fallback, input.adoptToken);
 
@@ -394,7 +408,7 @@ export async function addFace(input: AddFaceInput, actor: Actor): Promise<FontUp
       familyId = fam.id;
     }
 
-    const faceData = { assetId: asset.id, subset, warnings: info.warnings };
+    const faceData = { assetId: asset.id, subset, warnings: warningCodes };
     let faceId: string;
     if (match) {
       await tx.fontFace.update({ where: { id: match.id }, data: faceData });

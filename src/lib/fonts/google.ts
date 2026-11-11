@@ -10,7 +10,7 @@ import { MAX_ASSET_BYTES } from '@/lib/builder/upload-asset';
 
 import { googleCssFamilyName, parseGoogleCss, parseGoogleFamily, type GoogleFace } from './google-parse';
 import { addFace, previewFaces, slugify, type Actor, type FontUploadResult } from './service';
-import { FontError } from './types';
+import { FontError, type FontWarningCode } from './types';
 
 export interface GoogleImportRequest {
   family: string;
@@ -173,12 +173,18 @@ export async function importGoogleFamily(
     });
   }
 
+  // Thiếu tiếng Việt là chuyện của CẢ HỌ: mỗi file chỉ bị kiểm chữ trong dải của nó (service),
+  // còn họ không có bộ `vietnamese` thì chữ có dấu rơi về font dự phòng dù từng file đều "đủ".
+  // Gắn cảnh báo vào mọi face để kết quả nhập, `FontFace.warnings` và nhãn ở màn Font khớp nhau.
+  const familyWarnings: FontWarningCode[] = faces.some((f) => f.subset === 'vietnamese') ? [] : ['missing_vietnamese'];
+
   if (req.dryRun) {
     // Không tải file, không ghi gì. Luật tên/token/fallback và `replaced` do service tính.
     const preview = await previewFaces({
       family: cssName,
       fallback: req.fallback,
       faces: faces.map((f) => ({ weight: f.weight, style: f.style, unicodeRange: f.unicodeRange, subset: f.subset })),
+      extraWarnings: familyWarnings,
     });
     return { ...preview, warnings: [...preview.warnings, ...extra] };
   }
@@ -207,6 +213,7 @@ export async function importGoogleFamily(
             source: 'google',
             googleFamily: cssName,
             prepared: { unicodeRange: f.unicodeRange, subset: f.subset },
+            ...(familyWarnings.length ? { extraWarnings: familyWarnings } : {}),
           },
           actor,
         ),

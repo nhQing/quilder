@@ -278,6 +278,22 @@ describe('addFace', () => {
     );
   });
 
+  it('face có unicode-range: inspect chỉ kiểm chữ trong dải; extraWarnings gộp vào cảnh báo lưu và trả về', async () => {
+    m.inspectFont.mockReturnValue(inspected({ format: 'woff2', warnings: ['restricted_embedding'] }));
+    const r = await upload({
+      source: 'google',
+      prepared: { unicodeRange: 'U+0000-00FF', subset: 'latin' },
+      extraWarnings: ['missing_vietnamese', 'restricted_embedding'],
+    });
+    expect(m.inspectFont).toHaveBeenCalledWith(bytes, { unicodeRange: 'U+0000-00FF' });
+    expect(m.prisma.fontFace.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ warnings: ['restricted_embedding', 'missing_vietnamese'] }),
+      }),
+    );
+    expect(r.warnings.map((w) => w.code)).toEqual(['restricted_embedding', 'missing_vietnamese']);
+  });
+
   it("fallback 'x; }' → bad_fallback", async () => {
     expect(await codeOf(upload({ fallback: 'x; }' }))).toBe('bad_fallback');
   });
