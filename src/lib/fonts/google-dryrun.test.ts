@@ -8,7 +8,7 @@ const m = vi.hoisted(() => {
   const fn = () => vi.fn();
   return {
     prisma: {
-      fontFamily: { findFirst: fn(), findUnique: fn() },
+      fontFamily: { findMany: fn(), findUnique: fn() },
       token: { findUnique: fn() },
     },
     uploadAsset: fn(),
@@ -32,7 +32,7 @@ const fetchOf = (body: string) =>
 
 beforeEach(() => {
   vi.clearAllMocks();
-  m.prisma.fontFamily.findFirst.mockResolvedValue(null);
+  m.prisma.fontFamily.findMany.mockResolvedValue([]);
   m.prisma.fontFamily.findUnique.mockResolvedValue(null);
   m.prisma.token.findUnique.mockResolvedValue(null);
 });
@@ -71,13 +71,13 @@ describe('importGoogleFamily dryRun (luật service)', () => {
 
   it('face đã có → replaced true, họ cũ không tạo mới', async () => {
     const vnRange = /unicode-range: (U\+0102[^;]*);/.exec(css)![1]!;
-    m.prisma.fontFamily.findFirst.mockResolvedValue({
+    m.prisma.fontFamily.findMany.mockResolvedValue([{
       id: 'f9',
       slug: 'be-vietnam-pro',
       cssName: 'Be Vietnam Pro',
       source: 'google',
       faces: [{ id: 'x', weight: '400', style: 'normal', unicodeRange: vnRange }],
-    });
+    }]);
     const out = await importGoogleFamily({ family: 'Be Vietnam Pro', dryRun: true }, actor, fetchOf(css));
     expect(out.family).toMatchObject({ id: 'f9', created: false });
     expect(out.faces.map((f) => [f.subset, f.replaced])).toEqual([

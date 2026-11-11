@@ -29,6 +29,7 @@ import { revalidateTag } from 'next/cache';
 
 import { BUILTIN_FAMILIES, isReservedFamilyName } from './builtin';
 import { toWoff2 } from './convert';
+import { familyNameKey } from './css';
 import { inspectFont } from './inspect';
 import { fontSealOf } from './seal';
 import { describeFontFamily, fontTokenName, fontTokenValue } from './token';
@@ -155,6 +156,27 @@ function cleanFallback(raw: string | undefined): string {
   return fallback;
 }
 
+/**
+ * Các họ có tên trùng `name` theo `familyNameKey` (không phân biệt hoa thường, khoảng trắng).
+ *
+ * So trong JS chứ không `cssName: { equals, mode: 'insensitive' }`: Prisma dịch cái đó thành
+ * ILIKE mà không escape `_ % \`, nên "My-Font" khớp "My_Font" và face rơi nhầm họ. Bảng họ
+ * font chỉ có vài chục hàng — đọc hết rẻ hơn mọi cách escape.
+ */
+async function familiesNamed(name: string) {
+  const key = familyNameKey(name);
+  const rows = await prisma.fontFamily.findMany({
+    select: {
+      id: true,
+      slug: true,
+      cssName: true,
+      source: true,
+      faces: { select: { id: true, weight: true, style: true, unicodeRange: true } },
+    },
+  });
+  return rows.filter((r) => familyNameKey(r.cssName) === key);
+}
+
 /** Luật tên cho một họ MỚI hoặc tên mới của họ (`excludeId` = chính họ đang đổi tên). */
 async function checkFamilyName(name: string, fallback: string, excludeId?: string): Promise<void> {
   if (!name) {
@@ -166,13 +188,7 @@ async function checkFamilyName(name: string, fallback: string, excludeId?: strin
       `"${name}" là tên font có sẵn hoặc tên dự phòng của hệ thống, dùng nó sẽ trộn với font đó. Hãy đặt tên khác, ví dụ "${name} Web".`,
     );
   }
-  const other = await prisma.fontFamily.findFirst({
-    where: {
-      cssName: { equals: name, mode: 'insensitive' },
-      ...(excludeId ? { NOT: { id: excludeId } } : {}),
-    },
-    select: { id: true, cssName: true },
-  });
+  const other = (await familiesNamed(name)).find((f) => f.id !== excludeId);
   if (other) {
     throw new FontError(
       'name_reserved',
@@ -216,16 +232,7 @@ async function planFamily(name: string, fallback: string, adoptToken?: boolean) 
   }
 
   // Tên họ so KHÔNG phân biệt hoa thường: "GILROY" khi đã có "gilroy" là thêm face vào họ cũ.
-  const existing = await prisma.fontFamily.findFirst({
-    where: { cssName: { equals: name, mode: 'insensitive' } },
-    select: {
-      id: true,
-      slug: true,
-      cssName: true,
-      source: true,
-      faces: { select: { id: true, weight: true, style: true, unicodeRange: true } },
-    },
-  });
+  const existing = (await familiesNamed(name))[0] ?? null;
 
   let slug: string;
   let adopt: { id: string } | null = null;

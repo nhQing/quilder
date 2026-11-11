@@ -38,6 +38,39 @@ export function firstFamilyName(stack: string): string {
   return (s.split(',')[0] ?? '').trim();
 }
 
+/**
+ * Khoá so tên họ (spec §4): bỏ khoảng trắng hai đầu, gộp khoảng trắng, chữ thường. Dịch vụ
+ * font, nhập trang và phần đếm chỗ dùng cùng dùng — so ở một chỗ để không lệch nhau.
+ */
+export const familyNameKey = (name: string): string => name.trim().replace(/\s+/g, ' ').toLowerCase();
+
+/**
+ * Mọi tên họ trong một chồng font CSS, bỏ nháy và giải `\` (`newYork, "Times New Roman",
+ * serif` → `newYork`, `Times New Roman`, `serif`). Dấu phẩy trong nháy không tách.
+ */
+export function fontStackNames(stack: string): string[] {
+  const out: string[] = [];
+  let cur = '';
+  let quote: string | null = null;
+  const push = () => {
+    const name = cur.trim().replace(/\s+/g, ' ');
+    if (name) out.push(name);
+    cur = '';
+  };
+  for (let i = 0; i < stack.length; i++) {
+    const c = stack[i]!;
+    if (quote) {
+      if (c === '\\' && i + 1 < stack.length) cur += stack[++i];
+      else if (c === quote) quote = null;
+      else cur += c;
+    } else if (c === '"' || c === "'") quote = c;
+    else if (c === ',') push();
+    else cur += c;
+  }
+  push();
+  return out;
+}
+
 const SAFE_KEY =/^[A-Za-z0-9._\-/]+$/;
 const SAFE_WEIGHT = /^\d{1,4}( \d{1,4})?$/;
 /** `unicode-range` đi thẳng vào `@font-face`: chỉ ký tự của cú pháp U+…; nhập trang cũng kiểm bằng nó. */
