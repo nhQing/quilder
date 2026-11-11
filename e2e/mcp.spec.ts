@@ -237,6 +237,10 @@ test.describe('AI chỉ chạm bản nháp', () => {
         // file có thể lấy lại được.
         'upload_asset',
 
+        // Ghi vào kho font (`FontFamily`/`FontFace` + file trên S3). Bản nháp: font chỉ vào
+        // `Release.fonts` lúc người dùng Publish. `licenseConfirmed` không bao giờ được tự điền.
+        'upload_font',
+
         /*
          * Ghi vào bảng `Entry` — và đây là nhóm KHÁC BẢN CHẤT với mọi nhóm trên,
          * nên nó phải được đọc kỹ chứ không chỉ được thêm vào cho test xanh.
