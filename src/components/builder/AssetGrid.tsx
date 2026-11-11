@@ -102,7 +102,7 @@ function LibraryNote() {
         hoàn toàn — và release cũ có thể vẫn đang trỏ tới nó.
       </p>
       <p>
-        Nhận ảnh (PNG, JPEG, SVG), PDF, video (MP4, WebM), âm thanh (MP3, WAV, OGG) và font (WOFF, WOFF2), tối đa
+        Nhận ảnh (PNG, JPEG, SVG), PDF, video (MP4, WebM), âm thanh (MP3, WAV, OGG) và font (WOFF, WOFF2, TTF, OTF), tối đa
         10 MB. Kiểu file đọc từ nội dung, không từ đuôi tên — docx, xlsx, zip và HTML chưa nhận.
       </p>
       <p>Kéo file thả vào thư mục để dời. Kéo file từ máy thả vào thư mục để tải thẳng vào đó.</p>

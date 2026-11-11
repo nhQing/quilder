@@ -142,6 +142,14 @@ describe('sniff — không phải ảnh', () => {
     expect(sniff(bytes('wOFF', [0, 1, 0, 0]))).toEqual({ mime: 'font/woff' });
   });
 
+  it('nhận TTF, OTF, TTC', () => {
+    const pad = [0, 12, 0, 0, 0, 0, 0, 0];
+    expect(sniff(bytes([0, 1, 0, 0], pad))).toEqual({ mime: 'font/ttf' });
+    expect(sniff(bytes('true', pad))).toEqual({ mime: 'font/ttf' });
+    expect(sniff(bytes('OTTO', pad))).toEqual({ mime: 'font/otf' });
+    expect(sniff(bytes('ttcf', pad))).toEqual({ mime: 'font/collection' });
+  });
+
   /*
    * Đây là phép kiểm chịu lực của cả nhánh này. Cả ba thứ dưới đây CỐ Ý không được
    * nhận, và mỗi cái vì một lý do khác nhau:

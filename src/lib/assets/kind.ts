@@ -130,5 +130,5 @@ export const UPLOAD_ACCEPT = [
   'application/pdf',
   'video/mp4', 'video/webm', 'video/quicktime',
   'audio/mpeg', 'audio/wav', 'audio/ogg', 'audio/mp4',
-  'font/woff', 'font/woff2',
+  'font/woff', 'font/woff2', 'font/ttf', 'font/otf',
 ].join(',');

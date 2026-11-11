@@ -109,7 +109,7 @@ export async function uploadAsset(args: {
       status: 415,
       error:
         'Không nhận dạng được file. Kho nhận ảnh (PNG, JPEG, SVG), PDF, video ' +
-        '(MP4, WebM), âm thanh (MP3, WAV, OGG) và font (WOFF, WOFF2).\n\n' +
+        '(MP4, WebM), âm thanh (MP3, WAV, OGG) và font (WOFF, WOFF2, TTF, OTF).\n\n' +
         'Kiểu file được đọc từ NỘI DUNG, không từ đuôi tên, nên định dạng nào không ' +
         'có dấu hiệu nhận biết trong byte đầu file thì chưa nhận — docx/xlsx/zip đều ' +
         'là cùng một dấu hiệu, và HTML thì cố ý không nhận. Với ảnh còn thêm một ' +
