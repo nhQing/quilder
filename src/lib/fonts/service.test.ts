@@ -219,6 +219,64 @@ describe('addFace', () => {
     );
   });
 
+  describe('replaceFaceId ("Thay file")', () => {
+    const fam = (faces: { id: string; weight?: string; unicodeRange: string }[]) => [{
+      id: 'f1', slug: 'be-vietnam-pro', cssName: 'Be Vietnam Pro', source: 'upload',
+      faces: faces.map((f) => ({ weight: '400', style: 'normal', ...f })),
+    }];
+
+    it('file mới ra dải khác (woff2 "" → TTF đã cắt): ghi đè face đó, không thêm face', async () => {
+      m.prisma.fontFamily.findMany.mockResolvedValue(fam([{ id: 'face0', unicodeRange: '' }]));
+      m.inspectFont.mockReturnValue(inspected({ weight: '500', warnings: ['missing_vietnamese'] }));
+
+      const r = await upload({ replaceFaceId: 'face0' });
+
+      expect(m.prisma.fontFace.create).not.toHaveBeenCalled();
+      expect(m.prisma.fontFace.update).toHaveBeenCalledWith({
+        where: { id: 'face0' },
+        // weight/kiểu giữ của face cũ (không đè), dải và file theo file mới.
+        data: { assetId: 'a1', subset: '', warnings: ['missing_vietnamese'], unicodeRange: RANGE, weight: '400', style: 'normal' },
+      });
+      expect(r.faces[0]).toMatchObject({ weight: '400', replaced: true });
+      expect(m.prisma.auditLog.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ action: 'font.face.replace', targetId: 'face0' }) }),
+      );
+    });
+
+    it('weight/style gửi kèm thì đè', async () => {
+      m.prisma.fontFamily.findMany.mockResolvedValue(fam([{ id: 'face0', unicodeRange: '' }]));
+      await upload({ replaceFaceId: 'face0', weight: '700', style: 'italic' });
+      expect(m.prisma.fontFace.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ weight: '700', style: 'italic' }) }),
+      );
+    });
+
+    it('face khác đã mang đúng descriptor mới → xoá bản trùng đó trong cùng transaction', async () => {
+      m.prisma.fontFamily.findMany.mockResolvedValue(fam([{ id: 'face0', unicodeRange: '' }, { id: 'face1', unicodeRange: RANGE }]));
+      await upload({ replaceFaceId: 'face0' });
+      expect(m.prisma.fontFace.delete).toHaveBeenCalledWith({ where: { id: 'face1' } });
+      expect(m.prisma.fontFace.update).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'face0' } }));
+    });
+
+    it('face không thuộc họ được chọn → not_found, không tải lên', async () => {
+      m.prisma.fontFamily.findMany.mockResolvedValue(fam([{ id: 'face0', unicodeRange: '' }]));
+      expect(await codeOf(upload({ replaceFaceId: 'face-of-other-family' }))).toBe('not_found');
+      // họ chưa có (tên lạ) cũng vậy
+      m.prisma.fontFamily.findMany.mockResolvedValue([]);
+      expect(await codeOf(upload({ replaceFaceId: 'face0' }))).toBe('not_found');
+      expect(m.uploadAsset).not.toHaveBeenCalled();
+      expect(m.prisma.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('dryRun báo replaced true dù dải đoán được khác, không ghi gì', async () => {
+      m.prisma.fontFamily.findMany.mockResolvedValue(fam([{ id: 'face0', unicodeRange: '' }]));
+      const r = await upload({ replaceFaceId: 'face0', dryRun: true });
+      expect(r.faces[0]!.replaced).toBe(true);
+      expect(m.uploadAsset).not.toHaveBeenCalled();
+      expect(m.prisma.$transaction).not.toHaveBeenCalled();
+    });
+  });
+
   it("family 'Inter' → name_reserved", async () => {
     expect(await codeOf(upload({ family: 'Inter' }))).toBe('name_reserved');
     expect(m.uploadAsset).not.toHaveBeenCalled();

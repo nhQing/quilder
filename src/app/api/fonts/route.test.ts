@@ -66,6 +66,14 @@ describe('POST /api/fonts', () => {
     );
   });
 
+  it('multipart replaceFaceId đi xuống service', async () => {
+    await POST(form({ licenseConfirmed: 'true', replaceFaceId: 'face9', dryRun: 'true' }));
+    expect(m.addFace).toHaveBeenCalledWith(
+      expect.objectContaining({ replaceFaceId: 'face9', dryRun: true }),
+      expect.anything(),
+    );
+  });
+
   it('fallback lạ đi thẳng xuống service', async () => {
     await POST(form({ licenseConfirmed: 'true', fallback: 'Arial, sans-serif' }));
     expect(m.addFace).toHaveBeenCalledWith(
