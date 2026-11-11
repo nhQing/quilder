@@ -1181,8 +1181,62 @@ async function uploadBuffer(bytes, fileName, folder) {
   return JSON.parse(text);
 }
 
+/**
+ * `upload_font` với `filePath`: đọc file font trên máy này rồi POST multipart vào `/api/fonts`.
+ * Cùng lý lẽ với `uploadLocalFile` (byte không đi qua context, không dùng `call()` vì boundary
+ * do FormData sinh). Mọi tham số phải append tay — tham số nào quên là tham số biến mất.
+ */
+async function uploadLocalFont(args) {
+  const { readFile } = await import('node:fs/promises');
+  const { basename } = await import('node:path');
+
+  const others = [args.sourceUrl, args.google].filter((v) => v !== undefined);
+  if (others.length) throw new Error('Chỉ một nguồn: filePath, sourceUrl hoặc google.');
+
+  let bytes;
+  try {
+    bytes = await readFile(args.filePath);
+  } catch (error) {
+    throw new Error(`Không đọc được file ${args.filePath}. (${error.message})`);
+  }
+
+  const form = new FormData();
+  form.append('file', new Blob([bytes]), basename(args.filePath));
+  for (const key of ['family', 'weight', 'style', 'fallback', 'licenseNote']) {
+    if (typeof args[key] === 'string' && args[key]) form.append(key, args[key]);
+  }
+  // Chỉ gửi `licenseConfirmed` khi model gửi — không bao giờ tự điền.
+  if (args.licenseConfirmed !== undefined) form.append('licenseConfirmed', String(args.licenseConfirmed));
+  if (args.dryRun !== undefined) form.append('dryRun', String(args.dryRun));
+
+  const response = await fetch(`${BASE}/api/fonts`, {
+    method: 'POST',
+    headers: { authorization: `Bearer ${TOKEN}`, 'x-mm-client': String(CLIENT_VERSION) },
+    body: form,
+  });
+
+  const text = await response.text();
+  if (!response.ok) {
+    let message = text;
+    try {
+      const parsed = JSON.parse(text);
+      message = parsed.error ?? text;
+      if (parsed.code) message = `${message} [${parsed.code}]`;
+    } catch {
+      // Không phải JSON thì dùng nguyên văn.
+    }
+    throw new Error(`Tải font thất bại (${response.status}): ${message}`);
+  }
+  return JSON.parse(text);
+}
+
 async function callTool(params) {
   const { name, arguments: args = {} } = params ?? {};
+
+  if (name === 'upload_font' && args.filePath) {
+    const result = await uploadLocalFont(args);
+    return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+  }
 
   if (name === 'upload_asset' && args.filePath) {
     const { asset } = await uploadLocalFile(args.filePath, args.folder);

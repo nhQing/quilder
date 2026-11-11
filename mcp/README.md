@@ -48,6 +48,8 @@ npm i playwright && npx playwright install chromium
 | `list_text_units` | Mọi đoạn chữ của trang, kèm khoá `nodeId:field`, cờ `flat` và op phải dùng để ghi |
 | `find_nodes` | Tìm node theo text/tên/type/effect |
 | `search_tokens` | Tra design token |
+| `list_fonts` | Họ font của site: token, nguồn, face, nơi dùng |
+| `upload_font` | **Ghi** — thêm font từ `filePath` / `sourceUrl` / `google`; chạy `dryRun` trước, hỏi người dùng về giấy phép |
 | `list_effects` | Hiệu ứng gắn được, kèm params |
 | `apply_ops` | **Ghi** — sửa bản nháp, tối đa 80 thao tác |
 | `screenshot_page` | Chụp ảnh bản nháp ở một cỡ màn hình |

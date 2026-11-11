@@ -45,6 +45,7 @@ import { SCHEMA_TOOLS } from './schema-tools';
 import { COMPONENT_TOOLS } from './component-tools';
 import { INSPECT_TOOLS } from './inspect-tools';
 import { ASSET_TOOLS } from './asset-tools';
+import { FONT_TOOLS } from './font-tools';
 import { CLONE_TOOLS } from './clone-tools';
 import { SITE_TOOLS } from './site-tools';
 import { LINK_TOOLS } from './link-tools';
@@ -335,13 +336,13 @@ const searchTokens: ToolDef = {
   name: 'search_tokens',
   title: 'Tìm design token',
   description:
-    'Tra design token theo tên hoặc nhóm. MỌI màu, khoảng cách, cỡ chữ, bo góc và ' +
-    'thời lượng nên dùng token thay vì giá trị thô — validator từ chối token không ' +
+    'Tra design token theo tên hoặc nhóm. MỌI màu, khoảng cách, cỡ chữ, bo góc, ' +
+    'thời lượng và họ font nên dùng token thay vì giá trị thô — validator từ chối token không ' +
     'tồn tại, nên hãy tra ở đây trước khi dùng.',
   input: z
     .object({
       query: z.string().optional().describe('Khớp một phần trong tên hoặc mô tả.'),
-      category: z.string().optional().describe('color | space | typeScale | radius | duration | easing | shadow'),
+      category: z.string().optional().describe('color | space | typeScale | radius | duration | easing | shadow | font'),
       limit: z.number().int().min(1).max(100).default(40),
     })
     .strict(),
@@ -702,6 +703,7 @@ export const TOOLS: ToolDef[] = [
   ...COMPONENT_TOOLS,
   ...SITE_TOOLS,
   ...ASSET_TOOLS,
+  ...FONT_TOOLS,
   ...CLONE_TOOLS,
   ...COLLECTION_TOOLS,
   ...SCHEMA_TOOLS,
