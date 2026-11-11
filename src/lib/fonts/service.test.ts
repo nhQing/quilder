@@ -303,6 +303,51 @@ describe('addFace', () => {
     });
   });
 
+  describe('tạo họ song song (P2002)', () => {
+    const p2002 = () => Object.assign(new Error('Unique constraint failed'), { code: 'P2002', meta: { target: ['slug'] } });
+    const created = {
+      id: 'f-other', slug: 'be-vietnam-pro', cssName: 'Be Vietnam Pro', source: 'upload',
+      faces: [{ id: 'face-other', weight: '700', style: 'normal', unicodeRange: RANGE }],
+    };
+
+    it('lần đầu đụng P2002 → lập kế hoạch lại (họ đã có) và ghi vào họ đó; không tải file lại', async () => {
+      m.prisma.fontFamily.findMany.mockResolvedValueOnce([]).mockResolvedValueOnce([]).mockResolvedValue([created]);
+      const real = m.prisma.$transaction.getMockImplementation()!;
+      m.prisma.$transaction.mockRejectedValueOnce(p2002()).mockImplementation(real);
+
+      const r = await upload();
+
+      expect(m.prisma.$transaction).toHaveBeenCalledTimes(2);
+      expect(m.uploadAsset).toHaveBeenCalledTimes(1);
+      expect(m.prisma.fontFamily.create).not.toHaveBeenCalled();
+      expect(m.prisma.fontFace.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ familyId: 'f-other', weight: '400' }) }),
+      );
+      expect(r.family).toMatchObject({ id: 'f-other', created: false });
+    });
+
+    it('lần thử lại vẫn P2002 → FontError conflict 409, lời nhắn bảo thử lại', async () => {
+      m.prisma.$transaction.mockRejectedValue(p2002());
+      let err: unknown;
+      try {
+        await upload();
+      } catch (e) {
+        err = e;
+      }
+      expect(err).toBeInstanceOf(FontError);
+      expect((err as FontError).code).toBe('conflict');
+      expect((err as FontError).status).toBe(409);
+      expect((err as FontError).message).toMatch(/thử lại/i);
+      expect(m.prisma.$transaction).toHaveBeenCalledTimes(2);
+    });
+
+    it('lỗi khác P2002 ném nguyên, không thử lại', async () => {
+      m.prisma.$transaction.mockRejectedValue(Object.assign(new Error('fk'), { code: 'P2003' }));
+      await expect(upload()).rejects.toMatchObject({ code: 'P2003' });
+      expect(m.prisma.$transaction).toHaveBeenCalledTimes(1);
+    });
+  });
+
   it("family 'Inter' → name_reserved", async () => {
     expect(await codeOf(upload({ family: 'Inter' }))).toBe('name_reserved');
     expect(m.uploadAsset).not.toHaveBeenCalled();

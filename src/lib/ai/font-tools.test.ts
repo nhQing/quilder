@@ -109,6 +109,7 @@ describe('upload_font', () => {
   it('mô tả có ba câu dặn', () => {
     const d = byName('upload_font').description;
     expect(d).toContain('Mỗi lần gọi một file');
+    expect(d).toContain('gọi tuần tự, không gọi song song');
     expect(d).toContain('dryRun');
     expect(d).toContain('hỏi người dùng');
     expect(d).toContain('KHÔNG tự điền licenseConfirmed');

@@ -348,53 +348,67 @@ export async function addFace(input: AddFaceInput, actor: Actor): Promise<FontUp
   const warningCodes = [...new Set([...info.warnings, ...(input.extraWarnings ?? [])])];
   const warnings = warningMessages(warningCodes);
 
-  const { existing, slug, adopt } = await planFamily(name, fallback, input.adoptToken);
-
-  const target = input.replaceFaceId ? existing?.faces.find((f) => f.id === input.replaceFaceId) : undefined;
-  if (input.replaceFaceId && !target) {
-    throw new FontError(
-      'not_found',
-      `Không tìm thấy face cần thay trong họ "${existing?.cssName ?? name}" (có thể đã bị xoá). Tải lại trang rồi thử lại.`,
-    );
-  }
-  // Thay file giữ weight/kiểu của face cũ trừ khi người gọi đè.
-  const weight = (input.weight?.trim() || target?.weight || info.weight).replace(/\s+/g, ' ');
-  const style: FontStyle = input.style ?? (target ? asStyle(target.style) : info.style);
-
-  const cssName = existing?.cssName ?? name;
-  const tokenName = fontTokenName(slug);
-  const subset = input.prepared?.subset ?? '';
-  const sameFace = (range: string) => (f: { weight: string; style: string; unicodeRange: string }) =>
-    f.weight === weight && f.style === style && f.unicodeRange === range;
-  const matchOf = (range: string) => target ?? existing?.faces.find(sameFace(range));
-  const familyOut = { slug, cssName, token: tokenName, created: !existing };
   // File giữ nguyên byte: Google/gói đã cắt sẵn (`prepared`), hoặc woff2 tải lên (§7.1 bước 4).
   const keepBytes = !!input.prepared || info.format === 'woff2';
+  const subset = input.prepared?.subset ?? '';
+
+  /**
+   * Họ và face đích theo trạng thái DB LÚC GỌI. Tách thành hàm vì phải chạy lại khi transaction
+   * đụng P2002 (ai đó vừa tạo cùng họ): mọi thứ suy từ `planFamily` đều nằm ở đây.
+   */
+  const resolve = async (unicodeRange: string) => {
+    const plan = await planFamily(name, fallback, input.adoptToken);
+    const { existing } = plan;
+    const target = input.replaceFaceId ? existing?.faces.find((f) => f.id === input.replaceFaceId) : undefined;
+    if (input.replaceFaceId && !target) {
+      throw new FontError(
+        'not_found',
+        `Không tìm thấy face cần thay trong họ "${existing?.cssName ?? name}" (có thể đã bị xoá). Tải lại trang rồi thử lại.`,
+      );
+    }
+    // Thay file giữ weight/kiểu của face cũ trừ khi người gọi đè.
+    const weight = (input.weight?.trim() || target?.weight || info.weight).replace(/\s+/g, ' ');
+    const style: FontStyle = input.style ?? (target ? asStyle(target.style) : info.style);
+    const same = (f: { id: string; weight: string; style: string; unicodeRange: string }) =>
+      f.weight === weight && f.style === style && f.unicodeRange === unicodeRange;
+    return {
+      ...plan,
+      target,
+      weight,
+      style,
+      unicodeRange,
+      match: target ?? existing?.faces.find(same),
+      // Face thay theo id đổi descriptor; một face KHÁC đã mang đúng (weight, style, dải mới) là
+      // bản trùng mà file mới thay luôn — để lại thì đụng @@unique của FontFace.
+      clash: target ? existing?.faces.find((f) => f.id !== target.id && same(f)) : undefined,
+      cssName: existing?.cssName ?? name,
+      tokenName: fontTokenName(plan.slug),
+    };
+  };
+  type Resolved = Awaited<ReturnType<typeof resolve>>;
+  const familyOut = (r: Resolved) => ({ slug: r.slug, cssName: r.cssName, token: r.tokenName, created: !r.existing });
+
+  // Dải ký tự đoán được mà không cần cắt: giữ byte thì là dải đã cho ("" cho woff2), còn lại là tập cắt.
+  const predicted = input.prepared?.unicodeRange ?? (keepBytes ? '' : SUBSET_UNICODE_RANGE);
+  let plan = await resolve(predicted);
 
   if (dryRun) {
-    // Dải ký tự đoán được mà không cần cắt: woff2 giữ nguyên (""), còn lại là tập cắt.
-    const predicted = input.prepared?.unicodeRange ?? (keepBytes ? '' : SUBSET_UNICODE_RANGE);
     return {
       ok: true,
       dryRun: true,
-      family: { ...(existing ? { id: existing.id } : {}), ...familyOut },
-      faces: [{ weight, style, subset, bytes: input.bytes.length, replaced: !!matchOf(predicted) }],
+      family: { ...(plan.existing ? { id: plan.existing.id } : {}), ...familyOut(plan) },
+      faces: [{ weight: plan.weight, style: plan.style, subset, bytes: input.bytes.length, replaced: !!plan.match }],
       warnings,
     };
   }
 
   // ── Ghi ────────────────────────────────────────────────────────────────
   let fileBytes = input.bytes;
-  let unicodeRange = input.prepared?.unicodeRange ?? '';
   if (!keepBytes) {
     const out = await toWoff2(input.bytes, info.format);
     fileBytes = out.bytes;
-    unicodeRange = out.unicodeRange;
+    if (out.unicodeRange !== predicted) plan = await resolve(out.unicodeRange);
   }
-  const match = matchOf(unicodeRange);
-  // Face mang dải mới đổi descriptor; một face KHÁC đã có đúng (weight, style, dải mới) là bản
-  // trùng mà file mới thay luôn — để lại thì đụng @@unique của FontFace.
-  const clash = target ? existing?.faces.find((f) => f.id !== target.id && sameFace(unicodeRange)(f)) : undefined;
   // Đuôi khoá theo định dạng THẬT của byte lưu, không theo tên client gửi: tên không đuôi,
   // `download` của sourceUrl hay woff2 đặt tên `.ttf` sẽ ra khoá `/mm-font` từ chối (404) hoặc
   // content-type sai.
@@ -405,14 +419,15 @@ export async function addFace(input: AddFaceInput, actor: Actor): Promise<FontUp
     fileName,
     actorEmail: actor.email,
     actorSub: actor.sub,
-    folder: `fonts/${slug}`,
+    folder: `fonts/${plan.slug}`,
   });
   if (!up.ok) {
     throw new FontError(up.status === 413 ? 'too_large' : 'not_font', up.error);
   }
   const asset = up.asset;
 
-  const ids = await prisma.$transaction(async (tx) => {
+  const write = (r: Resolved) => prisma.$transaction(async (tx) => {
+    const { existing, slug, adopt, target, weight, style, unicodeRange, match, clash, cssName, tokenName } = r;
     let familyId = existing?.id;
     if (!familyId) {
       const fam = await tx.fontFamily.create({
@@ -491,15 +506,38 @@ export async function addFace(input: AddFaceInput, actor: Actor): Promise<FontUp
     return { familyId };
   });
 
-  revalidate(!existing);
+  let ids: { familyId: string };
+  try {
+    ids = await write(plan);
+  } catch (e) {
+    if (!isUniqueViolation(e)) throw e;
+    // Một yêu cầu khác vừa tạo cùng họ/token/face giữa lúc lập kế hoạch và lúc ghi. File đã lên
+    // kho (khoá theo nội dung) nên chỉ cần lập kế hoạch lại theo DB mới — lần này họ đã "có".
+    plan = await resolve(plan.unicodeRange);
+    try {
+      ids = await write(plan);
+    } catch (e2) {
+      if (!isUniqueViolation(e2)) throw e2;
+      throw new FontError(
+        'conflict',
+        'Có người vừa thêm font cùng tên cùng lúc nên chưa lưu được. Hãy thử lại — file đã tải lên sẽ được dùng lại, không tải lại.',
+      );
+    }
+  }
+
+  revalidate(!plan.existing);
   return {
     ok: true,
     dryRun: false,
-    family: { id: ids.familyId, ...familyOut },
-    faces: [{ weight, style, subset, bytes: asset.bytes, replaced: !!match }],
+    family: { id: ids.familyId, ...familyOut(plan) },
+    faces: [{ weight: plan.weight, style: plan.style, subset, bytes: asset.bytes, replaced: !!plan.match }],
     warnings,
   };
 }
+
+/** P2002: đụng ràng buộc unique. Kiểm theo `code`, không `instanceof` (lớp lỗi Prisma có thể bị nạp hai bản). */
+const isUniqueViolation = (e: unknown): boolean =>
+  typeof e === 'object' && e !== null && (e as { code?: unknown }).code === 'P2002';
 
 // ── Sửa / xoá ──────────────────────────────────────────────────────────────
 
