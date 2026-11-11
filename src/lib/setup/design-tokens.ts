@@ -35,7 +35,24 @@ export interface TokenImportResult {
   byCategory: Map<string, number>;
 }
 
-export function categorize(name: string): { category: string; group: string | null } {
+const FONT_NAME = /^(lv-)?font-/;
+const FONT_NON_FAMILY = /^(lv-)?font-(size|weight|leading)/;
+
+/** Font stack = không bắt đầu bằng chữ số, `var(` hay `calc(`. */
+function isFontStack(value: string): boolean {
+  const v = value.trim().toLowerCase();
+  return v !== '' && !/^\d/.test(v) && !v.startsWith('var(') && !v.startsWith('calc(');
+}
+
+/**
+ * `value` là giá trị token: có thì tên `font-*` chỉ thành hạng `font` khi giá trị là font stack
+ * (`font-size-l: 1.25rem` vẫn là `typography`). Không có giá trị thì dựa vào tên.
+ */
+export function categorize(name: string, value?: string): { category: string; group: string | null } {
+  if (FONT_NAME.test(name)) {
+    const isFont = value === undefined ? !FONT_NON_FAMILY.test(name) : isFontStack(value);
+    if (isFont) return { category: 'font', group: null };
+  }
   if (name.startsWith('color-') || name.startsWith('surface') || name.startsWith('ink')) {
     return { category: 'color', group: null };
   }
@@ -53,6 +70,40 @@ export function categorize(name: string): { category: string; group: string | nu
   if (name.startsWith('shadow')) return { category: 'shadow', group: null };
   if (name.startsWith('z-')) return { category: 'zIndex', group: null };
   return { category: 'other', group: null };
+}
+
+export interface TokenUpdatePlan {
+  name: string;
+  /** `created` = chưa có hàng; `kept` = hàng đã bị sửa trong builder (giữ `value`); `updated` = còn lại. */
+  kind: 'created' | 'kept' | 'updated';
+  create: { name: string; value: string; category: string; group: string | null; aiDescription: string | null };
+  update: Record<string, unknown>;
+}
+
+/**
+ * Phần "tính thay đổi" của `importDesignTokens`, thuần để test không cần DB.
+ * `category` luôn có trong `update`, kể cả hàng bị đóng băng hay không đổi giá trị — nhờ đó
+ * hàng cũ hạng `typography` của `font-body` được chuyển sang `font` ở lần nhập kế tiếp.
+ */
+export function planTokenUpdates(
+  existing: ReadonlyMap<string, { baseValue: string | null }>,
+  parsed: ReadonlyMap<string, { value: string; comment: string | null }>,
+): TokenUpdatePlan[] {
+  const plans: TokenUpdatePlan[] = [];
+  for (const [name, { value, comment }] of parsed) {
+    const { category, group } = categorize(name, value);
+    const row = existing.get(name);
+    const frozen = row?.baseValue != null;
+    plans.push({
+      name,
+      kind: !row ? 'created' : frozen ? 'kept' : 'updated',
+      create: { name, value, category, group, aiDescription: comment },
+      update: frozen
+        ? { category, group, aiDescription: comment, baseValue: value, deprecated: false }
+        : { value, category, group, aiDescription: comment, deprecated: false },
+    });
+  }
+  return plans;
 }
 
 export async function importDesignTokens(prisma: PrismaClient): Promise<TokenImportResult> {
@@ -98,9 +149,14 @@ export async function importDesignTokens(prisma: PrismaClient): Promise<TokenImp
   let updated = 0;
   let kept = 0;
 
-  for (const [name, { value, comment }] of found) {
-    const { category, group } = categorize(name);
-    const existing = await prisma.token.findUnique({ where: { name } });
+  const existingRows = new Map<string, { baseValue: string | null }>();
+  for (const name of found.keys()) {
+    const row = await prisma.token.findUnique({ where: { name } });
+    if (row) existingRows.set(name, { baseValue: row.baseValue });
+  }
+
+  for (const plan of planTokenUpdates(existingRows, found)) {
+    const { name } = plan;
 
     /*
      * Token đã bị SỬA trong builder thì giữ nguyên `value`.
@@ -119,17 +175,10 @@ export async function importDesignTokens(prisma: PrismaClient): Promise<TokenImp
      * này thì một lần chạy lỗi (gói vắng) đánh dấu deprecated, và mọi lần chạy đúng sau
      * đó vẫn để nó kẹt ở deprecated — đã xảy ra 22/10/2026.
      */
-    const frozen = existing?.baseValue != null;
-    await prisma.token.upsert({
-      where: { name },
-      create: { name, value, category, group, aiDescription: comment },
-      update: frozen
-        ? { category, group, aiDescription: comment, baseValue: value, deprecated: false }
-        : { value, category, group, aiDescription: comment, deprecated: false },
-    });
+    await prisma.token.upsert({ where: { name }, create: plan.create, update: plan.update });
 
-    if (!existing) created += 1;
-    else if (frozen) kept += 1;
+    if (plan.kind === 'created') created += 1;
+    else if (plan.kind === 'kept') kept += 1;
     else updated += 1;
   }
 
@@ -150,7 +199,7 @@ export async function importDesignTokens(prisma: PrismaClient): Promise<TokenImp
 
   const byCategory = new Map<string, number>();
   for (const name of found.keys()) {
-    const c = categorize(name).category;
+    const c = categorize(name, found.get(name)?.value).category;
     byCategory.set(c, (byCategory.get(c) ?? 0) + 1);
   }
 

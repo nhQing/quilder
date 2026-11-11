@@ -2,7 +2,50 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { PrismaClient } from '@prisma/client';
 
-import { importDesignTokens } from './design-tokens';
+import { categorize, importDesignTokens, planTokenUpdates } from './design-tokens';
+
+describe('categorize', () => {
+  it('font stack → hạng font', () => {
+    expect(categorize('font-body', '"Inter Variable", system-ui').category).toBe('font');
+    expect(categorize('lv-font-head', 'gilroy, Arial, sans-serif').category).toBe('font');
+  });
+
+  it('giá trị không phải font stack → giữ luật cũ', () => {
+    expect(categorize('font-size-l', '1.25rem').category).toBe('typography');
+    expect(categorize('font-x', 'var(--font-body)').category).toBe('typography');
+    expect(categorize('weight-bold', '700').category).toBe('typography');
+    expect(categorize('color-ink', '#000').category).toBe('color');
+  });
+
+  it('không có giá trị thì dựa vào tên', () => {
+    expect(categorize('font-body').category).toBe('font');
+    expect(categorize('font-size-l').category).toBe('typography');
+    expect(categorize('font-weight-bold').category).toBe('typography');
+    expect(categorize('font-leading-tight').category).toBe('typography');
+  });
+});
+
+describe('planTokenUpdates', () => {
+  it('hàng font-body cũ hạng typography → update category font, kể cả khi giá trị không đổi', () => {
+    const plans = planTokenUpdates(
+      new Map([['font-body', { baseValue: null }]]),
+      new Map([['font-body', { value: '"Inter Variable", system-ui', comment: null }]]),
+    );
+    expect(plans).toHaveLength(1);
+    expect(plans[0]?.update).toMatchObject({ category: 'font' });
+    expect(plans[0]?.kind).toBe('updated');
+  });
+
+  it('hàng đã sửa trong builder: giữ value nhưng vẫn đổi category', () => {
+    const [plan] = planTokenUpdates(
+      new Map([['font-body', { baseValue: 'x' }]]),
+      new Map([['font-body', { value: 'Georgia, serif', comment: null }]]),
+    );
+    expect(plan?.kind).toBe('kept');
+    expect(plan?.update).toMatchObject({ category: 'font', baseValue: 'Georgia, serif' });
+    expect(plan?.update).not.toHaveProperty('value');
+  });
+});
 
 /*
  * 22/10/2026 — deploy v1.2.0 lên server: stage `bootstrap` không chép `projects/`, nên

@@ -22,7 +22,8 @@ import type { TokenOption } from './queries';
  * Loại token của một ô. Phần lớn trùng `Token.category` (`space`, `radius`, `typeScale`,
  * `color`…); vài loại hẹp hơn một category thì lọc thêm theo tiền tố tên:
  *
- *  - `tracking` → token `tracking-*` (category `typography` còn gồm cả font, weight, leading).
+ *  - `tracking` → token `tracking-*` (category `typography` còn gồm weight, leading; token
+ *    font-family có hạng riêng `font`).
  */
 export type TokenKind = string;
 
