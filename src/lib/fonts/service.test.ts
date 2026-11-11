@@ -573,6 +573,40 @@ describe('updateFamily', () => {
     expect(m.prisma.fontFamily.update).not.toHaveBeenCalled();
   });
 
+  // Fallback 150 ký tự, an toàn khi đứng riêng (< 200).
+  const LONG_FB = Array.from({ length: 15 }, (_, i) => `Fallback${String(i).padStart(2, '0')}`).join(', ').slice(0, 150);
+
+  it('chỉ đổi fallback: kiểm CHUỖI GHÉP sẽ ghi — tên dài + fallback dài quá 200 → bad_fallback, không ghi', async () => {
+    const longName = 'G'.repeat(60);
+    m.prisma.fontFamily.findUnique.mockResolvedValue({ ...family([{ id: 'face0' }]), cssName: longName });
+    m.prisma.token.findUnique.mockResolvedValue({ id: 't1', name: 'font-gilroy', value: `"${longName}", ${FALLBACKS.sans}` });
+    expect(LONG_FB.length).toBeLessThanOrEqual(200);
+
+    expect(await codeOf(updateFamily('f1', { fallback: LONG_FB }, actor))).toBe('bad_fallback');
+    expect(m.prisma.$transaction).not.toHaveBeenCalled();
+    expect(m.prisma.token.update).not.toHaveBeenCalled();
+  });
+
+  it('đổi tên khi token nhận lại từ gói có fallback KHÁC fam.fallback: kiểm với fallback của token → name_required', async () => {
+    m.prisma.fontFamily.findUnique.mockResolvedValue(family([{ id: 'face0' }])); // fam.fallback ngắn
+    m.prisma.token.findUnique.mockResolvedValue({ id: 't1', name: 'font-gilroy', value: `gilroy, ${LONG_FB}` });
+    // Với fam.fallback thì hợp lệ; với fallback thật của token thì quá 200.
+    const name = 'Gilroy ' + 'W'.repeat(45);
+
+    expect(await codeOf(updateFamily('f1', { cssName: name }, actor))).toBe('name_required');
+    expect(m.prisma.$transaction).not.toHaveBeenCalled();
+    expect(m.prisma.fontFamily.update).not.toHaveBeenCalled();
+  });
+
+  it('đổi tên token nhận lại từ gói: ghi đúng chuỗi đã kiểm (giữ fallback của token)', async () => {
+    m.prisma.fontFamily.findUnique.mockResolvedValue(family([{ id: 'face0' }]));
+    m.prisma.token.findUnique.mockResolvedValue({ id: 't1', name: 'font-gilroy', value: 'gilroy, "Helvetica Neue", Arial, sans-serif' });
+    await updateFamily('f1', { cssName: 'Gilroy Web' }, actor);
+    expect(m.prisma.token.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ value: '"Gilroy Web", "Helvetica Neue", Arial, sans-serif' }) }),
+    );
+  });
+
   it('đổi fallback → value token mang fallback mới', async () => {
     m.prisma.fontFamily.findUnique.mockResolvedValue(family([{ id: 'face0' }]));
     m.prisma.token.findUnique.mockResolvedValue({ id: 't1', name: 'font-gilroy', value: `"gilroy", ${FALLBACKS.sans}`, custom: true });

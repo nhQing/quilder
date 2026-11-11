@@ -23,7 +23,7 @@
 
 import { prisma } from '@/lib/db';
 import { uploadAsset } from '@/lib/builder/upload-asset';
-import { isSafeTokenValue } from '@/lib/design/token-value';
+import { isSafeTokenValue, MAX_TOKEN_VALUE } from '@/lib/design/token-value';
 import { CUSTOM_TOKENS_TAG } from '@/lib/render/custom-tokens';
 import { revalidateTag } from 'next/cache';
 
@@ -587,37 +587,50 @@ export async function updateFamily(
   if (patch.fallback !== undefined) {
     data.fallback = cleanFallback(patch.fallback);
   }
-  if (patch.cssName !== undefined) {
-    const name = patch.cssName.trim().replace(/\s+/g, ' ');
-    if (name !== fam.cssName) {
-      await checkFamilyName(name, data.fallback ?? fam.fallback, fam.id);
-      data.cssName = name;
-    }
-  }
+  const name = patch.cssName?.trim().replace(/\s+/g, ' ');
+  const renaming = name !== undefined && name !== fam.cssName;
   if (patch.licenseNote !== undefined) {
     data.licenseNote = patch.licenseNote?.trim() || null;
   }
-  if (!Object.keys(data).length) return;
 
   const tokenName = fontTokenName(fam.slug);
-  const tokenChanged = data.cssName !== undefined || data.fallback !== undefined;
+  const tokenChanged = renaming || data.fallback !== undefined;
+  // Giá trị token SẼ GHI, dựng trước để kiểm đúng chuỗi đó: đổi tên giữ phần fallback đang có
+  // trong value (token nhận lại từ gói có thể khác `fam.fallback`), đổi fallback thì dùng
+  // fallback mới. Kiểm từng phần riêng lẻ là để lọt chuỗi ghép quá `MAX_TOKEN_VALUE`.
+  let tokenWrite: { id: string; value: string } | null = null;
+  if (tokenChanged) {
+    const token = await prisma.token.findUnique({ where: { name: tokenName }, select: { id: true, value: true } });
+    const fb = data.fallback ?? (token ? fallbackPartOf(token.value) : null) ?? fam.fallback;
+    const cssName = renaming ? name : fam.cssName;
+    if (renaming) await checkFamilyName(name, fb, fam.id);
+    const value = fontTokenValue(cssName, fb);
+    if (!isSafeTokenValue(value)) {
+      throw renaming && data.fallback === undefined
+        ? new FontError(
+            'name_required',
+            `Tên họ mới ghép với font dự phòng đang có thành giá trị token quá dài (tối đa ${MAX_TOKEN_VALUE} ký tự). Hãy đặt tên ngắn hơn hoặc rút gọn fallback.`,
+          )
+        : new FontError(
+            'bad_fallback',
+            `Tên họ ghép với font dự phòng này thành giá trị token quá dài (tối đa ${MAX_TOKEN_VALUE} ký tự). Hãy rút gọn danh sách fallback.`,
+          );
+    }
+    if (renaming) data.cssName = name;
+    if (token) tokenWrite = { id: token.id, value };
+  }
+  if (!Object.keys(data).length) return;
+
   await prisma.$transaction(async (tx) => {
     await tx.fontFamily.update({ where: { id }, data });
-    if (tokenChanged) {
-      const token = await tx.token.findUnique({ where: { name: tokenName }, select: { id: true, value: true } });
-      if (token) {
-        const cssName = data.cssName ?? fam.cssName;
-        // Đổi tên giữ phần fallback đang có trong value (token nhận lại từ gói có thể khác
-        // `fam.fallback`); đổi fallback thì dùng fallback mới.
-        const fb = data.fallback ?? fallbackPartOf(token.value) ?? fam.fallback;
-        await tx.token.update({
-          where: { id: token.id },
-          data: {
-            value: fontTokenValue(cssName, fb),
-            aiDescription: describeFontFamily(cssName, fam.source, fam.faces),
-          },
-        });
-      }
+    if (tokenWrite) {
+      await tx.token.update({
+        where: { id: tokenWrite.id },
+        data: {
+          value: tokenWrite.value,
+          aiDescription: describeFontFamily(data.cssName ?? fam.cssName, fam.source, fam.faces),
+        },
+      });
     }
     await tx.auditLog.create({
       data: {
