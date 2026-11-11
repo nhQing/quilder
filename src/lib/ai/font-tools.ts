@@ -20,7 +20,7 @@ import { fetchUrlBytes } from '@/lib/assets/fetch-url';
 import { importGoogleFamily } from '@/lib/fonts/google';
 import { resolveFallback } from '@/lib/fonts/http';
 import { addFace, listFonts } from '@/lib/fonts/service';
-import { FontError, parseWeight } from '@/lib/fonts/types';
+import { FontError, MAX_LICENSE_NOTE, parseWeight } from '@/lib/fonts/types';
 import type { ToolContext, ToolDef } from './tools';
 
 const listFontsTool: ToolDef = {
@@ -77,7 +77,7 @@ const uploadFontTool: ToolDef = {
         .boolean()
         .optional()
         .describe('Chỉ true khi NGƯỜI DÙNG đã xác nhận có quyền dùng font. Bắt buộc với filePath/sourceUrl.'),
-      licenseNote: z.string().max(500).optional().describe('Ghi chú giấy phép.'),
+      licenseNote: z.string().max(MAX_LICENSE_NOTE).optional().describe('Ghi chú giấy phép.'),
       dryRun: z.boolean().optional().describe('Chỉ đọc và báo, không lưu.'),
     })
     .strict(),

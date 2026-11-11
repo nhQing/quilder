@@ -66,6 +66,17 @@ describe('POST /api/fonts', () => {
     );
   });
 
+  it('licenseNote quá 500 ký tự → 422, không gọi service (multipart lẫn JSON)', async () => {
+    const res = await POST(form({ licenseConfirmed: 'true', licenseNote: 'x'.repeat(501) }));
+    expect(res.status).toBe(422);
+    const res2 = await POST(json({ sourceUrl: 'https://e.com/x.woff2', licenseNote: 'x'.repeat(501) }));
+    expect(res2.status).toBe(422);
+    expect(m.addFace).not.toHaveBeenCalled();
+    expect(m.fetchUrlBytes).not.toHaveBeenCalled();
+    await POST(form({ licenseConfirmed: 'true', licenseNote: 'x'.repeat(500) }));
+    expect(m.addFace).toHaveBeenCalledWith(expect.objectContaining({ licenseNote: 'x'.repeat(500) }), expect.anything());
+  });
+
   it('multipart replaceFaceId đi xuống service', async () => {
     await POST(form({ licenseConfirmed: 'true', replaceFaceId: 'face9', dryRun: 'true' }));
     expect(m.addFace).toHaveBeenCalledWith(

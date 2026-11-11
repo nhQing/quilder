@@ -43,6 +43,7 @@ import {
   FALLBACKS,
   FONTS_TAG,
   FontError,
+  parseWeight,
 } from './types';
 
 export interface Actor {
@@ -363,6 +364,9 @@ export async function addFace(input: AddFaceInput, actor: Actor): Promise<FontUp
   // sẽ cắt thì dải là bộ cắt (chứa cả bộ kiểm), woff2 tải lên là "" — cả hai = kiểm cả bộ.
   const info = inspectFont(input.bytes, { unicodeRange: input.prepared?.unicodeRange });
   const name = (input.family ?? info.family ?? '').trim().replace(/\s+/g, ' ');
+  // Route và MCP đã kiểm, nhưng service còn người gọi khác (script adopt đọc `font-weight` từ
+  // CSS — có thể là `bold`): weight không hợp lệ bị `fontFaceCss` bỏ, face thành vô hình.
+  const weightIn = parseWeight(input.weight?.replace(/\s+/g, ' '));
   const warningCodes = [...new Set([...info.warnings, ...(input.extraWarnings ?? [])])];
   const warnings = warningMessages(warningCodes);
 
@@ -385,7 +389,7 @@ export async function addFace(input: AddFaceInput, actor: Actor): Promise<FontUp
       );
     }
     // Thay file giữ weight/kiểu của face cũ trừ khi người gọi đè.
-    const weight = (input.weight?.trim() || target?.weight || info.weight).replace(/\s+/g, ' ');
+    const weight = (weightIn || target?.weight || info.weight).replace(/\s+/g, ' ');
     const style: FontStyle = input.style ?? (target ? asStyle(target.style) : info.style);
     const same = (f: { id: string; weight: string; style: string; unicodeRange: string }) =>
       f.weight === weight && f.style === style && f.unicodeRange === unicodeRange;

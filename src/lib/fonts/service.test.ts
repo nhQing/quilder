@@ -431,6 +431,14 @@ describe('addFace', () => {
     expect(r.warnings.map((w) => w.code)).toEqual(['restricted_embedding', 'missing_vietnamese']);
   });
 
+  it("weight do người gọi đưa (vd. script adopt đọc 'bold' từ CSS) cũng qua parseWeight → bad_weight", async () => {
+    expect(await codeOf(upload({ weight: 'bold' }))).toBe('bad_weight');
+    expect(await codeOf(upload({ weight: '900 100' }))).toBe('bad_weight');
+    expect(m.uploadAsset).not.toHaveBeenCalled();
+    const r = await upload({ weight: ' 100  900 ' });
+    expect(r.faces[0]!.weight).toBe('100 900');
+  });
+
   it("fallback 'x; }' → bad_fallback", async () => {
     expect(await codeOf(upload({ fallback: 'x; }' }))).toBe('bad_fallback');
   });

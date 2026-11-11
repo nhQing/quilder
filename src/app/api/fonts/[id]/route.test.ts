@@ -32,6 +32,11 @@ describe('/api/fonts/[id]', () => {
     );
   });
 
+  it('PATCH licenseNote quá 500 ký tự → 422, không gọi service', async () => {
+    expect((await patch({ licenseNote: 'x'.repeat(501) })).status).toBe(422);
+    expect(m.updateFamily).not.toHaveBeenCalled();
+  });
+
   it('PATCH FontError → mã của §10', async () => {
     m.updateFamily.mockRejectedValue(new FontError('bad_fallback', 'x'));
     expect((await patch({ fallback: '};evil' })).status).toBe(422);
