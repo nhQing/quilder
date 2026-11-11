@@ -84,7 +84,12 @@ export async function POST(request: Request) {
       const url = asString(body.sourceUrl);
       if (!url) return bad('Cần "sourceUrl" hoặc "google" trong thân JSON');
       const got = await fetchUrlBytes(url, 'Font');
-      if (!got.ok) return bad(got.error, got.status);
+      if (!got.ok) {
+        return NextResponse.json(
+          { error: got.error, ...(got.code ? { code: got.code } : {}) },
+          { status: got.status },
+        );
+      }
       return NextResponse.json(await addFace({ ...fields, bytes: got.bytes, fileName: got.fileName }, actor));
     }
 
@@ -98,7 +103,10 @@ export async function POST(request: Request) {
     if (!(file instanceof File)) return bad('Thiếu trường "file"');
     // Kiểm trước khi đọc vào bộ nhớ, như /api/assets.
     if (file.size > MAX_ASSET_BYTES) {
-      return bad(`Tối đa ${MAX_ASSET_BYTES / 1024 / 1024} MB`, 413);
+      return NextResponse.json(
+        { error: `Tối đa ${MAX_ASSET_BYTES / 1024 / 1024} MB`, code: 'too_large' },
+        { status: 413 },
+      );
     }
     const fields = readFields(Object.fromEntries(form.entries()));
     const bytes = new Uint8Array(await file.arrayBuffer());

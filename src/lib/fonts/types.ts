@@ -106,3 +106,10 @@ export function parseWeight(input: unknown): string | undefined {
   if (lo < 1 || lo > 1000 || hi < 1 || hi > 1000 || lo > hi) throw badWeight();
   return text;
 }
+
+const SERVABLE_KEY_RE = /^public\/(?:[A-Za-z0-9._-]+\/)*[A-Za-z0-9._-]+\.(?:woff2|woff|ttf|otf)$/;
+
+/** Khoá file font mà `/mm-font` được phép đọc: `public/…`, đuôi font, không `..`/`.`/`//`/`\`. */
+export function isServableFontKey(key: string): boolean {
+  return SERVABLE_KEY_RE.test(key) && !key.split('/').some((s) => s === '.' || s === '..');
+}
