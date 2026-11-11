@@ -1,16 +1,16 @@
-import { createRequire } from "node:module";
-import path from "node:path";
-import { Worker } from "node:worker_threads";
+import { createRequire } from 'node:module';
+import { Worker } from 'node:worker_threads';
 
-import type { InspectResult } from "./inspect";
-import { FontError } from "./types";
-import { SUBSET_CODEPOINTS, SUBSET_UNICODE_RANGE } from "./unicode";
+import type { InspectResult } from './inspect';
+import { FontError } from './types';
+import { SUBSET_CODEPOINTS, SUBSET_UNICODE_RANGE } from './unicode';
 
 /** Trần thời gian cắt một font (kế hoạch: 30 giây). */
 const DEFAULT_TIMEOUT_MS = 30_000;
 
 const TOO_SLOW =
-  "Cắt bộ chữ quá lâu (quá giới hạn thời gian). Hãy dùng file woff2 đã cắt sẵn (ví dụ bộ latin + vietnamese) rồi tải lại.";
+  'Cắt bộ chữ quá lâu (quá giới hạn thời gian). Hãy dùng file woff2 đã cắt sẵn (ví dụ bộ latin + vietnamese) rồi tải lại.';
+const BAD_FILE = 'Không cắt được bộ chữ của file font (file hỏng hoặc không hỗ trợ).';
 
 /**
  * Mã chạy trong worker. `subset-font` chạy wasm đồng bộ nên sẽ chặn event loop của luồng
@@ -32,21 +32,34 @@ fn(Buffer.from(workerData.bytes), String.fromCodePoint(...workerData.codepoints)
 );
 `;
 
-/** `subset-font` là external của Next (xem `serverExternalPackages`), nên resolve lúc chạy. */
+/**
+ * Đường dẫn tuyệt đối tới `subset-font`, resolve theo vị trí module này. Literal
+ * `require.resolve('subset-font')` để trình theo vết (nft) của Next mang gói và cây phụ
+ * thuộc vào bản standalone — chỉ có `serverExternalPackages` thì KHÔNG đủ.
+ */
 function subsetModulePath(): string {
-  return createRequire(path.join(process.cwd(), "package.json")).resolve("subset-font");
+  try {
+    return createRequire(import.meta.url).resolve('subset-font');
+  } catch (e) {
+    throw new FontError('not_font', 'Server thiếu thư viện cắt font (subset-font).', {
+      cause: String((e as Error)?.message ?? e),
+    });
+  }
 }
 
 function runInWorker(bytes: Uint8Array, timeoutMs: number): Promise<Uint8Array> {
   return new Promise((resolve, reject) => {
-    const copy = new Uint8Array(bytes); // worker nhận bản sao, không chiếm buffer của người gọi
+    let modulePath: string;
+    try {
+      modulePath = subsetModulePath();
+    } catch (e) {
+      reject(e);
+      return;
+    }
     const worker = new Worker(WORKER_SOURCE, {
       eval: true,
-      workerData: {
-        bytes: copy,
-        codepoints: SUBSET_CODEPOINTS,
-        modulePath: subsetModulePath(),
-      },
+      // Worker nhận bản sao, không chiếm buffer của người gọi.
+      workerData: { bytes: new Uint8Array(bytes), codepoints: SUBSET_CODEPOINTS, modulePath },
     });
     let settled = false;
     const finish = (fn: () => void) => {
@@ -56,38 +69,21 @@ function runInWorker(bytes: Uint8Array, timeoutMs: number): Promise<Uint8Array> 
       void worker.terminate();
       fn();
     };
+    const fail = (cause: string) =>
+      finish(() => reject(new FontError('not_font', BAD_FILE, { cause })));
     // Timer nằm ở luồng chính, còn wasm ở worker → timer luôn nổ đúng hạn.
     const timer = setTimeout(
-      () => finish(() => reject(new FontError("too_large", TOO_SLOW))),
+      () => finish(() => reject(new FontError('too_large', TOO_SLOW))),
       timeoutMs,
     );
-    worker.on("message", (msg: { ok: boolean; bytes?: Uint8Array; message?: string }) =>
-      finish(() => {
-        if (msg.ok && msg.bytes) resolve(new Uint8Array(msg.bytes));
-        else
-          reject(
-            new FontError(
-              "not_font",
-              "Không cắt được bộ chữ của file font (file hỏng hoặc không hỗ trợ).",
-            ),
-          );
-      }),
-    );
-    worker.on("error", () =>
-      finish(() =>
-        reject(
-          new FontError(
-            "not_font",
-            "Không cắt được bộ chữ của file font (file hỏng hoặc không hỗ trợ).",
-          ),
-        ),
-      ),
-    );
-    worker.on("exit", (code) =>
-      finish(() =>
-        reject(new FontError("not_font", `Tiến trình cắt font dừng bất thường (${code}).`)),
-      ),
-    );
+    worker.on('message', (msg: { ok: boolean; bytes?: Uint8Array; message?: string }) => {
+      if (msg.ok && msg.bytes) {
+        const out = new Uint8Array(msg.bytes);
+        finish(() => resolve(out));
+      } else fail(msg.message ?? 'unknown');
+    });
+    worker.on('error', (e) => fail(String(e?.message ?? e)));
+    worker.on('exit', (code) => fail(`worker exit ${code}`));
   });
 }
 
@@ -97,10 +93,10 @@ function runInWorker(bytes: Uint8Array, timeoutMs: number): Promise<Uint8Array> 
  */
 export async function toWoff2(
   bytes: Uint8Array,
-  format: InspectResult["format"],
+  format: InspectResult['format'],
   opts: { timeoutMs?: number } = {},
 ): Promise<{ bytes: Uint8Array; unicodeRange: string }> {
-  if (format === "woff2") return { bytes, unicodeRange: "" };
+  if (format === 'woff2') return { bytes, unicodeRange: '' };
   const out = await runInWorker(bytes, opts.timeoutMs ?? DEFAULT_TIMEOUT_MS);
   return { bytes: out, unicodeRange: SUBSET_UNICODE_RANGE };
 }
