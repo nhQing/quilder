@@ -216,27 +216,11 @@ function revalidate(tokenChanged: boolean): void {
   if (tokenChanged) revalidateTag(CUSTOM_TOKENS_TAG);
 }
 
-// ── addFace ────────────────────────────────────────────────────────────────
-
-/** Thêm một file font vào kho: tạo họ (và token) khi chưa có, thêm hoặc thay face (§7.1). */
-export async function addFace(input: AddFaceInput, actor: Actor): Promise<FontUploadResult> {
-  const source: FontSource = input.source ?? 'upload';
-  const dryRun = !!input.dryRun;
-  const fallback = cleanFallback(input.fallback);
-  // Bản dryRun là bước xem trước, chạy TRƯỚC khi người dùng tick giấy phép (§7.3, §11.3).
-  if (source === 'upload' && !input.licenseConfirmed && !dryRun) {
-    throw new FontError(
-      'license_required',
-      'Cần xác nhận "Tôi có quyền dùng font này trên web" trước khi lưu font tải lên.',
-    );
-  }
-
-  const info = inspectFont(input.bytes);
-  const name = (input.family ?? info.family ?? '').trim().replace(/\s+/g, ' ');
-  const weight = (input.weight?.trim() || info.weight).replace(/\s+/g, ' ');
-  const style: FontStyle = input.style ?? info.style;
-  const warnings = info.warnings.map((code) => ({ code, message: WARNING_MESSAGES[code] }));
-
+/**
+ * Luật chọn họ cho một tên (dùng chung cho ghi thật và dryRun): tìm họ cũ không phân biệt hoa
+ * thường; họ mới thì kiểm tên, slug và token.
+ */
+async function planFamily(name: string, fallback: string, adoptToken?: boolean) {
   if (!name) {
     throw new FontError('name_required', 'File font không ghi tên họ. Hãy nhập tên họ font.');
   }
@@ -275,7 +259,7 @@ export async function addFace(input: AddFaceInput, actor: Actor): Promise<FontUp
       select: { id: true, custom: true },
     });
     if (token) {
-      if (input.adoptToken && token.custom) adopt = { id: token.id };
+      if (adoptToken && token.custom) adopt = { id: token.id };
       else {
         throw new FontError(
           'slug_taken',
@@ -284,6 +268,72 @@ export async function addFace(input: AddFaceInput, actor: Actor): Promise<FontUp
       }
     }
   }
+
+  return { existing, slug, adopt };
+}
+
+export interface PreviewFace {
+  weight: string;
+  style: FontStyle;
+  unicodeRange: string;
+  subset: string;
+  bytes?: number;
+}
+
+/** Xem trước (không ghi, không đụng file): cùng luật `addFace`, `replaced` tính từ face đã có. */
+export async function previewFaces(input: {
+  family: string;
+  fallback?: string;
+  faces: PreviewFace[];
+}): Promise<FontUploadResult> {
+  const fallback = cleanFallback(input.fallback);
+  const name = input.family.trim().replace(/\s+/g, ' ');
+  const { existing, slug } = await planFamily(name, fallback);
+  return {
+    ok: true,
+    dryRun: true,
+    family: {
+      ...(existing ? { id: existing.id } : {}),
+      slug,
+      cssName: existing?.cssName ?? name,
+      token: tokenNameOf(slug),
+      created: !existing,
+    },
+    faces: input.faces.map((f) => ({
+      weight: f.weight,
+      style: f.style,
+      subset: f.subset,
+      bytes: f.bytes ?? 0,
+      replaced: !!existing?.faces.some(
+        (x) => x.weight === f.weight && x.style === f.style && x.unicodeRange === f.unicodeRange,
+      ),
+    })),
+    warnings: [],
+  };
+}
+
+// ── addFace ────────────────────────────────────────────────────────────────
+
+/** Thêm một file font vào kho: tạo họ (và token) khi chưa có, thêm hoặc thay face (§7.1). */
+export async function addFace(input: AddFaceInput, actor: Actor): Promise<FontUploadResult> {
+  const source: FontSource = input.source ?? 'upload';
+  const dryRun = !!input.dryRun;
+  const fallback = cleanFallback(input.fallback);
+  // Bản dryRun là bước xem trước, chạy TRƯỚC khi người dùng tick giấy phép (§7.3, §11.3).
+  if (source === 'upload' && !input.licenseConfirmed && !dryRun) {
+    throw new FontError(
+      'license_required',
+      'Cần xác nhận "Tôi có quyền dùng font này trên web" trước khi lưu font tải lên.',
+    );
+  }
+
+  const info = inspectFont(input.bytes);
+  const name = (input.family ?? info.family ?? '').trim().replace(/\s+/g, ' ');
+  const weight = (input.weight?.trim() || info.weight).replace(/\s+/g, ' ');
+  const style: FontStyle = input.style ?? info.style;
+  const warnings = info.warnings.map((code) => ({ code, message: WARNING_MESSAGES[code] }));
+
+  const { existing, slug, adopt } = await planFamily(name, fallback, input.adoptToken);
 
   const cssName = existing?.cssName ?? name;
   const tokenName = tokenNameOf(slug);
