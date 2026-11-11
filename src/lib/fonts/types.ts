@@ -31,7 +31,8 @@ export type FontErrorCode =
   | 'google_not_found'
   | 'google_unreachable'
   | 'in_use'
-  | 'bad_fallback';
+  | 'bad_fallback'
+  | 'not_found';
 
 export const FONT_ERROR_STATUS: Record<FontErrorCode, number> = {
   not_font: 415,
@@ -45,6 +46,7 @@ export const FONT_ERROR_STATUS: Record<FontErrorCode, number> = {
   google_unreachable: 502,
   in_use: 409,
   bad_fallback: 422,
+  not_found: 404,
 };
 
 export class FontError extends Error {

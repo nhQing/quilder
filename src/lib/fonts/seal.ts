@@ -1,5 +1,17 @@
+import type { Prisma, PrismaClient } from '@prisma/client';
+import { unstable_cache } from 'next/cache';
 import { z } from 'zod';
-import { EMPTY_FONT_SEAL, type FontSeal, type FontSealFace, type FontSealFamily } from './types';
+
+import { prisma } from '@/lib/db';
+
+import { fontFaceCss } from './css';
+import {
+  EMPTY_FONT_SEAL,
+  FONTS_TAG,
+  type FontSeal,
+  type FontSealFace,
+  type FontSealFamily,
+} from './types';
 
 const faceSchema = z.object({
   key: z.string().min(1),
@@ -33,4 +45,50 @@ export function fontSealOf(json: unknown): FontSeal {
     families.push({ slug: fam.data.slug, cssName: fam.data.cssName, faces });
   }
   return { families };
+}
+
+// ── Đọc từ DB ────────────────────────────────────────────────────────────────
+
+type Db = Prisma.TransactionClient | PrismaClient;
+
+/**
+ * FontSeal của bản nháp, đọc thẳng `FontFamily` + `FontFace` (không cache). `db` cho phép
+ * Publish chụp trong chính transaction của nó. `key` là `Asset.key` của file face.
+ */
+export async function readFontSeal(db: Db = prisma): Promise<FontSeal> {
+  const rows = await db.fontFamily.findMany({
+    orderBy: { slug: 'asc' },
+    select: {
+      slug: true,
+      cssName: true,
+      faces: {
+        orderBy: [{ weight: 'asc' }, { style: 'asc' }, { unicodeRange: 'asc' }],
+        select: { weight: true, style: true, unicodeRange: true, asset: { select: { key: true } } },
+      },
+    },
+  });
+  return fontSealOf({
+    families: rows.map((f) => ({
+      slug: f.slug,
+      cssName: f.cssName,
+      faces: f.faces.map((x) => ({
+        key: x.asset.key,
+        weight: x.weight,
+        style: x.style,
+        unicodeRange: x.unicodeRange,
+      })),
+    })),
+  });
+}
+
+/** Bản nháp có cache; mọi thao tác ghi font gọi `revalidateTag(FONTS_TAG)`. */
+export const draftFontSeal: () => Promise<FontSeal> = unstable_cache(
+  () => readFontSeal(),
+  ['font-seal'],
+  { tags: [FONTS_TAG] },
+);
+
+/** `@font-face` của bản nháp — in ở `/render`, `/preview` và màn Font. */
+export async function draftFontFaceCss(): Promise<string> {
+  return fontFaceCss(await draftFontSeal());
 }
