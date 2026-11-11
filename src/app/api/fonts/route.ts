@@ -5,7 +5,8 @@ import { NextResponse } from 'next/server';
  *
  * `POST` nhận ba dạng thân:
  *  - multipart: `file`, `family?`, `weight?`, `style?`, `fallback?`, `licenseConfirmed`,
- *    `licenseNote?`, `dryRun?` — dạng chính (cả MCP `filePath` lẫn màn Cài đặt);
+ *    `licenseNote?`, `dryRun?`, `replaceFaceId?` (nút "Thay file": face bị thay theo id) — dạng
+ *    chính (cả MCP `filePath` lẫn màn Cài đặt);
  *  - JSON `{ sourceUrl, … }`: server tải file về (cùng helper và trần 10 MB với `upload_asset`);
  *  - JSON `{ google: { family, weights?, italic? }, … }`: server gọi css2 và tải woff2 từ Google (`lib/fonts/google`).
  *
@@ -52,6 +53,7 @@ function readFields(raw: Record<string, unknown>): Fields {
     licenseConfirmed: asBool(raw.licenseConfirmed),
     licenseNote: asString(raw.licenseNote),
     dryRun: asBool(raw.dryRun),
+    replaceFaceId: asString(raw.replaceFaceId),
   };
 }
 

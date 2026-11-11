@@ -74,6 +74,12 @@ export interface AddFaceInput {
    * file đều đủ chữ trong dải của nó.
    */
   extraWarnings?: FontWarningCode[];
+  /**
+   * "Thay file" ở màn Font: face này (phải thuộc họ được chọn) nhận file mới, kể cả khi dải
+   * ký tự của file mới khác dải cũ (woff2 "" ↔ TTF đã cắt ↔ dải Google). Không có thì face
+   * được thay chỉ khi trùng đúng (weight, style, unicodeRange).
+   */
+  replaceFaceId?: string;
 }
 
 /** Đúng hình dạng phản hồi `POST /api/fonts` (§10). */
@@ -339,18 +345,28 @@ export async function addFace(input: AddFaceInput, actor: Actor): Promise<FontUp
   // sẽ cắt thì dải là bộ cắt (chứa cả bộ kiểm), woff2 tải lên là "" — cả hai = kiểm cả bộ.
   const info = inspectFont(input.bytes, { unicodeRange: input.prepared?.unicodeRange });
   const name = (input.family ?? info.family ?? '').trim().replace(/\s+/g, ' ');
-  const weight = (input.weight?.trim() || info.weight).replace(/\s+/g, ' ');
-  const style: FontStyle = input.style ?? info.style;
   const warningCodes = [...new Set([...info.warnings, ...(input.extraWarnings ?? [])])];
   const warnings = warningMessages(warningCodes);
 
   const { existing, slug, adopt } = await planFamily(name, fallback, input.adoptToken);
 
+  const target = input.replaceFaceId ? existing?.faces.find((f) => f.id === input.replaceFaceId) : undefined;
+  if (input.replaceFaceId && !target) {
+    throw new FontError(
+      'not_found',
+      `Không tìm thấy face cần thay trong họ "${existing?.cssName ?? name}" (có thể đã bị xoá). Tải lại trang rồi thử lại.`,
+    );
+  }
+  // Thay file giữ weight/kiểu của face cũ trừ khi người gọi đè.
+  const weight = (input.weight?.trim() || target?.weight || info.weight).replace(/\s+/g, ' ');
+  const style: FontStyle = input.style ?? (target ? asStyle(target.style) : info.style);
+
   const cssName = existing?.cssName ?? name;
   const tokenName = fontTokenName(slug);
   const subset = input.prepared?.subset ?? '';
-  const matchOf = (range: string) =>
-    existing?.faces.find((f) => f.weight === weight && f.style === style && f.unicodeRange === range);
+  const sameFace = (range: string) => (f: { weight: string; style: string; unicodeRange: string }) =>
+    f.weight === weight && f.style === style && f.unicodeRange === range;
+  const matchOf = (range: string) => target ?? existing?.faces.find(sameFace(range));
   const familyOut = { slug, cssName, token: tokenName, created: !existing };
   // File giữ nguyên byte: Google/gói đã cắt sẵn (`prepared`), hoặc woff2 tải lên (§7.1 bước 4).
   const keepBytes = !!input.prepared || info.format === 'woff2';
@@ -376,6 +392,9 @@ export async function addFace(input: AddFaceInput, actor: Actor): Promise<FontUp
     unicodeRange = out.unicodeRange;
   }
   const match = matchOf(unicodeRange);
+  // Face mang dải mới đổi descriptor; một face KHÁC đã có đúng (weight, style, dải mới) là bản
+  // trùng mà file mới thay luôn — để lại thì đụng @@unique của FontFace.
+  const clash = target ? existing?.faces.find((f) => f.id !== target.id && sameFace(unicodeRange)(f)) : undefined;
   const fileName = keepBytes ? input.fileName : input.fileName.replace(/(\.[^./\\]*)?$/, '.woff2');
   const up = await uploadAsset({
     bytes: fileBytes,
@@ -411,7 +430,12 @@ export async function addFace(input: AddFaceInput, actor: Actor): Promise<FontUp
     const faceData = { assetId: asset.id, subset, warnings: warningCodes };
     let faceId: string;
     if (match) {
-      await tx.fontFace.update({ where: { id: match.id }, data: faceData });
+      if (clash) await tx.fontFace.delete({ where: { id: clash.id } });
+      await tx.fontFace.update({
+        where: { id: match.id },
+        // Thay theo id: dải/weight/kiểu đi theo file mới. Thay vì trùng: ba thứ đó vốn đã bằng.
+        data: target ? { ...faceData, unicodeRange, weight, style } : faceData,
+      });
       faceId = match.id;
     } else {
       const face = await tx.fontFace.create({
@@ -421,7 +445,10 @@ export async function addFace(input: AddFaceInput, actor: Actor): Promise<FontUp
       faceId = face.id;
     }
 
-    const facesAfter = [...(existing?.faces ?? []).filter((f) => f.id !== match?.id), { weight, style }];
+    const facesAfter = [
+      ...(existing?.faces ?? []).filter((f) => f.id !== match?.id && f.id !== clash?.id),
+      { weight, style },
+    ];
     const aiDescription = describeFontFamily(cssName, existing?.source ?? source, facesAfter);
     if (existing) {
       await tx.token.updateMany({ where: { name: tokenName }, data: { aiDescription } });
@@ -452,6 +479,8 @@ export async function addFace(input: AddFaceInput, actor: Actor): Promise<FontUp
           source,
           createdFamily: !existing,
           ...(adopt ? { adoptedToken: tokenName } : {}),
+          ...(target ? { replacedById: true, before: { weight: target.weight, style: target.style, unicodeRange: target.unicodeRange } } : {}),
+          ...(clash ? { removedDuplicateFaceId: clash.id } : {}),
         },
       },
     });

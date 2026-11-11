@@ -216,6 +216,8 @@ function FontDetail({
     form.set('family', font.cssName);
     form.set('weight', p.face.weight);
     form.set('style', p.face.style);
+    // Thay ĐÚNG face này kể cả khi file mới ra dải ký tự khác (woff2 "" ↔ TTF đã cắt).
+    if (p.face.id) form.set('replaceFaceId', p.face.id);
     form.set('fallback', font.fallback);
     // dryRun không ghi gì (kể cả người xác nhận), nên được gửi kèm để server kiểm file thay vì dừng ở giấy phép.
     form.set('licenseConfirmed', 'true');
