@@ -13,7 +13,32 @@ export function cssFamilyName(name: string): string {
   return `"${body}"`;
 }
 
-const SAFE_KEY = /^[A-Za-z0-9._\-/]+$/;
+/**
+ * Tên họ ĐẦU TIÊN trong một chồng font CSS, bỏ nháy (`"Inter Variable", system-ui` →
+ * `Inter Variable`). Hiểu nháy đơn/kép, `\"` và dấu phẩy nằm trong nháy; ngược với
+ * `cssFamilyName` thì không cần giữ nguyên an toàn CSS — chỉ để làm nhãn hiển thị.
+ */
+export function firstFamilyName(stack: string): string {
+  const s = stack.trim();
+  const q = s[0];
+  if (q === '"' || q === "'") {
+    let out = '';
+    for (let i = 1; i < s.length; i++) {
+      const c = s[i]!;
+      if (c === '\\' && i + 1 < s.length) {
+        out += s[++i];
+      } else if (c === q) {
+        return out;
+      } else {
+        out += c;
+      }
+    }
+    return out; // nháy không đóng: lấy phần đã đọc
+  }
+  return (s.split(',')[0] ?? '').trim();
+}
+
+const SAFE_KEY =/^[A-Za-z0-9._\-/]+$/;
 const SAFE_WEIGHT = /^\d{1,4}( \d{1,4})?$/;
 const SAFE_RANGE = /^[Uu+0-9A-Fa-f?,\s-]*$/;
 

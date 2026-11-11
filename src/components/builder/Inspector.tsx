@@ -50,6 +50,7 @@ import type { ContentOverride, Doc, Node, RepeatSpec, StyleProps } from '@/lib/d
 import {
   BoxModel,
   ColorControl,
+  FontFamilyControl,
   LenControl,
   NumberControl,
   ROW,
@@ -748,6 +749,7 @@ function NodeInspector({
       </Section>
 
       <Section title="Chữ" count={countIn(effective, 'typography')} filter={filter} keys={KEYS.typography}>
+        <FontFamilyControl {...common} group="typography" field="family" />
         <ColorControl {...common} group="typography" field="color" />
         <LenControl
           {...common} group="typography" field="size"

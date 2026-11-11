@@ -34,6 +34,8 @@ import { Suspense } from 'react';
 
 import { getSession } from '@/lib/auth/guard';
 import { getBuilderBranding } from '@/lib/builder/branding';
+import { builtinFontFaceCss } from '@/lib/fonts/builtin';
+import { draftFontFaceCss } from '@/lib/fonts/seal';
 import { BuilderNav } from '@/components/builder/BuilderNav';
 import { CommandPalette } from '@/components/builder/CommandPalette';
 import { NavProgress } from '@/components/builder/NavProgress';
@@ -69,10 +71,22 @@ function readTheme(raw: string | undefined): ThemeChoice {
 export default async function BuilderLayout({ children }: { children: React.ReactNode }) {
   const [store, session, branding] = await Promise.all([cookies(), getSession(), getBuilderBranding()]);
   const theme = readTheme(store.get('mm-theme')?.value);
+  // Vỏ builder không nạp CSS của site: tự in `@font-face` để ô chọn font ở Inspector (và
+  // màn Cài đặt › Font) xem trước đúng font. Rỗng thì không in thẻ nào.
+  // Lỗi đọc font (DB chưa dựng ở màn cài đặt lần đầu) không được làm sập cả vỏ builder.
+  const draftCss = await draftFontFaceCss().catch(() => '');
+  const fontCss = [builtinFontFaceCss(), draftCss].filter(Boolean).join('\n');
 
   return (
     <html lang="vi" data-theme={theme}>
       <body className="bg-shell-bg text-shell-ink font-shell antialiased">
+        {fontCss && (
+          <style
+            data-mm-fonts=""
+            // eslint-disable-next-line react/no-danger
+            dangerouslySetInnerHTML={{ __html: fontCss }}
+          />
+        )}
         {/* Thanh tiến độ khi chuyển trang, ở LAYOUT vì cùng lý do với thanh menu: mọi màn đều
             cần nó, và nó phải sống qua lượt chuyển trang mà nó đang báo. `Suspense` vì
             `useSearchParams` — ở đây vỏ luôn render động (đọc cookie), nhưng thiếu boundary

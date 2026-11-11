@@ -50,6 +50,8 @@ import { Tip } from './ui/Tip';
 import { TokenPicker } from './TokenPicker';
 import { tokensOfKind } from '@/lib/builder/token-kinds';
 import { SelectField } from './ui/Field';
+import Link from 'next/link';
+import { firstFamilyName } from '@/lib/fonts/css';
 
 export interface TokenOption {
   name: string;
@@ -988,6 +990,77 @@ export function SelectControl({
           <option key={o.value} value={o.value}>{o.label}</option>
         ))}
       </SelectField>
+    </div>
+  );
+}
+
+/* ── Ô chọn họ font ───────────────────────────────────────────────────── */
+
+/**
+ * Chọn họ font từ token hạng `font`. Liệt kê MỌI token hạng đó, kể cả token lõi
+ * (`font-body` = Inter): spec §11.5 cần Inter trong danh sách, nên KHÔNG đi qua
+ * `tokensOfKind` (nó bỏ token lõi). Mỗi option tự vẽ bằng chính họ của nó — builder
+ * in `@font-face` ở layout nên xem trước đúng font.
+ */
+export function FontFamilyControl({
+  node, breakpoint, group, field, label: labelProp, tokens,
+}: Common) {
+  const label = labelFor(group, field, labelProp);
+  const state = fieldState(node, breakpoint, group, field);
+  const setStyle = useSetStyle(node, breakpoint, group, field);
+  const id = fieldId(node, breakpoint, group, field);
+  const shadowedBy = useShadowedBy(node, group, field);
+  const saving = useEditor(selectStyleLocked);
+
+  const fonts = tokens.filter((t) => t.category === 'font');
+  const current =
+    state.value && typeof state.value === 'object'
+      ? ((state.value as { $token?: string }).$token ?? '')
+      : '';
+
+  return (
+    <div className={ROW}>
+      <Label
+        htmlFor={id}
+        label={label}
+        alias={cssAlias(group, field)}
+        shadowedBy={shadowedBy}
+        from={state.from}
+        isOwn={state.isOwn}
+        onClear={() => void setStyle(null, `gỡ ${label}`)}
+        onOverride={() => void setStyle(state.value, `ghi đè ${label} ở lớp này`)}
+      />
+      <div className="flex min-w-0 flex-col gap-1">
+        <SelectField
+          size="sm"
+          id={id}
+          value={current}
+          disabled={saving}
+          onChange={(e) => {
+            const name = e.target.value;
+            const shown = fonts.find((t) => t.name === name);
+            void setStyle(
+              name ? { $token: name } : null,
+              name ? `${label}: ${shown ? firstFamilyName(shown.value) : name}` : `gỡ ${label}`,
+            );
+          }}
+          className={cn(!state.isOwn && current && 'text-shell-muted')}
+        >
+          <option value="">—</option>
+          {/* Token đang gắn nhưng không còn trong danh sách: vẫn hiện để ô không nói dối. */}
+          {current && !fonts.some((t) => t.name === current) && (
+            <option value={current}>{current}</option>
+          )}
+          {fonts.map((t) => (
+            <option key={t.name} value={t.name} style={{ fontFamily: t.value }}>
+              {firstFamilyName(t.value) || t.name}
+            </option>
+          ))}
+        </SelectField>
+        <Link href="/builder/settings/fonts" className="text-micro text-shell-muted hover:text-shell-ink">
+          Quản lý font →
+        </Link>
+      </div>
     </div>
   );
 }
