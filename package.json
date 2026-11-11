@@ -26,6 +26,7 @@
     "db:generate": "prisma generate",
     "db:seed": "tsx prisma/seed.ts",
     "tokens:import": "tsx scripts/import-tokens.ts",
+    "fonts:adopt": "node --env-file=.env --conditions=react-server --import tsx scripts/fonts-adopt.ts",
     "effects:sync": "node --env-file=.env --import tsx scripts/sync-effects.ts",
     "effect:preset": "node --env-file=.env --import tsx scripts/effect-preset.ts",
     "check:tokens": "tsx scripts/check-tokens.ts",
