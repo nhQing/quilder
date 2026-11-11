@@ -331,3 +331,23 @@ test.describe('AI chỉ chạm bản nháp', () => {
     expect(denied.result?.error).toMatch(/không có quyền đăng bản dịch/i);
   });
 });
+
+test.describe('tool font', () => {
+  test('list_fonts có Inter; upload_font qua HTTP từ chối filePath (nhánh đó chỉ chạy ở mcp/server.mjs)', async ({
+    request,
+  }) => {
+    const me = await (await request.get('/api/auth/me')).json();
+    const token = await serviceToken({ sub: me.id, email: me.email, role: me.role });
+
+    const list = await (await tool(request, token, 'list_fonts')).json();
+    expect(list.ok).toBe(true);
+    expect(JSON.stringify(list.result)).toContain('font-body');
+
+    // `filePath` là đường đọc file trên máy người dùng: nếu HTTP nhận nó thì thành lỗ đọc file.
+    const refused = await (
+      await tool(request, token, 'upload_font', { filePath: 'C:/Windows/Fonts/arial.ttf', licenseConfirmed: true })
+    ).json();
+    // Tool trả `{ok:false,error}` làm kết quả (HTTP 200) hoặc lỗi cấp tool — cả hai đều là từ chối.
+    expect(refused.result?.ok === false || refused.ok === false).toBe(true);
+  });
+});

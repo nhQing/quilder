@@ -8,6 +8,7 @@ chụp của cả site — lùi về bản cũ trong chưa tới một giây.
 |---|---|---|
 | [Cài đặt](cai-dat.md) | dev, người vận hành | máy dev, chạy thử Docker, triển khai production, nâng cấp |
 | [Dùng builder](dung-builder.md) | người biên tập | trang, editor, breakpoint, component, văn bản và bản dịch, thư viện ảnh, lịch sử publish, cài đặt |
+| [Font](font.md) | người biên tập, người vận hành | tải file hoặc nhập Google Fonts, gán trong Inspector, lên site sau Publish, xoá, Claude, chuyển font từ gói cũ, kiểm bản standalone |
 | [Kho dữ liệu](kho-du-lieu.md) | người biên tập | loại nội dung, field, danh mục, bài viết, trang danh sách/chi tiết, khối lặp |
 | [Sửa site bằng Claude](ket-noi-claude.md) | mọi người | kết nối Claude Desktop, giới hạn của Claude, link phần tử cho AI |
 | [Vận hành](van-hanh.md) | admin | Publish và lùi bản, vai trò, ngôn ngữ, biến môi trường, lệnh, sao lưu |
