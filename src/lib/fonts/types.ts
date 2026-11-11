@@ -64,7 +64,7 @@ export class FontError extends Error {
   }
 }
 
-export type FontWarningCode = 'missing_vietnamese' | 'restricted_embedding';
+export type FontWarningCode = 'missing_vietnamese' | 'restricted_embedding' | 'google_truncated';
 
 /** Tag cache Next cho mọi thứ đọc từ bảng font. */
 export const FONTS_TAG = 'fonts';

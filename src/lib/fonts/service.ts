@@ -109,6 +109,8 @@ const WARNING_MESSAGES: Record<FontWarningCode, string> = {
     'Font thiếu một số chữ tiếng Việt có dấu (ạ ả ã ế ộ ữ ơ ư Ư Đ). Chữ thiếu sẽ hiện bằng font dự phòng.',
   restricted_embedding:
     'File font bật cờ cấm nhúng (Restricted License). Chỉ dùng khi bạn chắc chắn có quyền dùng font này trên web.',
+  google_truncated:
+    'Họ font này có hơn 60 file; chỉ nhập 60 file đầu. Hãy chọn weight cụ thể để nhập phần còn lại.',
 };
 
 /** Tên họ → slug: bỏ dấu tiếng Việt, chữ thường, nối bằng `-`. */

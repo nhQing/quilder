@@ -7,7 +7,7 @@ import { NextResponse } from 'next/server';
  *  - multipart: `file`, `family?`, `weight?`, `style?`, `fallback?`, `licenseConfirmed`,
  *    `licenseNote?`, `dryRun?` — dạng chính (cả MCP `filePath` lẫn màn Cài đặt);
  *  - JSON `{ sourceUrl, … }`: server tải file về (cùng helper và trần 10 MB với `upload_asset`);
- *  - JSON `{ google: { family, weights?, italic? }, … }`: nối ở Task 8, tạm trả 501.
+ *  - JSON `{ google: { family, weights?, italic? }, … }`: server gọi css2 và tải woff2 từ Google (`lib/fonts/google`).
  *
  * Luật (kiểm file, tên, token, audit) nằm ở `lib/fonts/service`; route chỉ chuẩn hoá đầu vào
  * (`weight`, `style`, `fallback`) và đổi `FontError` thành HTTP.
@@ -16,6 +16,7 @@ import { NextResponse } from 'next/server';
 import { fetchUrlBytes } from '@/lib/assets/fetch-url';
 import { requireAuth } from '@/lib/auth/guard';
 import { MAX_ASSET_BYTES } from '@/lib/builder/upload-asset';
+import { importGoogleFamily } from '@/lib/fonts/google';
 import { fontErrorResponse, resolveFallback } from '@/lib/fonts/http';
 import { addFace, listFonts, type AddFaceInput } from '@/lib/fonts/service';
 import {
@@ -79,7 +80,25 @@ export async function POST(request: Request) {
       const fields = readFields(body);
 
       if (body.google !== undefined) {
-        return bad('Nhập từ Google Fonts chưa được bật trên server này', 501);
+        const g = body.google as Record<string, unknown> | null;
+        const family = g && typeof g === 'object' ? asString(g.family) : undefined;
+        if (!family) return bad('Cần "google.family" (tên họ hoặc link fonts.google.com/specimen/…)', 422);
+        const weights = Array.isArray(g!.weights) ? g!.weights : undefined;
+        if (weights && !weights.every((w) => Number.isInteger(w) && w >= 1 && w <= 1000)) {
+          return bad('"google.weights" phải là mảng số nguyên từ 1 đến 1000', 422);
+        }
+        return NextResponse.json(
+          await importGoogleFamily(
+            {
+              family,
+              weights: weights as number[] | undefined,
+              italic: g!.italic === undefined ? undefined : asBool(g!.italic),
+              fallback: fields.fallback,
+              dryRun: fields.dryRun,
+            },
+            actor,
+          ),
+        );
       }
       const url = asString(body.sourceUrl);
       if (!url) return bad('Cần "sourceUrl" hoặc "google" trong thân JSON');
