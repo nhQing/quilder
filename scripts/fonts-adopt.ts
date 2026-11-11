@@ -132,6 +132,9 @@ async function main() {
     }
   }
   console.log(`Xong: ${written} face. Publish một lần để Release.fonts có họ mới; file trong gói giữ nguyên.`);
+  console.log(
+    'Builder còn cache kho font cũ trên đĩa (.next/cache/fetch-cache): xoá thư mục đó rồi khởi động lại app — xem docs/huong-dan/font.md, bước 3.',
+  );
 }
 
 main()

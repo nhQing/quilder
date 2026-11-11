@@ -5,10 +5,11 @@ Inter của lõi luôn có sẵn và chỉ đọc; mọi họ khác do người 
 
 ## Thêm font
 
-**Tải file.** *Cài đặt › Font › Tải file font*: chọn TTF, OTF hoặc WOFF2 (tối đa 10 MB; cắt và đổi định dạng quá 30 giây thì bị từ chối với lỗi `too_large`), kiểm tên
+**Tải file.** *Cài đặt › Font › Tải file font*: chọn TTF, OTF, WOFF hoặc WOFF2 (tối đa 10 MB; cắt và đổi định dạng quá 30 giây thì bị từ chối với lỗi `too_large`), kiểm tên
 họ, weight, kiểu chữ, rồi **tick xác nhận bạn có giấy phép dùng font trên web**. Không tick thì không
-lưu được. Builder cắt bớt glyph, đổi sang WOFF2 và báo cảnh báo nếu file thiếu chữ tiếng Việt có dấu
-hoặc cờ nhúng (`fsType`) cấm dùng trên web.
+lưu được. TTF, OTF và WOFF được cắt bớt glyph và đổi sang WOFF2; WOFF2 giữ nguyên. Builder báo cảnh
+báo nếu file thiếu chữ tiếng Việt có dấu hoặc cờ nhúng (`fsType`) cấm dùng trên web. File TTC (nhiều
+font trong một file) không nhận: tách thành từng file TTF/OTF trước.
 
 **Nhập từ Google Fonts.** *Nhập từ Google Fonts*: dán tên họ hoặc link `fonts.google.com/specimen/…`,
 chọn weight, bấm nhập. Họ từ Google (giấy phép OFL) không đòi tick giấy phép.
@@ -54,8 +55,14 @@ Làm lần lượt, ở từng môi trường (dev, staging, production):
    niêm phong release không có font và chữ rơi về font dự phòng.
 2. `pnpm fonts:adopt --actor <email>` — chỉ in kế hoạch (đọc các khối `@font-face` trong
    `projects/<gói>/styles/fonts.css`); xem kỹ, rồi chạy lại với `--apply` để ghi vào kho.
-3. **Khởi động lại app**: script không làm mới được cache của tiến trình
-   đang chạy, nên builder chưa thấy font mới ngay.
+3. **Xoá cache dữ liệu của app rồi khởi động lại.** Script chạy ngoài Next nên không gọi được
+   `revalidateTag`; builder đọc kho font qua `unstable_cache`, và cache đó nằm **trên đĩa** ở
+   `.next/cache/fetch-cache` (image không gắn volume cho thư mục này). Chỉ `docker restart` thì
+   **không đủ**: container giữ nguyên đĩa nên builder vẫn thấy kho cũ.
+   - Production / staging (Docker, tên container mặc định `quilder-app`):
+     `docker exec quilder-app rm -rf /app/.next/cache/fetch-cache && docker restart quilder-app`
+     — hoặc tạo lại container: `docker compose -f docker-compose.prod.yaml up -d --force-recreate app`.
+   - Máy dev: dừng `pnpm dev`, xoá thư mục `.next/cache/fetch-cache`, chạy lại `pnpm dev`.
 4. Kiểm canvas: chữ dùng font gói hiển thị đúng ở bản nháp.
 5. **Publish.**
 6. Ở repo gói: xoá các khối `@font-face` trong `styles/fonts.css` (giữ khối `:root`) và thư mục
