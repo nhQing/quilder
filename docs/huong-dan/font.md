@@ -5,7 +5,7 @@ Inter của lõi luôn có sẵn và chỉ đọc; mọi họ khác do người 
 
 ## Thêm font
 
-**Tải file.** *Cài đặt › Font › Tải file font*: chọn TTF, OTF hoặc WOFF2 (tối đa vài MB), kiểm tên
+**Tải file.** *Cài đặt › Font › Tải file font*: chọn TTF, OTF hoặc WOFF2 (tối đa 10 MB; cắt và đổi định dạng quá 30 giây thì bị từ chối với lỗi `too_large`), kiểm tên
 họ, weight, kiểu chữ, rồi **tick xác nhận bạn có giấy phép dùng font trên web**. Không tick thì không
 lưu được. Builder cắt bớt glyph, đổi sang WOFF2 và báo cảnh báo nếu file thiếu chữ tiếng Việt có dấu
 hoặc cờ nhúng (`fsType`) cấm dùng trên web.
@@ -28,8 +28,9 @@ phục vụ ở `/mm-font/…`, URL có hash nên cache `immutable`.
 
 ## Xoá font
 
-- Xoá một face, hoặc cả họ, bị **khoá khi còn trang hay component dùng** token của họ đó (nút mờ, kèm
-  lý do). Gỡ họ khỏi các chỗ đó trước.
+- **Xoá họ** bị khoá khi còn trang hay component dùng token của họ đó (nút mờ, kèm lý do). Gỡ họ
+  khỏi các chỗ đó trước.
+- **Xoá một face** xoá được bình thường, trừ **face cuối** của một họ đang được dùng.
 - Xoá xong vẫn cần Publish; bản đã publish giữ font đến lúc đó.
 
 ## Nhờ Claude
@@ -51,7 +52,7 @@ Làm lần lượt, ở từng môi trường (dev, staging, production):
    niêm phong release không có font và chữ rơi về font dự phòng.
 2. `pnpm fonts:adopt --actor <email>` — chỉ in kế hoạch (đọc các khối `@font-face` trong
    `projects/<gói>/styles/fonts.css`); xem kỹ, rồi chạy lại với `--apply` để ghi vào kho.
-3. **Khởi động lại app** (hoặc chờ cache hết hạn): script không làm mới được cache của tiến trình
+3. **Khởi động lại app**: script không làm mới được cache của tiến trình
    đang chạy, nên builder chưa thấy font mới ngay.
 4. Kiểm canvas: chữ dùng font gói hiển thị đúng ở bản nháp.
 5. **Publish.**
