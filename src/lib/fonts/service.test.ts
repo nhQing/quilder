@@ -1,7 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { assetKeyBase, nextAssetKey } from '@/lib/assets/key';
+
 import type { InspectResult } from './inspect';
-import { FontError, FALLBACKS } from './types';
+import { FontError, FALLBACKS, isServableFontKey } from './types';
 import { SUBSET_UNICODE_RANGE } from './unicode';
 
 /**
@@ -274,6 +276,30 @@ describe('addFace', () => {
       expect(r.faces[0]!.replaced).toBe(true);
       expect(m.uploadAsset).not.toHaveBeenCalled();
       expect(m.prisma.$transaction).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('đuôi tên file lưu theo định dạng thật', () => {
+    const storedName = () => m.uploadAsset.mock.calls[0]![0].fileName as string;
+    // Đúng phép `uploadAsset` dùng để ra khoá.
+    const keyOf = (fileName: string) => nextAssetKey(assetKeyBase(fileName), bytes);
+
+    it.each([
+      ['download', 'woff2', 'download.woff2'], // sourceUrl không có tên file
+      ['Gilroy-Bold', 'woff2', 'Gilroy-Bold.woff2'], // tên không đuôi
+      ['Gilroy-Bold.ttf', 'woff2', 'Gilroy-Bold.woff2'], // woff2 đặt tên .ttf
+      ['Gilroy-Bold.otf', 'otf', 'Gilroy-Bold.woff2'], // file cắt ra woff2
+    ])('%s (%s) → %s, khoá /mm-font nhận', async (fileName, format, expected) => {
+      m.inspectFont.mockReturnValue(inspected({ format: format as InspectResult['format'] }));
+      await upload({ fileName });
+      expect(storedName()).toBe(expected);
+      expect(isServableFontKey(keyOf(storedName()))).toBe(true);
+    });
+
+    it('file Google prepared giữ định dạng đã dò', async () => {
+      m.inspectFont.mockReturnValue(inspected({ format: 'woff2' }));
+      await upload({ fileName: 'bvp-latin-400-normal', source: 'google', prepared: { unicodeRange: 'U+0000-00FF', subset: 'latin' } });
+      expect(storedName()).toBe('bvp-latin-400-normal.woff2');
     });
   });
 

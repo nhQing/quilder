@@ -395,7 +395,11 @@ export async function addFace(input: AddFaceInput, actor: Actor): Promise<FontUp
   // Face mang dải mới đổi descriptor; một face KHÁC đã có đúng (weight, style, dải mới) là bản
   // trùng mà file mới thay luôn — để lại thì đụng @@unique của FontFace.
   const clash = target ? existing?.faces.find((f) => f.id !== target.id && sameFace(unicodeRange)(f)) : undefined;
-  const fileName = keepBytes ? input.fileName : input.fileName.replace(/(\.[^./\\]*)?$/, '.woff2');
+  // Đuôi khoá theo định dạng THẬT của byte lưu, không theo tên client gửi: tên không đuôi,
+  // `download` của sourceUrl hay woff2 đặt tên `.ttf` sẽ ra khoá `/mm-font` từ chối (404) hoặc
+  // content-type sai.
+  const storedFormat = keepBytes ? info.format : 'woff2';
+  const fileName = input.fileName.replace(/(\.[^./\\]*)?$/, `.${storedFormat}`);
   const up = await uploadAsset({
     bytes: fileBytes,
     fileName,
