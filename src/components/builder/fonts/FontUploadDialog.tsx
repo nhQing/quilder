@@ -5,21 +5,19 @@
  * (tên họ, weight, style sửa được), các dòng cùng họ gom lại, chọn fallback cho mỗi họ,
  * tick giấy phép rồi Lưu — gửi thật từng file, báo lỗi ngay trên dòng của nó.
  *
- * Ô kéo thả theo mẫu `transfer/ZipDropZone` (cùng `data-over`, input ẩn cho bàn phím và
- * e2e) nhưng nhận nhiều file font; `ZipDropZone` chỉ nhận một file .zip.
+ * Ô kéo thả là `transfer/FileDropZone` (dùng chung với ô nhập gói .zip).
  */
 
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 
-import { cn } from '@/lib/builder/cn';
 import type { FontUploadResult } from '@/lib/fonts/service';
 import { FALLBACKS } from '@/lib/fonts/types';
 
 import { Badge, Progress } from '../ui/Badge';
 import { Button } from '../ui/Button';
 import { Checkbox, SelectField, TextArea, TextField } from '../ui/Field';
-import { Icon } from '../ui/Icon';
 import { Dialog } from '../ui/Overlay';
+import { FileDropZone } from '../transfer/FileDropZone';
 
 const FONT_FILE = /\.(ttf|otf|woff2?)$/i;
 type FallbackKey = keyof typeof FALLBACKS;
@@ -60,72 +58,28 @@ function formOf(r: Row, extra: Record<string, string>) {
   return form;
 }
 
+/** Ô kéo thả dùng chung (`transfer/FileDropZone`); ở đây chỉ giữ bộ lọc đuôi font. */
 function DropZone({ onFiles }: { onFiles: (files: File[]) => void }) {
-  const input = useRef<HTMLInputElement>(null);
-  const [over, setOver] = useState(false);
-  const [wrong, setWrong] = useState<string | null>(null);
-
-  const take = (list: FileList | null | undefined) => {
-    const all = Array.from(list ?? []);
-    if (all.length === 0) return;
-    const good = all.filter((f) => FONT_FILE.test(f.name));
-    const bad = all.filter((f) => !FONT_FILE.test(f.name));
-    setWrong(
-      bad.length ? `Bỏ qua ${bad.map((f) => `"${f.name}"`).join(', ')}: chỉ nhận .ttf, .otf, .woff, .woff2.` : null,
-    );
-    if (good.length) onFiles(good);
-  };
-
   return (
-    <div className="flex flex-col gap-2">
-      <div
-        data-font-drop
-        data-over={over || undefined}
-        onDragOver={(e) => {
-          if (!e.dataTransfer.types.includes('Files')) return;
-          e.preventDefault();
-          e.dataTransfer.dropEffect = 'copy';
-          setOver(true);
-        }}
-        onDragLeave={(e) => {
-          if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setOver(false);
-        }}
-        onDrop={(e) => {
-          e.preventDefault();
-          setOver(false);
-          take(e.dataTransfer.files);
-        }}
-        className={cn(
-          'flex flex-col items-center gap-3 rounded-xl border-2 border-dashed px-6 py-6 text-center transition-colors',
-          over ? 'border-shell-accent bg-shell-accent-soft/70' : 'border-shell-line',
-        )}
-      >
-        <Icon name="upload" size={24} className={over ? 'text-shell-accent' : 'text-shell-muted'} />
-        <p className="font-semibold">{over ? 'Thả file vào đây' : 'Kéo file font vào đây'}</p>
-        <p className="text-small text-shell-muted">hoặc</p>
-        <Button variant="primary" icon="upload" onClick={() => input.current?.click()}>
-          Chọn file font
-        </Button>
-        <input
-          ref={input}
-          type="file"
-          multiple
-          accept=".ttf,.otf,.woff,.woff2,font/*"
-          aria-label="File font"
-          className="sr-only"
-          tabIndex={-1}
-          onChange={(e) => {
-            take(e.target.files);
-            e.target.value = '';
-          }}
-        />
-      </div>
-      {wrong && (
-        <p role="alert" className="text-small text-shell-danger">
-          {wrong}
-        </p>
-      )}
-    </div>
+    <FileDropZone
+      data={{ 'data-font-drop': '' }}
+      multiple
+      accept=".ttf,.otf,.woff,.woff2,font/*"
+      title="Kéo file font vào đây"
+      buttonLabel="Chọn file font"
+      inputLabel="File font"
+      className="py-6"
+      filter={(all) => {
+        const bad = all.filter((f) => !FONT_FILE.test(f.name));
+        return {
+          accepted: all.filter((f) => FONT_FILE.test(f.name)),
+          message: bad.length
+            ? `Bỏ qua ${bad.map((f) => `"${f.name}"`).join(', ')}: chỉ nhận .ttf, .otf, .woff, .woff2.`
+            : null,
+        };
+      }}
+      onFiles={onFiles}
+    />
   );
 }
 
