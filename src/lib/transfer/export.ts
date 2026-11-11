@@ -230,7 +230,9 @@ export async function buildExport(
   // của lõi không có hàng FontFamily nên tự rơi ra ngoài (spec §13.1). File font đi cùng đường
   // với ảnh: một dòng trong `assets[]`, nén vào `files/<sha256>.<đuôi>`.
   const fontSlugs = [...tokenNames].filter((n) => n.startsWith('font-')).map((n) => n.slice('font-'.length));
-  const families = fontSlugs.length
+  // Họ đã xoá hết face (xoá được khi chưa ai dùng, token vẫn còn) thì không có gì để mang theo
+  // và gói sẽ không qua schema (`faces` ≥ 1): bỏ họ, token của nó đi như token tự tạo thường.
+  const families = (fontSlugs.length
     ? await prisma.fontFamily.findMany({
       where: { slug: { in: fontSlugs } },
       orderBy: { slug: 'asc' },
@@ -239,7 +241,7 @@ export async function buildExport(
         faces: { select: { weight: true, style: true, unicodeRange: true, subset: true, assetId: true } },
       },
     })
-    : [];
+    : []).filter((f) => f.faces.length > 0);
   const fontTokens = new Set(families.map((f) => fontTokenName(f.slug)));
   const fontAssetIds = families.flatMap((f) => f.faces.map((x) => x.assetId));
 

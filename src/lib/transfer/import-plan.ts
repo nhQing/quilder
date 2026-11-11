@@ -79,6 +79,8 @@ function sameShape(bundleCol: PageCollection | null, page: { slug: string; colle
 
 type FaceShape = { weight: string; style: string; unicodeRange: string };
 const faceKey = (f: FaceShape) => `${f.weight}|${f.style}|${f.unicodeRange}`;
+/** Tên họ CSS so không phân biệt hoa thường (spec §4). */
+const nameKey = (name: string) => name.trim().replace(/\s+/g, ' ').toLowerCase();
 const faceLabel = (f: FaceShape) => `weight ${f.weight}${f.style === 'italic' ? ' italic' : ''}`;
 /** 8 hex đầu của sha256 trong khoá theo nội dung (`…-1a2b3c4d.woff2`). */
 const KEY_DIGEST_RE = /-([0-9a-f]{8})(?:\.[a-z0-9]+)?$/;
@@ -87,7 +89,8 @@ const KEY_DIGEST_RE = /-([0-9a-f]{8})(?:\.[a-z0-9]+)?$/;
  * Họ font của gói so với đích, theo `slug` (spec §13.2):
  *  - chưa có → tạo họ, face, token (file đi đường ảnh);
  *  - có → dùng bản ở đích; thiếu face hoặc file khác thì thành việc cần làm (C8), như component trùng khoá;
- *  - chưa có mà `cssName` trùng họ khác slug, trùng họ có sẵn, hoặc token `font-<slug>` đã bị chiếm → chặn (G11).
+ *  - chưa có mà `cssName` trùng họ khác slug hoặc trùng họ có sẵn → chặn (G11, đổi tên);
+ *    token `font-<slug>` đã bị một biến không thuộc họ nào chiếm → chặn (G12, gỡ biến).
  */
 function planFonts(bundle: PageBundle, snap: TargetSnapshot): { rows: FontPlanRow[]; issues: TransferIssue[] } {
   const issues: TransferIssue[] = [];
@@ -121,24 +124,25 @@ function planFonts(bundle: PageBundle, snap: TargetSnapshot): { rows: FontPlanRo
       return { slug: f.slug, cssName: f.cssName, action: 'use-target', targetId: there.id };
     }
 
-    const lower = f.cssName.trim().toLowerCase();
-    const clash = snap.fontFamilies.find((x) => x.cssName.trim().toLowerCase() === lower);
+    const clash = snap.fontFamilies.find((x) => nameKey(x.cssName) === nameKey(f.cssName));
     const reason = isReservedFamilyName(f.cssName) ? 'đó là tên một font có sẵn hoặc tên dự phòng của hệ thống'
       : clash ? `ở đây đã có họ "${clash.cssName}" (token font-${clash.slug})`
-      : snap.tokens.has(fontTokenName(f.slug)) ? `ở đây đã có biến "${fontTokenName(f.slug)}" không thuộc họ font nào`
       : null;
     if (reason) issues.push(issue('font-name-taken', 'block', { vars: { name: f.cssName, slug: f.slug, reason } }));
+    // Slug bất biến nên "đổi tên họ" không gỡ được chỗ này: biến cùng tên phải đi trước.
+    else if (snap.tokens.has(fontTokenName(f.slug))) issues.push(issue('font-token-taken', 'block', { vars: { name: f.cssName, token: fontTokenName(f.slug) } }));
     return { slug: f.slug, cssName: f.cssName, action: 'create', targetId: null };
   });
 
-  // Họ sẽ TẠO: token của nó đi thẳng vào stylesheet (cùng luật với màn Font), và face hay slug
-  // trùng nhau trong gói sẽ vỡ khoá unique giữa transaction.
+  // Gói phải tự nhất quán (nguồn không thể có hai họ trùng slug, trùng tên không phân biệt hoa
+  // thường, hay hai face trùng nhau): sửa tay mới ra thế, và tạo sẽ vỡ khoá unique giữa
+  // transaction. Họ sẽ TẠO thì token đi thẳng vào stylesheet — cùng luật với màn Font.
   const bad = bundle.fonts.filter((f, i) =>
-    rows[i]!.action === 'create'
-    && (!TOKEN_NAME_RE.test(fontTokenName(f.slug))
-      || !isSafeTokenValue(fontTokenValue(f.cssName, f.fallback))
-      || new Set(f.faces.map(faceKey)).size !== f.faces.length
-      || bundle.fonts.filter((x) => x.slug === f.slug).length > 1));
+    bundle.fonts.filter((x) => x.slug === f.slug).length > 1
+    || bundle.fonts.filter((x) => nameKey(x.cssName) === nameKey(f.cssName)).length > 1
+    || new Set(f.faces.map(faceKey)).size !== f.faces.length
+    || (rows[i]!.action === 'create'
+      && (!TOKEN_NAME_RE.test(fontTokenName(f.slug)) || !isSafeTokenValue(fontTokenValue(f.cssName, f.fallback)))));
   if (bad.length) {
     issues.push(issue('file-corrupt', 'block', {
       detail: `${bad.length} họ font trong gói không hợp lệ.`,

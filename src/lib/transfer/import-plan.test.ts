@@ -238,10 +238,34 @@ describe('buildImportPlan - họ font (spec §13.2)', () => {
     expect(renderGuide(g!).why).toContain('GILROY');
   });
 
-  it('tên trùng họ có sẵn (Inter) hoặc token font-<slug> đã có mà không thuộc họ nào → blocker', () => {
+  it('tên trùng họ có sẵn (Inter) → blocker đổi tên', () => {
     const inter = fontBundle({ fonts: [sampleFont({ slug: 'inter', cssName: 'Inter' })] });
     expect(codes(plan(inter, snap()))).toContain('block:font-name-taken');
-    expect(codes(fontPlan({ tokens: new Map([['font-gilroy', '"gilroy", serif']]) }))).toContain('block:font-name-taken');
+  });
+
+  it('token font-<slug> đã có ở đích mà không thuộc họ nào → blocker riêng: chạy fonts:adopt hoặc xoá biến, không bảo đổi tên họ', () => {
+    const p = fontPlan({ tokens: new Map([['font-gilroy', '"gilroy", serif']]) });
+    expect(codes(p)).not.toContain('block:font-name-taken');
+    const g = p.issues.find((i) => i.code === 'font-token-taken');
+    expect(g?.level).toBe('block');
+    const text = renderGuide(g!);
+    expect(text.why).toContain('font-gilroy');
+    expect(text.steps.join(' ')).toContain('pnpm fonts:adopt');
+    expect(text.steps.join(' ')).toContain('font-gilroy');
+    expect(text.steps.join(' ')).not.toContain('Đổi tên họ');
+  });
+
+  it('hai họ trong gói trùng tên không phân biệt hoa thường (khác slug) → G4', () => {
+    const f = sampleFont();
+    const twin = fontBundle({ fonts: [f, { ...sampleFont({ slug: 'gilroy-2', cssName: 'GILROY ' }), faces: f.faces }] });
+    const g4 = plan(twin, snap()).issues.find((i) => i.code === 'file-corrupt');
+    expect(g4?.level).toBe('block');
+    expect(g4?.items?.map((i) => i.label).join(' ')).toContain('gilroy-2');
+  });
+
+  it('face trỏ một dòng assets[] không phải file font → G4', () => {
+    const wrong = fontBundle({ fonts: [sampleFont({ faces: [{ weight: '400', style: 'normal', unicodeRange: '', subset: '', assetRef: sampleBundle().assets[0]!.id }] })] });
+    expect(codes(plan(wrong, snap()))).toContain('block:file-corrupt');
   });
 
   it('họ sẽ tạo mà fallback có ký tự thoát CSS, hoặc face trùng nhau → G4', () => {

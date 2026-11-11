@@ -111,6 +111,21 @@ describe('fonts[] (họ font tải lên mà trang dùng)', () => {
       expect(parseBundle(sampleBundle({ fonts: [bad] })).ok).toBe(false);
     }
   });
+
+  it('tên họ chuẩn hoá như màn Font (cắt, gộp khoảng trắng); rỗng thì từ chối', () => {
+    const r = parseBundle(sampleBundle({ fonts: [sampleFont({ cssName: '  Gilroy \t  Web ' })], assets: GILROY_ASSETS }));
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.bundle.fonts[0]!.cssName).toBe('Gilroy Web');
+    expect(parseBundle(sampleBundle({ fonts: [sampleFont({ cssName: '   ' })] })).ok).toBe(false);
+  });
+
+  it('weight theo luật parseWeight (1..1000, dải tăng dần); unicode-range theo luật an toàn của css.ts', () => {
+    const face = (over: Record<string, unknown>) => sampleFont({ faces: [{ weight: '400', style: 'normal', unicodeRange: '', subset: '', assetRef: 'a', ...over }] });
+    for (const weight of ['0', '1001', '900 100']) expect(parseBundle(sampleBundle({ fonts: [face({ weight })] })).ok, weight).toBe(false);
+    expect(parseBundle(sampleBundle({ fonts: [face({ weight: '100 900' })] })).ok).toBe(true);
+    expect(parseBundle(sampleBundle({ fonts: [face({ unicodeRange: 'U+0000-00FF; } body { x' })] })).ok).toBe(false);
+    expect(parseBundle(sampleBundle({ fonts: [face({ unicodeRange: 'U+0000-00FF, U+0131' })] })).ok).toBe(true);
+  });
 });
 
 describe('trường doc bắt buộc', () => {

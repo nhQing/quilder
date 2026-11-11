@@ -7,7 +7,7 @@ const ALL: TransferCode[] = [
   'doc-invalid', 'too-large', 'interrupted', 'file-over-import-limit', 'entries-not-included',
   'proxy-too-large', 'file-too-large', 'builder-too-old', 'file-corrupt', 'target-changed',
   'target-fixture', 'network', 'collection-type-missing', 'target-shape-mismatch', 'file-rejected',
-  'font-name-taken',
+  'font-name-taken', 'font-token-taken',
   'endpoint-missing', 'locale-missing', 'locale-disabled', 'embed-origin-missing',
   'collection-missing', 'component-differs', 'collection-field-missing', 'font-differs', 'publish',
 ];

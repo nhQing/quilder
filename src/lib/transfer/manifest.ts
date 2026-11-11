@@ -10,6 +10,17 @@
 
 import { z } from 'zod';
 
+import { SAFE_RANGE } from '@/lib/fonts/css';
+import { parseWeight } from '@/lib/fonts/types';
+
+function isWeight(w: string): boolean {
+  try {
+    return parseWeight(w) === w;
+  } catch {
+    return false;
+  }
+}
+
 export const BUNDLE_FORMAT = 'quilder-page' as const;
 /**
  * Tên định dạng của gói xuất TRƯỚC khi builder đổi tên thành Quilder (21/10/2026). Gói đã xuất
@@ -67,15 +78,20 @@ export const zBundleToken = z.object({
 export const zBundleFont = z.object({
   /** Cùng hình dạng slug mà `slugify` sinh: `font-` + slug phải lọt `TOKEN_NAME_RE`. */
   slug: z.string().regex(/^[a-z0-9]+(-[a-z0-9]+)*$/, 'slug họ font không hợp lệ').max(44),
-  cssName: z.string().min(1).max(200),
+  // Chuẩn hoá như màn Font (cắt, gộp khoảng trắng); rỗng sau đó là gói hỏng (như `name_required`).
+  cssName: z.string().max(200)
+    .transform((s) => s.trim().replace(/\s+/g, ' '))
+    .pipe(z.string().min(1, 'tên họ font rỗng')),
   fallback: z.string().min(1).max(200),
   source: z.enum(['upload', 'google']),
   googleFamily: z.string().max(200).nullable(),
   licenseNote: z.string().max(2000).nullable(),
   faces: z.array(z.object({
-    weight: z.string().regex(/^\d{1,4}( \d{1,4})?$/, 'weight phải là số hoặc dải "100 900"'),
+    // Cùng luật `parseWeight` của route/tool font: 1..1000, dải tăng dần.
+    weight: z.string().refine(isWeight, 'weight phải là số 1..1000 hoặc dải tăng dần "100 900"'),
     style: z.enum(['normal', 'italic']),
-    unicodeRange: z.string().max(4000),
+    // Đi thẳng vào `@font-face`: cùng luật an toàn mà `css.ts` dùng khi sinh CSS.
+    unicodeRange: z.string().max(4000).regex(SAFE_RANGE, 'unicode-range có ký tự lạ'),
     subset: z.string().max(40),
     /** `id` của một dòng trong `assets[]`. */
     assetRef: z.string().min(1).max(64),

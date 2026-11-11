@@ -14,7 +14,7 @@ export type TransferCode =
   // Nhập — chặn (G)
   | 'proxy-too-large' | 'file-too-large' | 'builder-too-old' | 'file-corrupt' | 'target-changed'
   | 'target-fixture' | 'network' | 'collection-type-missing' | 'target-shape-mismatch'
-  | 'file-rejected' | 'font-name-taken'
+  | 'file-rejected' | 'font-name-taken' | 'font-token-taken'
   // Nhập — việc cần làm sau khi nhập (C)
   | 'endpoint-missing' | 'locale-missing' | 'locale-disabled' | 'embed-origin-missing'
   | 'collection-missing' | 'component-differs' | 'collection-field-missing' | 'font-differs' | 'publish';
@@ -160,6 +160,15 @@ export const GUIDES: Record<TransferCode, Guide> = {
     steps: [
       'Đổi tên họ ở nguồn (Cài đặt › Font) rồi xuất lại, hoặc đổi tên họ đang có ở đây (Cài đặt › Font).',
       'Bấm "Xem trước lại".',
+    ],
+  },
+  'font-token-taken': {
+    tag: 'G12', title: 'Môi trường này còn biến {token} không thuộc họ font nào',
+    why: 'Gói mang họ font "{name}" và cần tạo biến {token}, nhưng ở đây đã có biến cùng tên mà không gắn với họ font nào. Tên biến suy từ slug của họ và không đổi được, nên đổi tên họ không gỡ được chỗ này.',
+    steps: [
+      'Nếu đây là font của gói dự án (chưa chuyển vào kho): chạy `pnpm fonts:adopt` ở môi trường này.',
+      'Nếu không: xoá hoặc đổi tên biến {token} trong design system của môi trường này.',
+      'Bấm "Xem trước lại" rồi nhập lại.',
     ],
   },
   'endpoint-missing': {
