@@ -26,6 +26,9 @@ export function serviceMayReach(pathname: string, method: string): boolean {
   // upload_asset với `filePath`: proxy tự POST multipart vì byte ảnh không được
   // đi qua context của model. Xem `uploadLocalFile` trong mcp/server.mjs.
   if (pathname === '/api/assets') return method === 'POST';
+  // upload_font với `filePath`: cùng lý do như /api/assets, byte font không đi qua context.
+  // GET để list_fonts đọc danh sách. Sửa/xoá họ font KHÔNG mở cho máy.
+  if (pathname === '/api/fonts') return method === 'POST' || method === 'GET';
   // Lời dặn + prompt MCP (`/clone_website`) do builder phát, và bộ clone (token, khổ đo,
   // mã bộ trích) cho `clone_url`/`compare_with_url` chạy ở máy người dùng. Cả hai CHỈ
   // ĐỌC. Thiếu dòng này thì proxy rơi về lời dặn nhúng sẵn và hai tool clone luôn báo
