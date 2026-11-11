@@ -1,6 +1,6 @@
 {
   "$comment": "SINH TỰ ĐỘNG bởi scripts/mcp-snapshot.ts. Đổi tool thì chạy `pnpm mcp:snapshot` và commit.",
-  "hash": "96c6005bd29a5d7c",
+  "hash": "36bd1d40bf77a350",
   "ops": "e0bfcf0471c1",
   "writeTools": [
     "apply_component_ops",
@@ -18,7 +18,8 @@
     "update_component",
     "update_entry",
     "update_page",
-    "upload_asset"
+    "upload_asset",
+    "upload_font"
   ],
   "tools": [
     {
@@ -142,6 +143,11 @@
       "schema": "26002ee9be7b"
     },
     {
+      "name": "list_fonts",
+      "readOnly": true,
+      "schema": "f973399805c1"
+    },
+    {
       "name": "list_locales",
       "readOnly": true,
       "schema": "f973399805c1"
@@ -189,7 +195,7 @@
     {
       "name": "search_tokens",
       "readOnly": true,
-      "schema": "d51d39f497d0"
+      "schema": "4b6117b9d0ec"
     },
     {
       "name": "set_entry_locale",
@@ -230,6 +236,11 @@
       "name": "upload_asset",
       "readOnly": false,
       "schema": "99cf20856325"
+    },
+    {
+      "name": "upload_font",
+      "readOnly": false,
+      "schema": "56ab9c500789"
     }
   ]
 }
