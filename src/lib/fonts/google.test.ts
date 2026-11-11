@@ -224,6 +224,19 @@ describe('importGoogleFamily', () => {
     expect(m.addFace).toHaveBeenCalledTimes(2);
   });
 
+  it('tên file của face variable không có khoảng trắng, chữ giữ nguyên', async () => {
+    const variable = css
+      .replaceAll('font-weight: 400', 'font-weight: 100 900')
+      .replaceAll('/* cyrillic */', '/* x */');
+    const fetchImpl = (async (u: RequestInfo | URL) =>
+      String(u).includes('css2') ? res(200, variable) : res(200, new Uint8Array([1]))) as typeof fetch;
+    await importGoogleFamily({ family: 'Be Vietnam Pro' }, actor, fetchImpl);
+    const names = m.addFace.mock.calls.map((c) => c[0].fileName as string);
+    expect(names).toHaveLength(3);
+    expect(names[0]).toBe('be-vietnam-pro-vietnamese-100-900-normal.woff2');
+    for (const n of names) expect(n).not.toMatch(/\s/);
+  });
+
   it('addFace hỏng ngay file đầu → ném nguyên lỗi gốc', async () => {
     const boom = new FontError('slug_taken', 'trùng');
     m.addFace.mockRejectedValue(boom);

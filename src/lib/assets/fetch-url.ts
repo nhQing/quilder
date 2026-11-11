@@ -37,7 +37,7 @@ function isPrivateV4(a: number, b: number, c = 0): boolean {
 /** IPv6 → 16 byte; `null` nếu không đọc được. Nhận cả đuôi dạng a.b.c.d. */
 function parseV6(ip: string): number[] | null {
   let text = ip.toLowerCase().split('%')[0] ?? '';
-  const tail = /(d+).(d+).(d+).(d+)$/.exec(text);
+  const tail = /(\d+)\.(\d+)\.(\d+)\.(\d+)$/.exec(text);
   if (tail) {
     const o = tail.slice(1).map(Number);
     if (o.some((n) => n > 255)) return null;
@@ -61,7 +61,7 @@ function parseV6(ip: string): number[] | null {
   return out.length === 16 ? out : null;
 }
 
-function isPrivateIp(ip: string): boolean {
+export function isPrivateIp(ip: string): boolean {
   if (isIP(ip) === 4) {
     const [a = 0, b = 0, c = 0] = ip.split('.').map(Number);
     return isPrivateV4(a, b, c);

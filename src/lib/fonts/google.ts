@@ -197,7 +197,7 @@ export async function importGoogleFamily(
         await addFace(
           {
             bytes: files[i]!,
-            fileName: `${slugify(cssName)}-${f.subset}-${f.weight.replace(/s+/g, '-')}-${f.style}.woff2`,
+            fileName: `${slugify(cssName)}-${f.subset}-${f.weight.replace(/\s+/g, '-')}-${f.style}.woff2`,
             family: cssName,
             weight: f.weight,
             style: f.style,
