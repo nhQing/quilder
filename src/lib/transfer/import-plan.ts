@@ -13,6 +13,7 @@ import { TOKEN_COLOR_RE, TOKEN_NAME_RE } from '@/lib/design/foundations';
 import { isSafeTokenValue } from '@/lib/design/token-value';
 import { endpointFormsIn } from '@/lib/doc/endpoint-usage';
 import { isReservedFamilyName } from '@/lib/fonts/builtin';
+import { familyNameKey } from '@/lib/fonts/css';
 import { fontTokenName, fontTokenValue } from '@/lib/fonts/token';
 import type { CompatResult } from './compat';
 import { assetUses, tokenRefsOf, type TreeShape } from './collect';
@@ -79,8 +80,8 @@ function sameShape(bundleCol: PageCollection | null, page: { slug: string; colle
 
 type FaceShape = { weight: string; style: string; unicodeRange: string };
 const faceKey = (f: FaceShape) => `${f.weight}|${f.style}|${f.unicodeRange}`;
-/** Tên họ CSS so không phân biệt hoa thường (spec §4). */
-const nameKey = (name: string) => name.trim().replace(/\s+/g, ' ').toLowerCase();
+/** Tên họ CSS so không phân biệt hoa thường (spec §4) — cùng khoá với dịch vụ font. */
+const nameKey = familyNameKey;
 const faceLabel = (f: FaceShape) => `weight ${f.weight}${f.style === 'italic' ? ' italic' : ''}`;
 /** 8 hex đầu của sha256 trong khoá theo nội dung (`…-1a2b3c4d.woff2`). */
 const KEY_DIGEST_RE = /-([0-9a-f]{8})(?:\.[a-z0-9]+)?$/;

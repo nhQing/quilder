@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cssFamilyName, fontFaceCss } from './css';
+import { cssFamilyName, familyNameKey, fontFaceCss, fontStackNames } from './css';
 import { EMPTY_FONT_SEAL, type FontSeal } from './types';
 
 const face = (key: string, weight = '400', unicodeRange = '') => ({
@@ -76,5 +76,21 @@ describe('fontFaceCss', () => {
     const one = fontFaceCss({ families: [a, b] });
     const two = fontFaceCss({ families: [{ ...b }, { ...a, faces: [...a.faces].reverse() }] });
     expect(two).toBe(one);
+  });
+});
+
+describe('familyNameKey / fontStackNames', () => {
+  it('khoá tên họ: chữ thường, gộp khoảng trắng; "_" và "-" là ký tự thường', () => {
+    expect(familyNameKey('  GILROY  ')).toBe(familyNameKey('gilroy'));
+    expect(familyNameKey('Be  Vietnam Pro')).toBe('be vietnam pro');
+    expect(familyNameKey('My-Font')).not.toBe(familyNameKey('My_Font'));
+  });
+
+  it('tách chồng font, bỏ nháy, giữ dấu phẩy trong nháy', () => {
+    expect(fontStackNames('newYork, Georgia, "Times New Roman", serif')).toEqual([
+      'newYork', 'Georgia', 'Times New Roman', 'serif',
+    ]);
+    expect(fontStackNames(`"A, B" , 'C \\" D'`)).toEqual(['A, B', 'C " D']);
+    expect(fontStackNames('')).toEqual([]);
   });
 });

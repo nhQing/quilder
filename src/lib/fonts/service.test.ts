@@ -148,16 +148,16 @@ describe('addFace', () => {
 
   it('(Review Focus 1) tên họ chỉ khác hoa thường → thêm face vào họ cũ, created false', async () => {
     m.inspectFont.mockReturnValue(inspected({ family: 'GILROY', weight: '400' }));
-    m.prisma.fontFamily.findFirst.mockResolvedValue({
-      id: 'g1', slug: 'gilroy', cssName: 'gilroy', source: 'upload',
-      faces: [{ id: 'face0', weight: '700', style: 'normal', unicodeRange: RANGE }],
-    });
+    m.prisma.fontFamily.findMany.mockResolvedValue([
+      { id: 'b1', slug: 'be-vietnam-pro', cssName: 'Be Vietnam Pro', source: 'upload', faces: [] },
+      {
+        id: 'g1', slug: 'gilroy', cssName: 'gilroy', source: 'upload',
+        faces: [{ id: 'face0', weight: '700', style: 'normal', unicodeRange: RANGE }],
+      },
+    ]);
 
     const r = await upload({ fileName: 'gilroy-regular.otf' });
 
-    expect(m.prisma.fontFamily.findFirst).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { cssName: { equals: 'GILROY', mode: 'insensitive' } } }),
-    );
     expect(m.prisma.fontFamily.create).not.toHaveBeenCalled();
     expect(m.prisma.token.create).not.toHaveBeenCalled();
     expect(m.prisma.fontFace.create).toHaveBeenCalledWith(
@@ -167,11 +167,45 @@ describe('addFace', () => {
     expect(r.faces[0]!.replaced).toBe(false);
   });
 
+  it('tên có "_" không khớp tên có "-" (không dùng ILIKE): "My-Font" khi đã có "My_Font" → họ mới', async () => {
+    m.inspectFont.mockReturnValue(inspected({ family: 'My-Font' }));
+    const myUnderscore = { id: 'u1', slug: 'my-font-x', cssName: 'My_Font', source: 'upload', faces: [] };
+    m.prisma.fontFamily.findMany.mockResolvedValue([
+      myUnderscore,
+      { id: 'u2', slug: 'my-font-y', cssName: 'My%', source: 'upload', faces: [] },
+    ]);
+    m.prisma.fontFamily.findFirst.mockResolvedValue(myUnderscore);
+
+    const r = await upload();
+
+    expect(m.prisma.fontFamily.findFirst).not.toHaveBeenCalled();
+    expect(m.prisma.fontFamily.findMany).not.toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.anything() }),
+    );
+    expect(m.prisma.fontFamily.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ cssName: 'My-Font', slug: 'my-font' }) }),
+    );
+    expect(r.family.created).toBe(true);
+  });
+
+  it('"My_Font" khi đã có "My-Font" → không nhét face vào "My-Font" (ILIKE coi "_" là ký tự đại diện)', async () => {
+    m.inspectFont.mockReturnValue(inspected({ family: 'My_Font' }));
+    const myDash = { id: 'd1', slug: 'my-font', cssName: 'My-Font', source: 'upload', faces: [] };
+    m.prisma.fontFamily.findMany.mockResolvedValue([myDash]);
+    // Đúng thứ Postgres trả cho `cssName ILIKE 'My_Font'` nếu service còn dùng `mode: 'insensitive'`.
+    m.prisma.fontFamily.findFirst.mockResolvedValue(myDash);
+    m.prisma.fontFamily.findUnique.mockResolvedValue({ cssName: 'My-Font' }); // slug my-font đã có chủ
+
+    expect(await codeOf(upload())).toBe('slug_taken');
+    expect(m.prisma.fontFace.create).not.toHaveBeenCalled();
+    expect(m.uploadAsset).not.toHaveBeenCalled();
+  });
+
   it('trùng (weight, style, unicodeRange) → thay assetId, replaced true, không tạo face mới', async () => {
-    m.prisma.fontFamily.findFirst.mockResolvedValue({
+    m.prisma.fontFamily.findMany.mockResolvedValue([{
       id: 'f1', slug: 'be-vietnam-pro', cssName: 'Be Vietnam Pro', source: 'upload',
       faces: [{ id: 'face0', weight: '400', style: 'normal', unicodeRange: RANGE }],
-    });
+    }]);
 
     const r = await upload();
 
@@ -249,10 +283,10 @@ describe('addFace', () => {
   });
 
   it('(Review Focus 5) dryRun không ghi gì: không upload, không create/update, không audit', async () => {
-    m.prisma.fontFamily.findFirst.mockResolvedValue({
+    m.prisma.fontFamily.findMany.mockResolvedValue([{
       id: 'f1', slug: 'be-vietnam-pro', cssName: 'Be Vietnam Pro', source: 'upload',
       faces: [{ id: 'face0', weight: '400', style: 'normal', unicodeRange: RANGE }],
-    });
+    }]);
     m.inspectFont.mockReturnValue(inspected({ warnings: ['missing_vietnamese'] }));
 
     const r = await upload({ dryRun: true, licenseConfirmed: false });
@@ -354,8 +388,11 @@ describe('updateFamily', () => {
 
   it('đổi cssName trùng họ khác (không phân biệt hoa thường) → name_reserved', async () => {
     m.prisma.fontFamily.findUnique.mockResolvedValue(family([{ id: 'face0' }]));
-    m.prisma.fontFamily.findFirst.mockResolvedValue({ id: 'f2', cssName: 'Be Vietnam Pro' });
-    expect(await codeOf(updateFamily('f1', { cssName: 'be vietnam pro' }, actor))).toBe('name_reserved');
+    m.prisma.fontFamily.findMany.mockResolvedValue([
+      { id: 'f1', cssName: 'gilroy', faces: [] },
+      { id: 'f2', cssName: 'Be Vietnam Pro', faces: [] },
+    ]);
+    expect(await codeOf(updateFamily('f1', { cssName: 'be  vietnam pro' }, actor))).toBe('name_reserved');
     expect(m.prisma.fontFamily.update).not.toHaveBeenCalled();
   });
 
