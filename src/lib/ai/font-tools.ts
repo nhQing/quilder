@@ -46,7 +46,8 @@ const uploadFontTool: ToolDef = {
     'Thêm một face font vào kho font. Đúng MỘT nguồn trong ba: `filePath` (file trên máy người ' +
     'dùng, MCP server đọc tại chỗ), `sourceUrl` (server tải về) hoặc `google` ({ family, weights?, ' +
     'italic? } — lấy từ Google Fonts, không cần xác nhận giấy phép).\n\n' +
-    'Mỗi lần gọi một file; cả bộ font thì gọi nhiều lần.\n\n' +
+    'Mỗi lần gọi một file; cả bộ font thì gọi nhiều lần, gọi tuần tự, không gọi song song ' +
+    '(các file cùng họ gọi song song sẽ tranh nhau tạo họ; gặp `conflict` thì gọi lại).\n\n' +
     'Chạy `dryRun: true` trước để cho người dùng xem tên họ và weight đọc được, rồi mới lưu thật.\n\n' +
     'Với `filePath` và `sourceUrl`, hỏi người dùng về giấy phép ("Bạn có quyền dùng font này trên ' +
     'web không?") và chỉ gửi `licenseConfirmed: true` khi họ đã trả lời có. KHÔNG tự điền ' +

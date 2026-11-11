@@ -33,7 +33,9 @@ export type FontErrorCode =
   | 'in_use'
   | 'bad_fallback'
   | 'not_found'
-  | 'bad_weight';
+  | 'bad_weight'
+  /** Ghi đụng một yêu cầu song song (P2002 cả sau lần thử lại) — thử lại là được. */
+  | 'conflict';
 
 export const FONT_ERROR_STATUS: Record<FontErrorCode, number> = {
   not_font: 415,
@@ -49,6 +51,7 @@ export const FONT_ERROR_STATUS: Record<FontErrorCode, number> = {
   bad_fallback: 422,
   not_found: 404,
   bad_weight: 422,
+  conflict: 409,
 };
 
 export class FontError extends Error {
