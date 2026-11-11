@@ -154,10 +154,17 @@ function otherFormat(b: Uint8Array): Sniffed | null {
     return { mime: 'audio/mpeg' };
   }
 
-  // Font: woff2 và woff. Có sẵn ở đây để việc "nhập file font" sau này không phải
-  // mở lại luật nhận dạng — xem HANDOFF §3.49.
+  // Font: woff2, woff, rồi TTF/OTF/TTC thô. Module font (src/lib/fonts) nhận file font tải
+  // lên và đọc kiểu từ đây. TTC (`ttcf`) được NHẬN DẠNG để module font từ chối bằng lời
+  // nhắn rõ (`collection_unsupported`) thay vì "không nhận dạng được".
   if (ascii(b, 0, 4) === 'wOF2') return { mime: 'font/woff2' };
   if (ascii(b, 0, 4) === 'wOFF') return { mime: 'font/woff' };
+  // sfnt: `00 01 00 00` (TrueType) hoặc `true` (TrueType kiểu Apple cũ).
+  if (startsWith(b, [0x00, 0x01, 0x00, 0x00]) || ascii(b, 0, 4) === 'true') {
+    return { mime: 'font/ttf' };
+  }
+  if (ascii(b, 0, 4) === 'OTTO') return { mime: 'font/otf' };
+  if (ascii(b, 0, 4) === 'ttcf') return { mime: 'font/collection' };
 
   return null;
 }

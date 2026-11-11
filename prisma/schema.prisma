@@ -318,6 +318,13 @@ model Release {
   translations Json?
 
   /**
+   * FontSeal: họ font động và các face đang dùng tại thời điểm publish (xem
+   * `src/lib/fonts`). `null` ở release tạo trước tính năng này, nghĩa là không có font
+   * động — trang vẫn render, chỉ không có `data-mm-fonts`.
+   */
+  fonts Json?
+
+  /**
    * Ảnh chụp cây component tại thời điểm publish, map `presetId` → cây node.
    *
    * ## Vì sao phải chụp
@@ -545,9 +552,57 @@ model Asset {
 
   createdAt DateTime @default(now())
 
+  /** Face font đang trỏ tới file này. `FontFace.asset` là Restrict nên file không bị xoá khi còn dùng. */
+  fontFaces FontFace[]
+
   @@index([kind])
   @@index([folder])
   @@index([trashedAt])
+}
+
+/**
+ * Một họ font động (tải lên hoặc nhập từ Google Fonts). Mỗi họ sở hữu đúng một hàng
+ * `Token` tên `font-<slug>`; hàng token chỉ được đổi qua module font.
+ */
+model FontFamily {
+  id        String   @id @default(cuid())
+  /** Phần đuôi của token `font-<slug>`. BẤT BIẾN: đổi slug là gãy mọi node trỏ vào token. */
+  slug      String   @unique
+  /** Tên họ trong CSS, ví dụ `Be Vietnam Pro`. Sửa được. So trùng KHÔNG phân biệt hoa thường. */
+  cssName   String   @unique
+  /** Chuỗi fallback, ví dụ `system-ui, -apple-system, "Segoe UI", Roboto, sans-serif`. */
+  fallback  String
+  /** upload | google */
+  source    String
+  googleFamily String?
+  licenseNote  String?
+  /** Email người tick "tôi có quyền dùng font này trên web". Null với nguồn google. */
+  licenseConfirmedBy String?
+  createdBy String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  faces     FontFace[]
+}
+
+model FontFace {
+  id        String @id @default(cuid())
+  familyId  String
+  family    FontFamily @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  /** "400", hoặc dải "100 900" cho variable font. */
+  weight    String
+  /** normal | italic */
+  style     String
+  /** "" = không giới hạn. Dùng "" thay null để @@unique có hiệu lực trên Postgres. */
+  unicodeRange String @default("")
+  /** vietnamese | latin-ext | latin | "" — nhãn để hiển thị. */
+  subset    String @default("")
+  /** Mã cảnh báo lúc tải lên (missing_vietnamese, restricted_embedding) — màn Font hiện lại. */
+  warnings  String[] @default([])
+  assetId   String
+  asset     Asset  @relation(fields: [assetId], references: [id], onDelete: Restrict)
+  createdAt DateTime @default(now())
+
+  @@unique([familyId, weight, style, unicodeRange])
 }
 
 /**
