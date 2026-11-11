@@ -14,10 +14,10 @@ export type TransferCode =
   // Nhập — chặn (G)
   | 'proxy-too-large' | 'file-too-large' | 'builder-too-old' | 'file-corrupt' | 'target-changed'
   | 'target-fixture' | 'network' | 'collection-type-missing' | 'target-shape-mismatch'
-  | 'file-rejected'
+  | 'file-rejected' | 'font-name-taken'
   // Nhập — việc cần làm sau khi nhập (C)
   | 'endpoint-missing' | 'locale-missing' | 'locale-disabled' | 'embed-origin-missing'
-  | 'collection-missing' | 'component-differs' | 'collection-field-missing' | 'publish';
+  | 'collection-missing' | 'component-differs' | 'collection-field-missing' | 'font-differs' | 'publish';
 
 export type IssueLevel = 'block' | 'warn' | 'todo';
 
@@ -154,6 +154,14 @@ export const GUIDES: Record<TransferCode, Guide> = {
     why: '{reason}',
     steps: ['Ở môi trường nguồn, thay file trong danh sách bằng định dạng kho nhận (PNG, JPEG, WebP, SVG, MP4…).', 'Xuất lại rồi nhập lại.'],
   },
+  'font-name-taken': {
+    tag: 'G11', title: 'Họ font "{name}" trùng tên ở đây',
+    why: 'Gói mang họ font "{name}" (token font-{slug}), nhưng {reason}. Tên họ font không phân biệt hoa thường, nên tạo thêm sẽ trộn hai font với nhau.',
+    steps: [
+      'Đổi tên họ ở nguồn (Cài đặt › Font) rồi xuất lại, hoặc đổi tên họ đang có ở đây (Cài đặt › Font).',
+      'Bấm "Xem trước lại".',
+    ],
+  },
   'endpoint-missing': {
     tag: 'C1', title: 'Form chưa có URL nhận dữ liệu',
     why: 'Form "{form}" gửi tới khoá {key}, nhưng môi trường này chưa đặt URL cho khoá đó — form đang tắt.',
@@ -193,6 +201,11 @@ export const GUIDES: Record<TransferCode, Guide> = {
     why: 'Bố cục gắn field "{field}" mà loại "{typeKey}" ở đây không có, nên chỗ đó sẽ trống.',
     steps: ['Mở Nội dung › {typeKey}, thêm field "{field}" cùng kiểu.', 'Bấm "Kiểm lại".'],
   },
+  'font-differs': {
+    tag: 'C8', title: 'Họ font ở đây khác bản trong gói',
+    why: '{name} ở đây {diff} so với gói. Trang dùng bản đang có ở đây.',
+    steps: ['Vào Cài đặt › Font (link).', 'Tải thêm hoặc thay file cho họ {name} nếu muốn giống nguồn.'],
+  },
   publish: {
     tag: 'C6', title: 'Publish khi đã kiểm',
     why: 'Nhập chỉ ghi bản nháp. Site thật chưa đổi.',
@@ -227,4 +240,4 @@ export function renderGuide(i: TransferIssue): Guide {
  */
 export const UNDO_IMPORT_CONSEQUENCE =
   'Bản nháp và bản dịch của trang trở về như trước lần nhập; tiêu đề/SEO cũng trở về nếu lần nhập đã đổi chúng. '
-  + 'Nếu lần nhập đã tạo ra trang này thì trang bị xoá hẳn. Component, token và ảnh đã thêm vẫn giữ lại. Site thật không đổi.';
+  + 'Nếu lần nhập đã tạo ra trang này thì trang bị xoá hẳn. Component, token, họ font và ảnh đã thêm vẫn giữ lại. Site thật không đổi.';

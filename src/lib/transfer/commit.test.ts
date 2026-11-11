@@ -4,7 +4,7 @@ vi.mock('server-only', () => ({}));
 vi.mock('@/lib/db', () => ({ prisma: {} }));
 vi.mock('next/cache', () => ({ revalidateTag: vi.fn(), unstable_cache: (f: unknown) => f }));
 
-import { sampleBundle } from './fixtures';
+import { GILROY_ASSETS, sampleBundle, sampleFont } from './fixtures';
 import { parseBundle } from './manifest';
 
 function bundleOf(over: Record<string, unknown> = {}) {
@@ -78,6 +78,85 @@ describe('commitFailure', () => {
   });
 });
 
+describe('commitImport - họ font (spec §13.2)', () => {
+  const session = { sub: 'u1', email: 'a@b.c' } as never;
+  const root = { id: 'root', type: 'Section', tag: 'main', parentId: null, children: ['h'], effects: [], style: { base: {} } };
+  const h = {
+    id: 'h', type: 'Text', tag: 'h1', parentId: 'root', children: [], effects: [], content: [{ t: 'text', v: 'Chào' }],
+    style: { base: { typography: { family: { $token: 'font-gilroy' } } } },
+  };
+  const META = { title: 'ABC', description: null, canonical: null, noindex: false, jsonLd: null, ogImageId: null };
+  const keyOf = (a: { key: string }) => a.key;
+
+  async function setup(fontFamilies: unknown[]) {
+    vi.resetModules();
+    const revalidateTag = vi.fn();
+    const tx = {
+      asset: {
+        findMany: vi.fn(async () => GILROY_ASSETS.map((a) => ({ id: `dst-${a.id}`, trashedAt: null }))),
+        updateMany: vi.fn(async () => ({ count: 0 })),
+      },
+      preset: { count: vi.fn(async () => 0), create: vi.fn() },
+      token: { create: vi.fn() },
+      fontFamily: { create: vi.fn(async () => ({ id: 'fnew' })) },
+      fontFace: { createMany: vi.fn() },
+      page: { findUniqueOrThrow: vi.fn(async () => META), updateMany: vi.fn(async () => ({ count: 1 })) },
+      pageVersion: { create: vi.fn(async () => ({ id: 'vnew' })) },
+      translation: { findMany: vi.fn(async () => []), deleteMany: vi.fn(), createMany: vi.fn() },
+      auditLog: { create: vi.fn(async () => ({ id: 'log1' })) },
+    };
+    vi.doMock('server-only', () => ({}));
+    vi.doMock('next/cache', () => ({ revalidateTag, unstable_cache: (f: unknown) => f }));
+    vi.doMock('@/lib/db', () => ({ prisma: { $transaction: async (fn: (t: typeof tx) => unknown) => fn(tx) } }));
+    vi.doMock('./target', () => ({
+      loadTargetSnapshot: async () => ({
+        pages: [{ id: 'p1', slug: 'abc', title: 'ABC', draftVersionId: 'v1', fixture: false, collection: null, hasUnpublishedChanges: false }],
+        // Hai file font đã lên kho (bước tải file chạy trước commit).
+        assetsByKey: new Map(GILROY_ASSETS.map((a) => [keyOf(a), { id: `dst-${a.id}`, key: a.key, trashed: false, alt: null, bytes: a.bytes }])),
+        presetsByKey: new Map(), tokens: new Map(), tokenNames: new Set(), locales: new Map([['vi', { enabled: true }]]),
+        endpointUrls: {}, embedHosts: [], collectionTypes: new Map(), folders: [], fontFamilies,
+      }),
+    }));
+    const { commitImport } = await import('./commit');
+    const bundle = bundleOf({ doc: { schemaVersion: 2, rootId: 'root', nodes: { root, h } }, assets: GILROY_ASSETS, fonts: [sampleFont()] });
+    const r = await commitImport({ bundle, target: { kind: 'existing', pageId: 'p1' }, expectDraftVersionId: 'v1', takeMeta: false, session });
+    return { r, tx, revalidateTag };
+  }
+
+  it('đích trống: tạo họ, các face (trỏ id ảnh ở đích) và token font-gilroy cùng định dạng với màn Font', async () => {
+    const { r, tx, revalidateTag } = await setup([]);
+    expect(r).toMatchObject({ ok: true, pageId: 'p1', importId: 'log1' });
+    expect(tx.fontFamily.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        slug: 'gilroy', cssName: 'Gilroy', fallback: 'system-ui, sans-serif', source: 'upload',
+        googleFamily: null, licenseNote: 'Mua bản web 2025', createdBy: 'a@b.c',
+      }),
+    }));
+    expect(tx.fontFace.createMany).toHaveBeenCalledWith({
+      data: [
+        { familyId: 'fnew', weight: '300', style: 'normal', unicodeRange: '', subset: '', warnings: [], assetId: 'dst-cfont000000000000000000300' },
+        { familyId: 'fnew', weight: '400', style: 'normal', unicodeRange: '', subset: '', warnings: [], assetId: 'dst-cfont000000000000000000400' },
+      ],
+    });
+    expect(tx.token.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ name: 'font-gilroy', value: '"Gilroy", system-ui, sans-serif', category: 'font', custom: true }),
+    });
+    const actions = tx.auditLog.create.mock.calls.map((c) => (c as unknown as [{ data: { action: string; meta: { created?: { fonts?: string[] } } } }])[0].data);
+    expect(actions.map((a) => a.action)).toEqual(['font.family.import', 'page.import']);
+    expect(actions[1]!.meta.created?.fonts).toEqual(['fnew']);
+    expect(revalidateTag).toHaveBeenCalledWith('fonts');
+  });
+
+  it('đích có họ cùng slug: không ghi họ/face/token, lần nhập vẫn thành công kèm việc cần làm', async () => {
+    const { r, tx } = await setup([{ id: 'fdst', slug: 'gilroy', cssName: 'Gilroy', faces: [] }]);
+    expect(r).toMatchObject({ ok: true });
+    expect(tx.fontFamily.create).not.toHaveBeenCalled();
+    expect(tx.fontFace.createMany).not.toHaveBeenCalled();
+    expect(tx.token.create).not.toHaveBeenCalled();
+    expect((r as { issues: { code: string }[] }).issues.map((i) => i.code)).toContain('font-differs');
+  });
+});
+
 describe('commitImport - kiểm trong transaction (spec §8.3)', () => {
   const session = { sub: 'u1', email: 'a@b.c' } as never;
   const KEY = 'public/builder/hero-aaaaaaaa.png';
@@ -107,7 +186,7 @@ describe('commitImport - kiểm trong transaction (spec §8.3)', () => {
         pages: [{ id: 'p1', slug: 'abc', title: 'ABC', draftVersionId: 'v1', fixture: false, collection: null, hasUnpublishedChanges: false }],
         assetsByKey: new Map(opts.asset ? [[KEY, { id: 'dst1', key: KEY, trashed: opts.asset.trashed, alt: 'có', bytes: 10 }]] : []),
         presetsByKey: new Map(), tokens: new Map(), tokenNames: new Set(), locales: new Map([['vi', { enabled: true }]]),
-        endpointUrls: {}, embedHosts: [], collectionTypes: new Map(), folders: [],
+        endpointUrls: {}, embedHosts: [], collectionTypes: new Map(), folders: [], fontFamilies: [],
       }),
     }));
     const { commitImport } = await import('./commit');

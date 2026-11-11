@@ -3,8 +3,9 @@ import { describe, expect, it } from 'vitest';
 import { CURRENT_SCHEMA_VERSION } from '@/lib/doc/types';
 import { checkBundle } from './compat';
 import { buildImportPlan, candidateKeys, uploadsNeeded, type TargetSnapshot } from './import-plan';
+import { renderGuide } from './guides';
 import { parseBundle } from './manifest';
-import { sampleBundle, SHA } from './fixtures';
+import { FONT_SHA_300, FONT_SHA_400, GILROY_ASSETS, sampleBundle, sampleFont, SHA } from './fixtures';
 
 const base = { parentId: 'root', children: [], effects: [], style: { base: {} } };
 const nodes = {
@@ -48,6 +49,7 @@ function snap(over: Partial<TargetSnapshot> = {}): TargetSnapshot {
     embedHosts: [],
     collectionTypes: new Map(),
     folders: ['trang-chu'],
+    fontFamilies: [],
     ...over,
   };
 }
@@ -168,6 +170,95 @@ describe('buildImportPlan', () => {
     expect(g4[0]!.items?.map((i) => i.label)).toEqual([expect.stringContaining('Mau Hong'), expect.stringContaining('mau-sai')]);
     // Đã có ở đích thì không ghi gì, không chặn.
     expect(codes(plan(bad, snap({ tokens: new Map([['Mau Hong', '#fff'], ['mau-sai', '#000']]) })))).not.toContain('block:file-corrupt');
+  });
+});
+
+describe('buildImportPlan - họ font (spec §13.2)', () => {
+  const style = { base: { typography: { family: { $token: 'font-gilroy' } } } };
+  const fontBundle = (over: Record<string, unknown> = {}) => bundle({
+    doc: { schemaVersion: CURRENT_SCHEMA_VERSION, rootId: 'root', nodes: { ...nodes, img: { ...nodes.img, style } } },
+    assets: [...sampleBundle().assets, ...GILROY_ASSETS],
+    fonts: [sampleFont()],
+    ...over,
+  });
+  const destFace = (weight: string, key: string) => ({ weight, style: 'normal', unicodeRange: '', key });
+  const fontPlan = (s: Partial<TargetSnapshot> = {}, b = fontBundle()) => plan(b, snap(s));
+
+  it('đích trống: tạo họ; file font tải lên; token font-gilroy không bị coi là token builder chưa có (G3)', () => {
+    const p = fontPlan();
+    expect(p.fonts).toEqual([{ slug: 'gilroy', cssName: 'Gilroy', action: 'create', targetId: null }]);
+    expect(p.issues.filter((i) => i.level === 'block')).toEqual([]);
+    expect(p.assets.filter((a) => a.sha256 === FONT_SHA_300 || a.sha256 === FONT_SHA_400).map((a) => a.status)).toEqual(['upload', 'upload']);
+  });
+
+  it('đích có họ cùng slug thiếu weight 300: dùng bản ở đích, việc cần làm nói "thiếu weight 300", không tải file font', () => {
+    const p = fontPlan({
+      fontFamilies: [{ id: 'fdst', slug: 'gilroy', cssName: 'Gilroy Web', faces: [destFace('400', `public/builder/gilroy-regular-${FONT_SHA_400.slice(0, 8)}.woff2`)] }],
+    });
+    expect(p.fonts).toEqual([{ slug: 'gilroy', cssName: 'Gilroy', action: 'use-target', targetId: 'fdst' }]);
+    const todo = p.issues.filter((i) => i.code === 'font-differs');
+    expect(todo).toHaveLength(1);
+    expect(todo[0]!.level).toBe('todo');
+    const g = renderGuide(todo[0]!);
+    expect(g.why).toContain('Gilroy Web ở đây thiếu weight 300');
+    expect(g.why).not.toContain('400');
+    expect(todo[0]!.items?.[0]?.href).toBe('/builder/settings/fonts');
+    expect(p.issues.filter((i) => i.level === 'block')).toEqual([]);
+    // Họ ở đích được giữ → file font của gói không cần lên kho.
+    expect(p.assets.map((a) => a.sha256)).toEqual([SHA]);
+  });
+
+  it('đích có họ cùng slug, cùng tập file: dùng lại, không có việc cần làm', () => {
+    const p = fontPlan({
+      fontFamilies: [{ id: 'fdst', slug: 'gilroy', cssName: 'Gilroy', faces: [
+        destFace('300', `public/builder/x-${FONT_SHA_300.slice(0, 8)}.woff2`),
+        destFace('400', `public/builder/y-${FONT_SHA_400.slice(0, 8)}.woff2`),
+      ] }],
+    });
+    expect(p.fonts[0]!.action).toBe('use-target');
+    expect(codes(p)).not.toContain('todo:font-differs');
+  });
+
+  it('cùng weight mà file khác → việc cần làm nói file khác', () => {
+    const p = fontPlan({
+      fontFamilies: [{ id: 'fdst', slug: 'gilroy', cssName: 'Gilroy', faces: [
+        destFace('300', `public/builder/x-${FONT_SHA_300.slice(0, 8)}.woff2`),
+        destFace('400', 'public/builder/y-12345678.woff2'),
+      ] }],
+    });
+    const why = renderGuide(p.issues.find((i) => i.code === 'font-differs')!).why;
+    expect(why).toContain('weight 400');
+    expect(why).not.toContain('thiếu');
+  });
+
+  it('đích có họ cssName "Gilroy" (khác hoa thường) mà khác slug → blocker', () => {
+    const p = fontPlan({ fontFamilies: [{ id: 'fcu', slug: 'gilroy-cu', cssName: 'GILROY', faces: [] }] });
+    const g = p.issues.find((i) => i.code === 'font-name-taken');
+    expect(g?.level).toBe('block');
+    expect(renderGuide(g!).why).toContain('GILROY');
+  });
+
+  it('tên trùng họ có sẵn (Inter) hoặc token font-<slug> đã có mà không thuộc họ nào → blocker', () => {
+    const inter = fontBundle({ fonts: [sampleFont({ slug: 'inter', cssName: 'Inter' })] });
+    expect(codes(plan(inter, snap()))).toContain('block:font-name-taken');
+    expect(codes(fontPlan({ tokens: new Map([['font-gilroy', '"gilroy", serif']]) }))).toContain('block:font-name-taken');
+  });
+
+  it('họ sẽ tạo mà fallback có ký tự thoát CSS, hoặc face trùng nhau → G4', () => {
+    const evil = fontBundle({ fonts: [sampleFont({ fallback: 'serif; } body { x' })] });
+    expect(codes(plan(evil, snap()))).toContain('block:file-corrupt');
+    const f = sampleFont();
+    const dup = fontBundle({ fonts: [{ ...f, faces: [f.faces[0], f.faces[0]] }] });
+    expect(codes(plan(dup, snap()))).toContain('block:file-corrupt');
+  });
+
+  it('face trỏ file không có trong assets[] → gói không kín (G4)', () => {
+    const holey = fontBundle({ assets: sampleBundle().assets });
+    expect(codes(plan(holey, snap()))).toContain('block:file-corrupt');
+  });
+
+  it('gói cũ không có fonts: kế hoạch không có họ font nào', () => {
+    expect(plan().fonts).toEqual([]);
   });
 });
 

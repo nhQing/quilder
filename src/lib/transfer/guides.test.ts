@@ -1,14 +1,15 @@
 import { describe, expect, it } from 'vitest';
 
-import { GUIDES, issue, renderGuide, type TransferCode } from './guides';
+import { GUIDES, issue, renderGuide, UNDO_IMPORT_CONSEQUENCE, type TransferCode } from './guides';
 
 const ALL: TransferCode[] = [
   'asset-row-missing', 'asset-file-missing', 'storage-unreachable', 'component-missing',
   'doc-invalid', 'too-large', 'interrupted', 'file-over-import-limit', 'entries-not-included',
   'proxy-too-large', 'file-too-large', 'builder-too-old', 'file-corrupt', 'target-changed',
   'target-fixture', 'network', 'collection-type-missing', 'target-shape-mismatch', 'file-rejected',
+  'font-name-taken',
   'endpoint-missing', 'locale-missing', 'locale-disabled', 'embed-origin-missing',
-  'collection-missing', 'component-differs', 'collection-field-missing', 'publish',
+  'collection-missing', 'component-differs', 'collection-field-missing', 'font-differs', 'publish',
 ];
 
 describe('hướng dẫn từng bước', () => {
@@ -37,6 +38,10 @@ describe('hướng dẫn từng bước', () => {
     expect(g.steps.join(' ')).toContain('Đăng ký');
     const raw = renderGuide(issue('endpoint-missing', 'todo'));
     expect(raw.steps.join(' ')).toContain('{key}');
+  });
+
+  it('hoàn tác lần nhập nói rõ họ font đã tạo vẫn giữ lại (spec §13.2)', () => {
+    expect(UNDO_IMPORT_CONSEQUENCE).toContain('họ font');
   });
 
   it('G1 hướng dẫn đúng dòng cấu hình Nginx và Caddy', () => {

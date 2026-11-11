@@ -5,7 +5,7 @@ import 'server-only';
  *  1. Lập lại kế hoạch (không tin preview). Còn blocker / còn file chưa tải → 409.
  *  2. Trang mới: `createPage` (cùng luật slug, collection, hình dạng mẫu với nút "Trang mới"),
  *     rồi coi nó như trang có sẵn. Transaction sau hỏng → lưu trữ + xoá hẳn trang vừa tạo.
- *  3. Một transaction: tạo component + token còn thiếu, lấy ảnh ra khỏi thùng rác, thêm
+ *  3. Một transaction: tạo component + token + họ font còn thiếu, lấy ảnh ra khỏi thùng rác, thêm
  *     PageVersion mới và dời con trỏ CÓ ĐIỀU KIỆN, thay bản dịch, ghi AuditLog kèm bản sao lưu.
  *
  * Chỉ ghi BẢN NHÁP: không publish, không đụng Release.
@@ -20,6 +20,8 @@ import { archivePage, purgePage } from '@/lib/builder/delete-page';
 import { parsePageCollection } from '@/lib/builder/page-collection';
 import { prisma } from '@/lib/db';
 import { CURRENT_SCHEMA_VERSION } from '@/lib/doc/types';
+import { describeFontFamily, fontTokenName, fontTokenValue } from '@/lib/fonts/token';
+import { FONTS_TAG } from '@/lib/fonts/types';
 import { CUSTOM_TOKENS_TAG } from '@/lib/render/custom-tokens';
 import { checkBundle } from './compat';
 import { issue, type TransferIssue } from './guides';
@@ -81,8 +83,11 @@ export interface ImportMeta {
    */
   importedMeta: PageMetaSnapshot;
   importedTranslations: number;
-  /** `assets`: id ảnh ở ĐÍCH mà lần nhập đã đụng tới. Hoàn tác KHÔNG đảo phần này (không bao giờ xoá/đổi ảnh). */
-  created: { presets: string[]; tokens: string[]; assets: { restored: string[]; altFilled: string[] } };
+  /**
+   * `assets`: id ảnh ở ĐÍCH mà lần nhập đã đụng tới. `fonts`: id FontFamily đã tạo (log cũ không có).
+   * Hoàn tác KHÔNG đảo phần này (không bao giờ xoá/đổi ảnh, không xoá họ font).
+   */
+  created: { presets: string[]; tokens: string[]; fonts?: string[]; assets: { restored: string[]; altFilled: string[] } };
 }
 
 export type PageMetaSnapshot = { title: string; description: string | null; canonical: string | null; noindex: boolean; jsonLd: unknown; ogImageId: string | null };
@@ -100,7 +105,7 @@ const pendingIssue = (n: number) => issue('network', 'block', { detail: `Còn ${
 /**
  * Lỗi của transaction → phản hồi cho người dùng, hoặc null nếu không phải lỗi ta hiểu (để ném lại).
  *
- * P2002 (trùng khoá unique của Preset.key / Token.name) nghĩa là giữa lúc lập kế hoạch và lúc ghi
+ * P2002 (trùng khoá unique của Preset.key / Token.name / FontFamily.slug, cssName) nghĩa là giữa lúc lập kế hoạch và lúc ghi
  * có người — thường là chính ta bấm "Nhập" hai lần — đã tạo trước. Đó là "đích vừa đổi", không phải lỗi máy.
  * Kiểm theo `code` chứ không `instanceof`: lớp lỗi của Prisma có thể bị nạp hai bản.
  */
@@ -111,7 +116,7 @@ export function commitFailure(e: unknown): Failure | null {
   }
   if (e instanceof Leftover) return { ok: false, status: 500, error: `Lỗi code: còn id nguồn chưa đổi ở ${e.message}` };
   if (typeof e === 'object' && e !== null && (e as { code?: unknown }).code === 'P2002') {
-    return { ok: false, status: 409, error: 'Component hoặc token vừa được tạo ở đích. Bấm "Xem trước lại" rồi nhập.', issues: [issue('target-changed', 'block')] };
+    return { ok: false, status: 409, error: 'Component, token hoặc họ font vừa được tạo ở đích. Bấm "Xem trước lại" rồi nhập.', issues: [issue('target-changed', 'block')] };
   }
   return null;
 }
@@ -228,6 +233,44 @@ export async function commitImport(args: {
         createdTokens.push(src.name);
       }
 
+      // Họ font chưa có ở đích: tạo họ, face (trỏ file vừa lên kho) và token — ngay trong
+      // transaction này. Không đi qua `addFace` của dịch vụ font: hàm đó tự đọc/cắt file, tự tải
+      // lên và tự mở transaction riêng, còn ở đây file đã lên kho (bước tải file, kiểm sha) và
+      // mọi thứ phải lùi cùng nhau. Định dạng token dùng chung `fonts/token.ts`.
+      const createdFonts: string[] = [];
+      for (const row of plan.fonts.filter((x) => x.action === 'create')) {
+        const src = bundle.fonts.find((f) => f.slug === row.slug)!;
+        const fam = await tx.fontFamily.create({
+          data: {
+            slug: src.slug, cssName: src.cssName, fallback: src.fallback, source: src.source,
+            googleFamily: src.googleFamily, licenseNote: src.licenseNote,
+            // Gói không mang người xác nhận giấy phép ở nguồn; người nhập chưa tick gì ở đây.
+            licenseConfirmedBy: null,
+            createdBy: session.email,
+          },
+          select: { id: true },
+        });
+        await tx.fontFace.createMany({
+          data: src.faces.map((f) => ({
+            familyId: fam.id, weight: f.weight, style: f.style, unicodeRange: f.unicodeRange, subset: f.subset,
+            warnings: [], assetId: assetMap.get(f.assetRef)!,
+          })),
+        });
+        await tx.token.create({
+          data: {
+            name: fontTokenName(src.slug), value: fontTokenValue(src.cssName, src.fallback), category: 'font', custom: true,
+            aiDescription: describeFontFamily(src.cssName, src.source, src.faces),
+          },
+        });
+        await tx.auditLog.create({
+          data: {
+            userId: session.sub, action: 'font.family.import', targetType: 'FontFamily', targetId: fam.id,
+            meta: { slug: src.slug, cssName: src.cssName, faces: src.faces.length, pageId, from: bundle.source.origin },
+          },
+        });
+        createdFonts.push(fam.id);
+      }
+
       const restoredAssets = [...restoring];
       if (restoredAssets.length) {
         const r = await tx.asset.updateMany({ where: { id: { in: restoredAssets } }, data: { trashedAt: null, trashedBy: null } });
@@ -293,16 +336,17 @@ export async function commitImport(args: {
         previousMeta: args.takeMeta && !createdPage ? before : null,
         importedMeta: after,
         importedTranslations: rows.length,
-        created: { presets: createdPresets, tokens: createdTokens, assets: { restored: restoredAssets, altFilled } },
+        created: { presets: createdPresets, tokens: createdTokens, fonts: createdFonts, assets: { restored: restoredAssets, altFilled } },
       };
       const log = await tx.auditLog.create({
         data: { userId: session.sub, action: 'page.import', targetType: 'page', targetId: pageId, meta: json(meta), createdAt: at },
         select: { id: true },
       });
-      return { importId: log.id, createdTokens };
+      return { importId: log.id, createdTokens, createdFonts };
     }, { timeout: 60_000, maxWait: 10_000 }); // mặc định 5 s không đủ cho gói tới 5000 ảnh
 
-    if (result.createdTokens.length) revalidateTag(CUSTOM_TOKENS_TAG);
+    if (result.createdTokens.length || result.createdFonts.length) revalidateTag(CUSTOM_TOKENS_TAG);
+    if (result.createdFonts.length) revalidateTag(FONTS_TAG);
     return { ok: true, pageId, importId: result.importId, issues: plan.issues.filter((i) => i.level !== 'block') };
   } catch (e) {
     await undoCreate();

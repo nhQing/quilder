@@ -59,6 +59,29 @@ export const zBundleToken = z.object({
   aiDescription: z.string().nullable(),
 });
 
+/**
+ * Một họ font TẢI LÊN mà trang hoặc component dùng (`$token: 'font-<slug>'`). Họ có sẵn của lõi
+ * không đi theo gói; token của họ cũng không nằm trong `tokens[]` — đích tự dựng lại token từ
+ * `cssName` + `fallback` (spec §13.1). File font nằm trong `assets[]`, face trỏ tới bằng `assetRef`.
+ */
+export const zBundleFont = z.object({
+  /** Cùng hình dạng slug mà `slugify` sinh: `font-` + slug phải lọt `TOKEN_NAME_RE`. */
+  slug: z.string().regex(/^[a-z0-9]+(-[a-z0-9]+)*$/, 'slug họ font không hợp lệ').max(44),
+  cssName: z.string().min(1).max(200),
+  fallback: z.string().min(1).max(200),
+  source: z.enum(['upload', 'google']),
+  googleFamily: z.string().max(200).nullable(),
+  licenseNote: z.string().max(2000).nullable(),
+  faces: z.array(z.object({
+    weight: z.string().regex(/^\d{1,4}( \d{1,4})?$/, 'weight phải là số hoặc dải "100 900"'),
+    style: z.enum(['normal', 'italic']),
+    unicodeRange: z.string().max(4000),
+    subset: z.string().max(40),
+    /** `id` của một dòng trong `assets[]`. */
+    assetRef: z.string().min(1).max(64),
+  })).min(1).max(200),
+});
+
 export const zBundleTranslation = z.object({
   locale: z.string().min(1).max(20),
   nodeId: z.string().min(1).max(200),
@@ -100,6 +123,8 @@ export const zPageBundle = z.object({
   components: z.array(zBundleComponent),
   tokens: z.array(zBundleToken),
   assets: z.array(zBundleAsset).max(MAX_BUNDLE_ASSETS),
+  // Gói xuất trước khi có kho font không có trường này — vẫn phải nhập được.
+  fonts: z.array(zBundleFont).max(200).default([]),
   needs: zBundleNeeds,
 });
 
@@ -107,6 +132,7 @@ export type PageBundle = z.infer<typeof zPageBundle>;
 export type BundleAsset = z.infer<typeof zBundleAsset>;
 export type BundleComponent = z.infer<typeof zBundleComponent>;
 export type BundleToken = z.infer<typeof zBundleToken>;
+export type BundleFont = z.infer<typeof zBundleFont>;
 export type BundleTranslation = z.infer<typeof zBundleTranslation>;
 export type BundleNeeds = z.infer<typeof zBundleNeeds>;
 
