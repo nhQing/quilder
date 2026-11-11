@@ -43,8 +43,29 @@ describe('GET /mm-font/[...key]', () => {
   });
 
   it('getObject ném → 404', async () => {
-    m.getObject.mockRejectedValue(new Error('NoSuchKey'));
+    m.getObject.mockRejectedValue(Object.assign(new Error('The specified key does not exist.'), { name: 'NoSuchKey' }));
     expect((await call(['public', 'a.woff2'])).status).toBe(404);
+  });
+
+  it('có X-Content-Type-Options: nosniff', async () => {
+    const res = await call(['public', 'builder', 'a-12345678.woff2']);
+    expect(res.headers.get('x-content-type-options')).toBe('nosniff');
+  });
+
+  it('object không có (NoSuchKey) → 404, không log; kho lỗi khác → vẫn 404 nhưng console.error', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      m.getObject.mockRejectedValue(Object.assign(new Error('missing'), { name: 'NoSuchKey' }));
+      expect((await call(['public', 'a.woff2'])).status).toBe(404);
+      expect(log).not.toHaveBeenCalled();
+
+      m.getObject.mockRejectedValue(Object.assign(new Error('connect ECONNREFUSED'), { name: 'Error' }));
+      expect((await call(['public', 'a.woff2'])).status).toBe(404);
+      expect(log).toHaveBeenCalledTimes(1);
+      expect(String(log.mock.calls[0]![0])).toContain('public/a.woff2');
+    } finally {
+      log.mockRestore();
+    }
   });
 
   it('if-none-match trùng etag → 304', async () => {

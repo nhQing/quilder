@@ -35,7 +35,9 @@ export type FontErrorCode =
   | 'not_found'
   | 'bad_weight'
   /** Ghi đụng một yêu cầu song song (P2002 cả sau lần thử lại) — thử lại là được. */
-  | 'conflict';
+  | 'conflict'
+  /** Cắt font hỏng vì phía server (worker chết, thiếu module/wasm) — không phải lỗi file. */
+  | 'convert_failed';
 
 export const FONT_ERROR_STATUS: Record<FontErrorCode, number> = {
   not_font: 415,
@@ -52,6 +54,7 @@ export const FONT_ERROR_STATUS: Record<FontErrorCode, number> = {
   not_found: 404,
   bad_weight: 422,
   conflict: 409,
+  convert_failed: 500,
 };
 
 export class FontError extends Error {

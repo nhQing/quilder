@@ -19,6 +19,12 @@ const DEFAULT_TIMEOUT_MS = 30_000;
 const TOO_SLOW =
   'Cắt bộ chữ quá lâu (quá giới hạn thời gian). Hãy dùng file woff2 đã cắt sẵn (ví dụ bộ latin + vietnamese) rồi tải lại.';
 const BAD_FILE = 'Không cắt được bộ chữ của file font (file hỏng hoặc không hỗ trợ).';
+/**
+ * Lỗi PHÍA SERVER (worker chết, thiếu module/wasm trong bản deploy): không được đổ cho file của
+ * người dùng — họ sẽ đi tìm lỗi ở file trong khi file không sao. Mã `convert_failed` → 500.
+ */
+const SERVER_FAILED =
+  'Server không cắt được font lúc này (lỗi phía server, không phải do file của bạn). Hãy thử lại; nếu vẫn lỗi, dùng file woff2 đã cắt sẵn hoặc báo quản trị.';
 
 /**
  * Mã chạy trong worker. `subset-font` chạy wasm đồng bộ nên sẽ chặn event loop của luồng
@@ -57,7 +63,7 @@ function subsetModulePath(): string {
       causes.push(String((e as Error)?.message ?? e));
     }
   }
-  throw new FontError('not_font', 'Server thiếu thư viện cắt font (subset-font).', {
+  throw new FontError('convert_failed', `${SERVER_FAILED} (Server thiếu thư viện cắt font subset-font.)`, {
     cause: causes.join(' | '),
   });
 }
@@ -84,8 +90,12 @@ function runInWorker(bytes: Uint8Array, timeoutMs: number): Promise<Uint8Array> 
       void worker.terminate();
       fn();
     };
-    const fail = (cause: string) =>
+    // subset-font từ chối file (promise reject trong worker) = file hỏng thật → not_font.
+    const badFile = (cause: string) =>
       finish(() => reject(new FontError('not_font', BAD_FILE, { cause })));
+    // Worker ném ngoài promise (không nạp được module/wasm) hoặc thoát giữa chừng = lỗi server.
+    const serverFailed = (cause: string) =>
+      finish(() => reject(new FontError('convert_failed', SERVER_FAILED, { cause })));
     // Timer nằm ở luồng chính, còn wasm ở worker → timer luôn nổ đúng hạn.
     const timer = setTimeout(
       () => finish(() => reject(new FontError('too_large', TOO_SLOW))),
@@ -95,10 +105,10 @@ function runInWorker(bytes: Uint8Array, timeoutMs: number): Promise<Uint8Array> 
       if (msg.ok && msg.bytes) {
         const out = new Uint8Array(msg.bytes);
         finish(() => resolve(out));
-      } else fail(msg.message ?? 'unknown');
+      } else badFile(msg.message ?? 'unknown');
     });
-    worker.on('error', (e) => fail(String(e?.message ?? e)));
-    worker.on('exit', (code) => fail(`worker exit ${code}`));
+    worker.on('error', (e) => serverFailed(String(e?.message ?? e)));
+    worker.on('exit', (code) => serverFailed(`worker exit ${code}`));
   });
 }
 

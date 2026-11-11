@@ -43,6 +43,12 @@ const MIME: Record<string, string> = {
 
 const notFound = () => new NextResponse('Not found', { status: 404 });
 
+/** Object không có trong kho (lỗi "bình thường", không cần log). */
+function isMissingObject(e: unknown): boolean {
+  const err = e as { name?: string; $metadata?: { httpStatusCode?: number } } | null;
+  return err?.name === 'NoSuchKey' || err?.name === 'NotFound' || err?.$metadata?.httpStatusCode === 404;
+}
+
 function validKey(segments: string[]): { key: string; ext: string } | null {
   // Next giải mã %2f trong từng đoạn, nên một đoạn có thể mang cả `/`: kiểm trên khoá đã nối.
   if (segments.some((s) => s.includes('/') || s.includes('\\'))) return null;
@@ -64,6 +70,8 @@ export async function GET(
     etag,
     'cache-control': FONT_CACHE_CONTROL,
     'content-type': MIME[valid.ext]!,
+    // Byte trong kho do người dùng tải lên: cấm trình duyệt đoán lại kiểu (vd. thành HTML).
+    'x-content-type-options': 'nosniff',
   };
 
   const inm = request.headers.get('if-none-match');
@@ -74,7 +82,10 @@ export async function GET(
   let bytes: Uint8Array;
   try {
     bytes = await getObject(valid.key);
-  } catch {
+  } catch (e) {
+    // Khách vẫn chỉ thấy 404 (không lộ chi tiết kho), nhưng kho sập / sai quyền / sai cấu hình
+    // phải để lại dấu vết: không log thì mọi font của site "mất" mà không có gì chỉ ra vì sao.
+    if (!isMissingObject(e)) console.error(`[mm-font] đọc ${valid.key} lỗi:`, e);
     return notFound();
   }
   return new NextResponse(Buffer.from(bytes), {

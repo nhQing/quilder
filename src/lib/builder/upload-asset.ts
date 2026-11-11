@@ -117,6 +117,16 @@ export async function uploadAsset(args: {
     };
   }
 
+  // TTC được `sniff` nhận dạng chỉ để module font báo lỗi rõ; kho không nhận nó (trình duyệt
+  // không dùng được file nhiều font qua @font-face, và /mm-font không phục vụ đuôi .ttc).
+  if (found.mime === 'font/collection') {
+    return {
+      ok: false,
+      status: 415,
+      error: 'File TTC chứa nhiều font, kho không nhận. Hãy tách thành từng file TTF/OTF rồi tải lên ở Cài đặt › Font.',
+    };
+  }
+
   const key = nextAssetKey(assetKeyBase(args.fileName), args.bytes);
 
   const existing = await prisma.asset.findUnique({
