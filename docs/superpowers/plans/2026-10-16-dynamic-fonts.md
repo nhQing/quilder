@@ -1,5 +1,7 @@
 # Font động — kế hoạch triển khai
 
+> **ĐÃ THAY THẾ (11/11/2026)** bằng `2026-11-11-dynamic-fonts.md`. Plan này viết trước 47 commit và trước khi spec đổi (font của gói chuyển vào kho). Đừng làm theo.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Tải font lên (file từ máy hoặc Google Fonts) qua màn Cài đặt › Font hoặc qua Claude/MCP, dùng ngay trên bản nháp và lên site thật khi Publish — không build lại image.
