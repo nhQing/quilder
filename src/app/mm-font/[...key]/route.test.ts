@@ -32,6 +32,10 @@ describe('GET /mm-font/[...key]', () => {
     [['public\\a.woff2']],
     [['private', 'a.woff2']],
     [['public', 'a.png']],
+    [['public', 'a/../b.woff2']],
+    [['public', '../x.woff2']],
+    [['public', 'a//b.woff2']],
+    [['public', 'a b.woff2']],
   ])('khoá không hợp lệ %j → 404, không đọc kho', async (key) => {
     const res = await call(key);
     expect(res.status).toBe(404);

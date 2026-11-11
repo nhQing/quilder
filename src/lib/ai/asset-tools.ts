@@ -22,8 +22,7 @@ import { z } from 'zod';
 
 import { normalizeFolder } from '@/lib/assets/folder';
 import { listFolders } from '@/lib/builder/asset-folders';
-import { fetchUrlBytes } from '@/lib/assets/fetch-url';
-import { uploadAsset } from '@/lib/builder/upload-asset';
+import { MAX_ASSET_BYTES, uploadAsset } from '@/lib/builder/upload-asset';
 import { prisma } from '@/lib/db';
 import type { ToolContext, ToolDef } from './tools';
 
@@ -77,10 +76,21 @@ const uploadAssetTool: ToolDef = {
     let fileName = input.fileName ?? '';
 
     if (input.sourceUrl) {
-      const got = await fetchUrlBytes(input.sourceUrl, 'Ảnh');
-      if (!got.ok) return { ok: false, error: got.error };
-      bytes = got.bytes;
-      fileName ||= got.fileName || 'asset';
+      let res: Response;
+      try {
+        res = await fetch(input.sourceUrl);
+      } catch (e) {
+        return { ok: false, error: `Không tải được ${input.sourceUrl}: ${String(e)}` };
+      }
+      if (!res.ok) {
+        return { ok: false, error: `Tải ${input.sourceUrl} trả về ${res.status}` };
+      }
+      const buf = new Uint8Array(await res.arrayBuffer());
+      if (buf.length > MAX_ASSET_BYTES) {
+        return { ok: false, error: `Ảnh ở URL đó vượt ${MAX_ASSET_BYTES / 1024 / 1024} MB` };
+      }
+      bytes = buf;
+      fileName ||= new URL(input.sourceUrl).pathname.split('/').pop() ?? 'asset';
     } else if (input.bytesBase64) {
       const buf = Buffer.from(input.bytesBase64, 'base64');
       if (buf.length > MAX_BASE64_BYTES) {

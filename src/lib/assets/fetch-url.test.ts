@@ -12,6 +12,17 @@ describe('fetchUrlBytes (SSRF)', () => {
     'http://192.168.1.1/x',
     'http://[::1]/x',
     'http://localhost/x',
+    'http://[::ffff:127.0.0.1]/x',
+    'http://[::ffff:7f00:1]/x',
+    'http://[::ffff:a9fe:a9fe]/x',
+    'http://[::127.0.0.1]/x',
+    'http://[64:ff9b::7f00:1]/x',
+    'http://[2002:7f00:1::]/x',
+    'http://[fec0::1]/x',
+    'http://[fd00::1]/x',
+    'http://[fe80::1]/x',
+    'http://192.0.0.1/x',
+    'http://198.18.0.1/x',
     'ftp://example.com/x',
   ])('chặn %s mà không gọi fetch', async (url) => {
     const spy = vi.spyOn(globalThis, 'fetch');

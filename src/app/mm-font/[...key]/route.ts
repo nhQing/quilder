@@ -29,7 +29,7 @@ import { NextResponse } from 'next/server';
  */
 
 import { getObject } from '@/lib/assets/s3';
-import { FONT_CACHE_CONTROL } from '@/lib/fonts/types';
+import { FONT_CACHE_CONTROL, isServableFontKey } from '@/lib/fonts/types';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -44,13 +44,11 @@ const MIME: Record<string, string> = {
 const notFound = () => new NextResponse('Not found', { status: 404 });
 
 function validKey(segments: string[]): { key: string; ext: string } | null {
-  if (segments.length < 2 || segments[0] !== 'public') return null;
-  for (const s of segments) {
-    if (s === '' || s === '.' || s === '..' || s.includes('\\') || s.includes('\0')) return null;
-  }
+  // Next giải mã %2f trong từng đoạn, nên một đoạn có thể mang cả `/`: kiểm trên khoá đã nối.
+  if (segments.some((s) => s.includes('/') || s.includes('\\'))) return null;
   const key = segments.join('/');
-  const ext = /\.(woff2|woff|ttf|otf)$/.exec(key)?.[1];
-  return ext ? { key, ext } : null;
+  if (!isServableFontKey(key)) return null;
+  return { key, ext: key.slice(key.lastIndexOf('.') + 1) };
 }
 
 export async function GET(
