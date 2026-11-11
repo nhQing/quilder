@@ -3,7 +3,7 @@ import * as fontkit from 'fontkit';
 import { sniff } from '@/lib/assets/sniff';
 
 import { type FontStyle, type FontWarningCode, FontError } from './types';
-import { VIETNAMESE_PROBE } from './unicode';
+import { vietnameseProbeFor } from './unicode';
 
 /**
  * Trần một file font — cùng giá trị `MAX_ASSET_BYTES` (10 MB) ở `builder/upload-asset.ts`.
@@ -31,8 +31,14 @@ const FORMAT_OF: Record<string, InspectResult['format'] | undefined> = {
 
 const NOT_FONT = 'File không phải font. Hãy chọn file .woff2, .woff, .ttf hoặc .otf.';
 
-/** Đọc metadata của một file font; ném `FontError` khi file không dùng được. */
-export function inspectFont(bytes: Uint8Array): InspectResult {
+/**
+ * Đọc metadata của một file font; ném `FontError` khi file không dùng được.
+ *
+ * `unicodeRange`: dải face sẽ mang (file Google, woff2 của gói). Có dải thì chỉ kiểm những chữ
+ * Việt nằm trong dải đó — mỗi file subset của Google chỉ chứa một phần bộ kiểm, kiểm cả bộ là
+ * báo thiếu oan cho mọi face.
+ */
+export function inspectFont(bytes: Uint8Array, opts: { unicodeRange?: string } = {}): InspectResult {
   if (bytes.length > MAX_FONT_BYTES) {
     throw new FontError(
       'too_large',
@@ -75,7 +81,8 @@ export function inspectFont(bytes: Uint8Array): InspectResult {
   const style: FontStyle = selItalic || (font.italicAngle ?? 0) !== 0 ? 'italic' : 'normal';
 
   const warnings: FontWarningCode[] = [];
-  if ([...VIETNAMESE_PROBE].some((ch) => !font.hasGlyphForCodePoint(ch.codePointAt(0)!))) {
+  const probe = vietnameseProbeFor(opts.unicodeRange);
+  if ([...probe].some((ch) => !font.hasGlyphForCodePoint(ch.codePointAt(0)!))) {
     warnings.push('missing_vietnamese');
   }
   const fsType = font['OS/2']?.fsType as unknown;
