@@ -114,11 +114,20 @@ export function checkBundle(bundle: PageBundle): CompatResult {
     doc, trees, translations: bundle.translations.map((t) => ({ ...t, value: t.value })), ogImageId: bundle.page.ogImageId,
   });
   for (const id of uses.keys()) if (!ids.has(id)) holes.push(`ảnh ${id}`);
+  const kindOf = new Map(bundle.assets.map((a) => [a.id, a.kind]));
+  const notFont: string[] = [];
   for (const f of bundle.fonts) {
-    for (const face of f.faces) if (!ids.has(face.assetRef)) holes.push(`file font ${f.cssName} ${face.weight} ${face.style}`);
+    for (const face of f.faces) {
+      const kind = kindOf.get(face.assetRef);
+      if (kind === undefined) holes.push(`file font ${f.cssName} ${face.weight} ${face.style}`);
+      else if (kind !== 'font') notFont.push(`${f.cssName} ${face.weight} ${face.style}`);
+    }
   }
   if (holes.length) {
     issues.push(issue('file-corrupt', 'block', { detail: `Gói thiếu: ${holes.slice(0, 5).join(', ')}${holes.length > 5 ? '…' : ''}` }));
+  }
+  if (notFont.length) {
+    issues.push(issue('file-corrupt', 'block', { detail: `Face của họ font trỏ vào file không phải font: ${notFont.slice(0, 5).join(', ')}${notFont.length > 5 ? '…' : ''}` }));
   }
 
   const big = bundle.assets.filter((a) => a.bytes > IMPORT_FILE_LIMIT);

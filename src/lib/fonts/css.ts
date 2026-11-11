@@ -40,7 +40,8 @@ export function firstFamilyName(stack: string): string {
 
 const SAFE_KEY =/^[A-Za-z0-9._\-/]+$/;
 const SAFE_WEIGHT = /^\d{1,4}( \d{1,4})?$/;
-const SAFE_RANGE = /^[Uu+0-9A-Fa-f?,\s-]*$/;
+/** `unicode-range` đi thẳng vào `@font-face`: chỉ ký tự của cú pháp U+…; nhập trang cũng kiểm bằng nó. */
+export const SAFE_RANGE = /^[Uu+0-9A-Fa-f?,\s-]*$/;
 
 const FORMATS: Record<string, string> = {
   woff2: 'woff2',
