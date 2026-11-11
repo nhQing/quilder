@@ -1187,14 +1187,21 @@ async function uploadBuffer(bytes, fileName, folder) {
  * do FormData sinh). Mọi tham số phải append tay — tham số nào quên là tham số biến mất.
  */
 async function uploadLocalFont(args) {
-  const { readFile } = await import('node:fs/promises');
+  const { readFile, stat } = await import('node:fs/promises');
   const { basename } = await import('node:path');
 
-  const others = [args.sourceUrl, args.google].filter((v) => v !== undefined);
+  const others = [
+    typeof args.sourceUrl === 'string' ? args.sourceUrl.trim() : args.sourceUrl,
+    args.google,
+  ].filter((v) => v !== undefined && v !== '');
   if (others.length) throw new Error('Chỉ một nguồn: filePath, sourceUrl hoặc google.');
 
+  // Cùng trần với POST /api/fonts (MAX_ASSET_BYTES): chặn tại máy này, trước khi đọc vào bộ nhớ.
+  const MAX_FONT_BYTES = 10 * 1024 * 1024;
   let bytes;
   try {
+    const { size } = await stat(args.filePath);
+    if (size > MAX_FONT_BYTES) throw new Error('Tối đa 10 MB');
     bytes = await readFile(args.filePath);
   } catch (error) {
     throw new Error(`Không đọc được file ${args.filePath}. (${error.message})`);

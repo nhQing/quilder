@@ -86,6 +86,21 @@ describe('upload_font', () => {
     expect(s.ok).toBe(false);
     expect(fetchUrl.fetchUrlBytes).not.toHaveBeenCalled();
   });
+  it('filePath rỗng + sourceUrl -> coi như chỉ có sourceUrl', async () => {
+    fetchUrl.fetchUrlBytes.mockResolvedValue({ ok: true, bytes: new Uint8Array([1]), fileName: 'a.ttf' });
+    svc.addFace.mockResolvedValue({ ok: true });
+    const r = await run('upload_font', { filePath: '', sourceUrl: 'https://x/a.ttf' });
+    expect(r.ok).toBe(true);
+    expect(fetchUrl.fetchUrlBytes).toHaveBeenCalledWith('https://x/a.ttf', 'Font');
+  });
+  it('sourceUrl rỗng một mình -> lỗi sạch, không ném', async () => {
+    const r = await run('upload_font', { sourceUrl: '' });
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/filePath, sourceUrl|google/);
+    expect(fetchUrl.fetchUrlBytes).not.toHaveBeenCalled();
+    const r2 = await run('upload_font', { filePath: '  ' });
+    expect(r2.ok).toBe(false);
+  });
   it('lỗi tải URL được báo lại', async () => {
     fetchUrl.fetchUrlBytes.mockResolvedValue({ ok: false, error: 'boom', status: 400 });
     const r = await run('upload_font', { sourceUrl: 'https://x.test/a.woff2' });
