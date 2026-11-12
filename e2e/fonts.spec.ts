@@ -196,7 +196,11 @@ test.describe('font động end-to-end', () => {
       expect(file.headers()['cache-control']).toContain('immutable');
 
       // Thay face (cùng họ/weight/kiểu, file khác byte): site chưa đổi cho tới Publish.
-      await uploadFace(request, family, await interTtfWith('AaBbCc0123 ạảãếộữơưƯĐ XyZ'));
+      // Chữ thêm vào phải là chữ Việt: file gốc `inter-vietnamese.woff2` không có glyph ASCII,
+      // nên thêm "XyZ" ra đúng file cũ — kho dùng lại asset cũ và chẳng có gì để niêm phong.
+      await uploadFace(request, family, await interTtfWith('ạảãếộữơưƯĐ ỳỵỷỹ'));
+      const listed = ((await (await request.get('/api/fonts')).json()) as { fonts: (ApiFont & { unpublished: boolean })[] }).fonts;
+      expect(listed.find((f) => f.cssName === family)?.unpublished, 'face thay phải là file mới').toBe(true);
       expect(faceUrl(await liveFontCss(page), family)).toBe(url1);
 
       const pub2 = await request.post('/api/publish', { data: {} });

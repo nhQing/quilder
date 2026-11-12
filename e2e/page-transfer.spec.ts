@@ -143,7 +143,7 @@ test('nhập qua giao diện vào trang có sẵn (ảnh mới, form chưa có U
   const tr = await request.post('/api/translations', { data: { ...translation, value: 'E2E alt tiếng Anh' } });
   expect(tr.ok(), await tr.text()).toBe(true);
   await page.getByRole('button', { name: 'Hoàn tác lần nhập' }).click();
-  await expect(page.locator('[data-import-undo-confirm]')).toContainText('Component, token và ảnh đã thêm vẫn giữ lại');
+  await expect(page.locator('[data-import-undo-confirm]')).toContainText('Component, token, họ font và ảnh đã thêm vẫn giữ lại');
   await page.getByRole('button', { name: 'Xác nhận hoàn tác' }).click();
   await expect(page.getByRole('alert').filter({ hasText: 'bản dịch hoặc SEO' })).toBeVisible();
   const refused = await request.post('/api/transfer/undo', { data: { importId } });
