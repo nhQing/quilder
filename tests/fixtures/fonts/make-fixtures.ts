@@ -21,7 +21,10 @@ export const interVietnameseWoff2 = (): Uint8Array => read(INTER_VIETNAMESE_PATH
 export const interLatinWoff2 = (): Uint8Array => read(INTER_LATIN_PATH);
 export const interLatinExtWoff2 = (): Uint8Array => read(INTER_LATIN_EXT_PATH);
 
-/** TTF sinh từ Inter (giữ chữ Việt + ASCII). */
+/**
+ * TTF sinh từ Inter. Gốc `inter-vietnamese.woff2` chỉ có glyph chữ Việt (không có ASCII),
+ * nên phần ASCII trong `text` không giữ được gì — muốn hai file khác byte thì khác ở chữ Việt.
+ */
 export async function interTtf(): Promise<Uint8Array> {
   return interTtfWith('AaBbCc0123 ạảãếộữơưƯĐ');
 }

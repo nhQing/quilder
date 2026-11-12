@@ -84,8 +84,10 @@ test.describe('lịch sử publish', () => {
 
     // Con trỏ đổi, và bản cũ vẫn còn nguyên trong danh sách — `PageVersion` bất
     // biến nên không có gì bị ghi đè, và lùi tiếp lên lại luôn làm được.
+    // Nhãn chỉ ghi tới PHÚT: hai lần Publish trong cùng một phút (spec khác chạy ngay trước,
+    // như kịch bản niêm phong font) ra hai dòng cùng nhãn — `toBeVisible` strict sẽ đỏ oan.
     await page.reload();
-    await expect(page.locator('li').filter({ hasText: before.label })).toBeVisible();
+    await expect(page.locator('li').filter({ hasText: before.label }).first()).toBeVisible();
   });
 
   test('Publish toàn site xong thì khối Việc hôm nay cập nhật, không cần tải lại trang', async ({ page, request }) => {
