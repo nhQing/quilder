@@ -301,6 +301,19 @@ test.describe('AI chỉ chạm bản nháp', () => {
         // Tên dịch của danh mục lên site ngay (không có lớp nháp), nên tool tự gác
         // bằng cùng cờ `canPublishLocale` như đăng bản dịch của entry.
         'set_taxonomy_locale',
+
+        /*
+         * Ghi bốn cột SEO trên hàng `Page` (mô tả, ảnh OG, canonical, noindex). Chúng nằm
+         * NGOÀI doc nên không có lớp nháp: ghi là ra site thật ngay, không chờ Publish —
+         * mô tả tool nói thẳng điều đó (`site-tools.ts`). Đây là ngoại lệ được chấp nhận
+         * có ý thức (người dùng duyệt 12/11/2026): SEO là siêu dữ liệu, không phải nội dung
+         * trang, và giữ nó sau Publish thì sửa một dòng mô tả cũng phải đẩy cả site.
+         *
+         * KHÁC `set_taxonomy_locale`: không có cờ trên token gác. Cái đáng sợ nhất nó làm
+         * được là `noindex: true` — gỡ một trang khỏi Google — nên mô tả tool dặn chỉ đặt
+         * khi người dùng muốn. Muốn chặn hẳn thì phải thêm cờ, không phải sửa chú thích này.
+         */
+        'set_page_seo',
       ].sort(),
     );
 
