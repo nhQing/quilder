@@ -51,8 +51,11 @@ MCP server trên máy bạn, không qua HTTP. Claude không Publish được.
 
 Làm lần lượt, ở từng môi trường (dev, staging, production):
 
-1. **Deploy** bản có tính năng font, **kèm migration**, trước khi ai Publish. Publish sớm hơn sẽ
-   niêm phong release không có font và chữ rơi về font dự phòng.
+1. **Deploy** bản có tính năng font. Với `docker compose up -d`, service `bootstrap` tự áp
+   migration trước khi `app` chạy. `fonts:adopt` thì KHÔNG nằm trong bootstrap — chạy tay ở
+   bước 2. Cho tới lúc đó site vẫn đúng font: `fonts.css` của gói còn được biên vào bundle CSS,
+   nên deploy rồi để đó, hay Publish trước khi adopt, đều không làm hỏng chữ. Thứ tự chỉ bắt
+   buộc ở bước 6: gỡ font khỏi gói mà chưa adopt (và chưa Publish) thì chữ rơi về font dự phòng.
 2. `pnpm fonts:adopt --actor <email>` — chỉ in kế hoạch (đọc các khối `@font-face` trong
    `projects/<gói>/styles/fonts.css`); xem kỹ, rồi chạy lại với `--apply` để ghi vào kho.
 3. **Xoá cache dữ liệu của app rồi khởi động lại.** Script chạy ngoài Next nên không gọi được
