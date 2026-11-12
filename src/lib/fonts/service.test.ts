@@ -29,6 +29,8 @@ const m = vi.hoisted(() => {
     tokenUsageMany: fn(),
     familyVariableRefs: fn(),
     revalidateTag: fn(),
+    /** Font gốc của gói cho test; `null` = gói không có font gốc. */
+    pack: null as import('./pack').PackFontManifest | null,
   };
 });
 
@@ -41,6 +43,16 @@ vi.mock('./usage', () => ({
   tokenUsageMany: m.tokenUsageMany,
   familyVariableRefs: m.familyVariableRefs,
 }));
+vi.mock('./pack', async (importOriginal) => {
+  const a = await importOriginal<typeof import('./pack')>();
+  const cur = () => m.pack ?? a.EMPTY_PACK_FONTS;
+  return {
+    ...a,
+    readPackFonts: () => cur(),
+    packFamilyNamed: (name: string) => a.packFamilyNamed(name, cur()),
+    withPackVariables: <T extends { name: string; value: string }>(rows: readonly T[]) => a.withPackVariables(rows, cur()),
+  };
+});
 vi.mock('next/cache', () => ({
   unstable_cache: (f: (...a: unknown[]) => unknown) => f,
   revalidateTag: m.revalidateTag,
@@ -58,10 +70,25 @@ function inspected(over: Partial<InspectResult> = {}): InspectResult {
 }
 
 const NONE = { pages: [], components: [] };
+
+const PACK: import('./pack').PackFontManifest = {
+  version: 1,
+  pack: 'thu',
+  css: 'projects/thu/styles/fonts.css',
+  licenseNote: '',
+  families: [
+    { cssName: 'SF Pro Display', faces: [{ weight: '400', style: 'normal', unicodeRange: '', url: '/p/fonts/sf.woff2', file: 'projects/thu/public/fonts/sf.woff2', bytes: 10 }] },
+    { cssName: 'gilroy', faces: [{ weight: '400', style: 'normal', unicodeRange: '', url: '/p/fonts/g.otf', file: 'projects/thu/public/fonts/g.otf', bytes: 20 }] },
+  ],
+  variables: { 'font-display': '"SF Pro Display", system-ui, sans-serif', 'font-body': '"SF Pro Text", "SF Pro Display", system-ui, sans-serif' },
+  undeclared: [],
+  missing: [],
+};
 const USED = { pages: [{ id: 'p1', title: 'Trang chủ', href: '/builder/p1' }], components: [] };
 
 beforeEach(() => {
   vi.clearAllMocks();
+  m.pack = null;
   const p = m.prisma;
   p.$transaction.mockImplementation(async (cb: (tx: typeof p) => unknown) => cb(p));
   p.fontFamily.findFirst.mockResolvedValue(null);
@@ -354,6 +381,20 @@ describe('addFace', () => {
       await expect(upload()).rejects.toMatchObject({ code: 'P2003' });
       expect(m.prisma.$transaction).toHaveBeenCalledTimes(1);
     });
+  });
+
+  it('trùng tên font GỐC của gói (không phân biệt hoa thường) → name_reserved, nói cách chạy fonts:adopt', async () => {
+    m.pack = { ...PACK };
+    m.inspectFont.mockReturnValue(inspected({ family: 'GILROY' }));
+    await expect(upload()).rejects.toThrow(/font gốc của gói.*fonts:adopt/);
+    expect(await codeOf(upload())).toBe('name_reserved');
+    expect(m.uploadAsset).not.toHaveBeenCalled();
+  });
+
+  it('fonts:adopt (adoptToken) được tạo họ trùng tên font gốc', async () => {
+    m.pack = { ...PACK };
+    m.inspectFont.mockReturnValue(inspected({ family: 'gilroy', format: 'woff2' }));
+    expect(await codeOf(upload({ adoptToken: true, fileName: 'gilroy.woff2' }))).toBe('không ném');
   });
 
   it("family 'Inter' → name_reserved", async () => {
@@ -663,6 +704,58 @@ describe('listFonts', () => {
     const list = await listFonts();
     expect(m.familyVariableRefs).toHaveBeenCalledWith([{ cssName: 'gilroy', token: 'font-gilroy' }]);
     expect(list[0]!.usage).toEqual({ pages: [], components: [], variables: ['--lv-font-head'] });
+  });
+});
+
+describe('listFonts — font gốc của gói', () => {
+  it('nằm giữa họ tải lên và Inter; token theo giá trị THẬT (gói đè), dùng ở đâu gộp mọi token', async () => {
+    m.pack = { ...PACK };
+    m.prisma.fontFamily.findMany.mockResolvedValue([]);
+    m.prisma.token.findMany.mockImplementation(async (q: { where: { name: { startsWith?: string } } }) =>
+      q.where.name.startsWith === 'font-'
+        ? [
+            { name: 'font-display', value: '"Inter Variable", sans-serif' },
+            { name: 'font-body', value: '"Inter Variable", sans-serif' },
+            { name: 'font-gilroy', value: 'gilroy, sans-serif' },
+          ]
+        : [],
+    );
+    m.tokenUsageMany.mockResolvedValue(
+      new Map([
+        ['font-display', { pages: [{ id: 'p1', title: 'Trang chủ', href: '/builder/p1' }], components: [] }],
+        ['font-body', { pages: [{ id: 'p2', title: 'Giới thiệu', href: '/builder/p2' }], components: [] }],
+      ]),
+    );
+    m.familyVariableRefs.mockResolvedValue(new Map([['font-display', ['--font-display', '--font-body']]]));
+
+    const list = await listFonts();
+    expect(list.map((f) => [f.cssName, f.source])).toEqual([
+      ['SF Pro Display', 'pack'],
+      ['gilroy', 'pack'],
+      ['Inter Variable', 'builtin'],
+    ]);
+    const sf = list[0]!;
+    // font-display bắt đầu bằng SF Pro Display → token chính; font-body chỉ nhắc tên ở vị trí sau.
+    expect(sf).toMatchObject({ id: null, token: 'font-display', fallback: 'system-ui, sans-serif', unpublished: false });
+    expect(sf.pack).toEqual({
+      name: 'thu', css: 'projects/thu/styles/fonts.css', tokens: ['font-display', 'font-body'],
+      files: ['projects/thu/public/fonts/sf.woff2'], adopted: false,
+    });
+    expect(sf.usage.pages.map((p) => p.id).sort()).toEqual(['p1', 'p2']);
+    expect(sf.usage.variables).toEqual(['--font-display', '--font-body']);
+    expect(sf.faces).toEqual([{ id: null, weight: '400', style: 'normal', subset: '', bytes: 10, warnings: [] }]);
+    expect(list[1]).toMatchObject({ token: 'font-gilroy', pack: { tokens: ['font-gilroy'] } });
+  });
+
+  it('kho đã có họ cùng tên (đã fonts:adopt) → adopted: true', async () => {
+    m.pack = { ...PACK };
+    m.prisma.fontFamily.findMany.mockResolvedValue([{
+      id: 'g', slug: 'gilroy', cssName: 'Gilroy', fallback: FALLBACKS.sans, source: 'upload', licenseNote: null, licenseConfirmedBy: null,
+      faces: [{ id: 'fg', weight: '400', style: 'normal', unicodeRange: '', subset: '', warnings: [], asset: { key: 'public/g.woff2', bytes: 1 } }],
+    }]);
+    const list = await listFonts();
+    expect(list.find((f) => f.source === 'pack' && f.cssName === 'gilroy')?.pack?.adopted).toBe(true);
+    expect(list.find((f) => f.source === 'pack' && f.cssName === 'SF Pro Display')?.pack?.adopted).toBe(false);
   });
 });
 

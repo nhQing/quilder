@@ -17,6 +17,7 @@ import { join } from 'node:path';
 import { rollbackWindowIds } from '@/lib/builder/rollback-window';
 import { prisma } from '@/lib/db';
 import { rootTokens, TOKENS_CSS } from '@/lib/design/token-source';
+import { withPackVariables } from '@/lib/fonts/pack';
 import { migrateDoc, migratePresetTree } from '@/lib/doc/migrate';
 import { CURRENT_SCHEMA_VERSION, type Doc } from '@/lib/doc/types';
 import { shareImageWarning } from '@/lib/render/share-meta';
@@ -405,7 +406,9 @@ export async function listTokens(): Promise<TokenOption[]> {
     select: { name: true, value: true, category: true },
   });
   const core = coreTokenNames();
-  return rows.map((r) => (core.has(r.name) ? { ...r, core: true } : r));
+  // Gói đè `--font-display`/`--font-body` trong `fonts.css`: ô chọn font phải nói tên font
+  // site THẬT dùng (SF Pro…), không phải giá trị Inter của lõi còn nằm trong bảng Token.
+  return withPackVariables(rows).map((r) => (core.has(r.name) ? { ...r, core: true } : r));
 }
 
 export interface ReleaseTimelineEntry extends ReleaseSummary {

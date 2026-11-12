@@ -15,7 +15,8 @@ projects/<tên>/
   styles/index.css  CSS của gói, nối SAU CSS lõi    (site công khai, niêm phong khi Publish)
   styles/tokens.css (tuỳ chọn) token tĩnh của gói — `:root { --x: … }`, có thể kèm @media
   public/           ảnh — phục vụ ở /p/<đường-dẫn> VÀ ở đường gốc (/img/…, /svg/…).
-                    Gói không mang file font hay `@font-face`: font thêm ở Cài đặt › Font
+  public/fonts/     (tuỳ chọn) FONT GỐC — khai `@font-face` cho từng file trong styles/fonts.css
+  styles/fonts.css  (tuỳ chọn) `@font-face` của font gốc + `:root { --font-display: … }`
   src/              composite, effect (+ *.test.ts — vitest tự chạy)
   seed.ts           (tuỳ chọn) export default async (prisma, { siteId }) => …
   e2e/              (tuỳ chọn) spec Playwright, chạy bằng E2E_PROJECT=<tên> pnpm e2e
@@ -67,9 +68,13 @@ Token:
   gói), renderer tự phát và niêm phong vào release.
 - Token cần đổi theo khổ màn (`@media`) → `styles/tokens.css` của gói. `pnpm tokens:import` và
   `pnpm check:tokens` đọc cả file này, nên token ở đây là token hợp lệ khi ghi trang.
-- Font mặc định của lõi là Inter. Gói không mang file font hay `@font-face`; font thêm ở
-  Cài đặt › Font (token `font-<slug>`). Gói chỉ đặt biến `--font-display` / `--font-body`
-  trỏ tới tên họ trong CSS của nó.
+- Font mặc định của lõi là Inter. Font mới thêm ở Cài đặt › Font (token `font-<slug>`).
+- **Font gốc** (tuỳ chọn): file trong `public/fonts/` + `@font-face` trong `styles/fonts.css`.
+  Dùng được ngay; build quét chúng ra `generated/pack-fonts/<gói>.json` (`scripts/pack-fonts.mjs`) nên
+  Cài đặt › Font, ô chọn font và `list_fonts` thấy chúng — **chỉ đọc**. Builder không có đường
+  nào xoá file trong gói; bỏ một font gốc = `pnpm fonts:adopt` → Publish → xoá `@font-face` và
+  file trong repo gói. File có trong `public/fonts/` mà chưa khai `@font-face` thì chưa dùng được.
+  Gói đè `--font-display` / `--font-body` trong `:root` của `styles/fonts.css`.
 
 ## Script
 

@@ -27,10 +27,13 @@ const listFontsTool: ToolDef = {
   name: 'list_fonts',
   title: 'Liệt kê font',
   description:
-    'Liệt kê các họ font của site: tên CSS, token, nguồn (builtin | upload | google), các face, ' +
+    'Liệt kê các họ font của site: tên CSS, token, nguồn (builtin | pack | upload | google), các face, ' +
     'fallback, nơi đang dùng (`usage`: trang, component, và `variables` — biến CSS như ' +
     '`--font-body` nhắc tên họ trong Token hoặc CSS của gói), cảnh báo và cờ chưa publish.\n\n' +
     'Kiểm font đã có trước khi tải mới.\n\n' +
+    '`source: "pack"` là font GỐC của gói dự án (`pack.css`): dùng được ngay qua token của nó, CHỈ ĐỌC — ' +
+    'không tool nào sửa/xoá được, và không tải font trùng tên. Muốn bỏ thì người dùng chạy ' +
+    '`pnpm fonts:adopt` rồi xoá trong repo gói.\n\n' +
     'Gán font bằng `apply_ops`, `setStyle` với `typography.family: { $token: \'<token>\' }`.\n\n' +
     'Font mới chỉ lên site thật sau khi người dùng Publish.',
   input: z.object({}).strict(),

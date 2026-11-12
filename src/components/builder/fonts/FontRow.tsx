@@ -1,8 +1,8 @@
 'use client';
 
 /**
- * Một hàng họ font (§11.2). Họ có sẵn trong lõi: không mở được, chỉ hiện token và chỗ
- * dùng. Họ tải lên/Google: mở ra để sửa tên, fallback, ghi chú giấy phép, thay/xoá face,
+ * Một hàng họ font (§11.2). Họ có sẵn trong lõi và font GỐC của gói dự án: không mở được,
+ * chỉ hiện token và chỗ dùng — font gốc sửa/xoá trong repo gói, không ở đây. Họ tải lên/Google: mở ra để sửa tên, fallback, ghi chú giấy phép, thay/xoá face,
  * xoá họ (admin, khoá khi còn chỗ dùng).
  */
 
@@ -22,7 +22,22 @@ import { ConfirmDialog } from '../ui/Overlay';
 
 export const PREVIEW_TEXT = 'Tiền về nhanh — Ắ ẩ ữ ộ ₫ 0123';
 
-const SOURCE_LABEL = { builtin: 'Có sẵn trong lõi', upload: 'Tải lên', google: 'Google Fonts' } as const;
+const SOURCE_LABEL = {
+  builtin: 'Có sẵn trong lõi',
+  pack: 'Font gốc của gói',
+  upload: 'Tải lên',
+  google: 'Google Fonts',
+} as const;
+
+/** Dòng giải thích dưới font gốc: dùng được sẵn, và bỏ nó bằng cách nào. */
+function packNote(font: FontListItem): string {
+  const p = font.pack;
+  if (!p) return '';
+  const where = `${p.css || 'styles/fonts.css'} và public/fonts/ của gói ${p.name}`;
+  return p.adopted
+    ? `Đã chuyển vào kho (pnpm fonts:adopt). Giờ có thể xoá khối @font-face và file trong ${where}.`
+    : `Khai trong ${where}, dùng được sẵn. Không xoá được ở đây: muốn bỏ thì chạy pnpm fonts:adopt, rồi xoá trong repo gói.`;
+}
 
 /** 100–900 hoặc "300 400 700": tóm tắt các weight của họ, không lặp. */
 function weightSummary(font: FontListItem): string {
@@ -60,13 +75,17 @@ export function FontRow({
   canWrite,
   isAdmin,
   onChanged,
+  note,
 }: {
   font: FontListItem;
   canWrite: boolean;
   isAdmin: boolean;
   onChanged: () => void;
+  /** Ghi chú thay cho dòng mô tả mặc định của họ có sẵn (vd. gói đã đè token của nó). */
+  note?: string;
 }) {
   const builtin = font.source === 'builtin';
+  const readOnly = builtin || font.source === 'pack';
   const [open, setOpen] = useState(false);
   const panelId = useId();
   const noVietnamese = font.faces.some((f) => f.warnings.includes('missing_vietnamese'));
@@ -93,12 +112,14 @@ export function FontRow({
       </span>
       <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
         <span className="font-semibold text-shell-ink">{font.cssName}</span>
-        <Badge className="font-shell-mono" data-font-token>
-          {font.token}
-        </Badge>
+        {font.token && (
+          <Badge className="font-shell-mono" data-font-token>
+            {font.token}
+          </Badge>
+        )}
         <span className="text-small text-shell-muted">
           {SOURCE_LABEL[font.source]}
-          {builtin && ' (chỉ đọc)'}
+          {readOnly && ' (chỉ đọc)'}
         </span>
         {font.unpublished && (
           <Badge tone="warn" size="sm">
@@ -113,15 +134,21 @@ export function FontRow({
       </span>
       <span className="flex flex-wrap items-center gap-x-3 text-small text-shell-muted">
         <span>{weightSummary(font)}</span>
-        <span>{builtin ? 'Font mặc định khi chưa đặt font nào' : usageSummary(font)}</span>
+        <span>{builtin ? (note ?? 'Font mặc định khi chưa đặt font nào') : usageSummary(font)}</span>
+        {font.pack && font.pack.tokens.length > 1 && <span>Token: {font.pack.tokens.join(', ')}</span>}
       </span>
+      {font.pack && (
+        <span data-font-pack-note className="text-small text-shell-muted">
+          {packNote(font)}
+        </span>
+      )}
     </div>
   );
 
   return (
-    <li data-font-row={font.token} className="flex flex-col">
+    <li data-font-row={font.token || `pack:${font.cssName}`} data-font-source={font.source} className="flex flex-col">
       <div className="flex items-start gap-2 px-4 py-3.5">
-        {builtin ? (
+        {readOnly ? (
           summary
         ) : (
           <button
@@ -139,18 +166,20 @@ export function FontRow({
             />
           </button>
         )}
-        <Button
-          variant="ghost"
-          size="sm"
-          icon="copy"
-          aria-label={`Chép token ${font.token}`}
-          onClick={copyToken}
-          className="mt-1"
-        >
-          {copied ? 'Đã chép' : ''}
-        </Button>
+        {font.token && (
+          <Button
+            variant="ghost"
+            size="sm"
+            icon="copy"
+            aria-label={`Chép token ${font.token}`}
+            onClick={copyToken}
+            className="mt-1"
+          >
+            {copied ? 'Đã chép' : ''}
+          </Button>
+        )}
       </div>
-      {!builtin && open && (
+      {!readOnly && open && (
         <FontDetail id={panelId} font={font} canWrite={canWrite} isAdmin={isAdmin} onChanged={onChanged} />
       )}
     </li>

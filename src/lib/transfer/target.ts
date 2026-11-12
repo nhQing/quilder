@@ -6,6 +6,7 @@ import { parsePageCollection } from '@/lib/builder/page-collection';
 import { prisma } from '@/lib/db';
 import { readEndpointTable } from '@/lib/doc/endpoint-table';
 import { migratePresetTree } from '@/lib/doc/migrate';
+import { readPackFonts } from '@/lib/fonts/pack';
 import { fontTokenName } from '@/lib/fonts/token';
 import { allowedEmbedHostnames } from '@/lib/render/embed-origins';
 import { tokenRefsOf } from './collect';
@@ -98,6 +99,7 @@ export async function loadTargetSnapshot(bundle: PageBundle): Promise<TargetSnap
       id: f.id, slug: f.slug, cssName: f.cssName,
       faces: f.faces.map((x) => ({ weight: x.weight, style: x.style, unicodeRange: x.unicodeRange, key: x.asset.key })),
     })),
+    packFamilies: readPackFonts().families.map((f) => f.cssName),
   };
 }
 

@@ -35,6 +35,7 @@ import { Suspense } from 'react';
 import { getSession } from '@/lib/auth/guard';
 import { getBuilderBranding } from '@/lib/builder/branding';
 import { builtinFontFaceCss } from '@/lib/fonts/builtin';
+import { packFontFaceCss } from '@/lib/fonts/pack';
 import { draftFontFaceCss } from '@/lib/fonts/seal';
 import { BuilderNav } from '@/components/builder/BuilderNav';
 import { CommandPalette } from '@/components/builder/CommandPalette';
@@ -75,7 +76,7 @@ export default async function BuilderLayout({ children }: { children: React.Reac
   // màn Cài đặt › Font) xem trước đúng font. Rỗng thì không in thẻ nào.
   // Lỗi đọc font (DB chưa dựng ở màn cài đặt lần đầu) không được làm sập cả vỏ builder.
   const draftCss = await draftFontFaceCss().catch(() => '');
-  const fontCss = [builtinFontFaceCss(), draftCss].filter(Boolean).join('\n');
+  const fontCss = [builtinFontFaceCss(), packFontFaceCss(), draftCss].filter(Boolean).join('\n');
 
   return (
     <html lang="vi" data-theme={theme}>

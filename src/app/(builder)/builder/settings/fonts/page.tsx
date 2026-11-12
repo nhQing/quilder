@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 import { can } from '@/lib/auth/session';
 import { getSession } from '@/lib/auth/guard';
 import { builtinFontFaceCss } from '@/lib/fonts/builtin';
+import { packFontFaceCss, readPackFonts } from '@/lib/fonts/pack';
 import { listFonts } from '@/lib/fonts/service';
 import { draftFontFaceCss } from '@/lib/fonts/seal';
 import { SettingsTabs } from '@/components/builder/SettingsTabs';
@@ -24,7 +25,9 @@ export default async function FontsPage() {
   if (!session) redirect('/builder/login?next=/builder/settings/fonts');
 
   const [fonts, draftCss] = await Promise.all([listFonts(), draftFontFaceCss()]);
-  const css = [builtinFontFaceCss(), draftCss].filter(Boolean).join('\n');
+  // Font gốc của gói: vỏ builder không nạp CSS của gói, nên in `@font-face` của chúng ở đây.
+  const pack = readPackFonts();
+  const css = [builtinFontFaceCss(), packFontFaceCss(pack), draftCss].filter(Boolean).join('\n');
 
   return (
     <PageShell>
@@ -37,7 +40,12 @@ export default async function FontsPage() {
       )}
       <PageHeader title="Font" />
       <SettingsTabs current="fonts" />
-      <FontList fonts={fonts} canWrite={can(session.role, 'write')} isAdmin={session.role === 'admin'} />
+      <FontList
+        fonts={fonts}
+        canWrite={can(session.role, 'write')}
+        isAdmin={session.role === 'admin'}
+        packIssues={{ undeclared: pack.undeclared, missing: pack.missing }}
+      />
     </PageShell>
   );
 }

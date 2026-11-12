@@ -92,3 +92,49 @@ describe('FontRow — Thay file', () => {
     expect(real.get('dryRun')).toBeNull();
   });
 });
+
+describe('FontRow — font gốc của gói', () => {
+  const PACK_FONT: FontListItem = {
+    ...FONT,
+    id: null,
+    cssName: 'SF Pro Display',
+    token: 'font-display',
+    source: 'pack',
+    faces: [{ id: null, weight: '400', style: 'normal', subset: '', bytes: 54068, warnings: [] }],
+    usage: { pages: [{ id: 'p1', title: 'Trang chủ', href: '/builder/p1' }], components: [], variables: [] },
+    licenseConfirmedBy: null,
+    pack: {
+      name: 'maimoney',
+      css: 'projects/maimoney/styles/fonts.css',
+      tokens: ['font-display', 'font-body'],
+      files: ['projects/maimoney/public/fonts/sf.woff2'],
+      adopted: false,
+    },
+  };
+
+  it('chỉ đọc: không mở được, không nút Thay file/Xoá; nói cách bỏ là fonts:adopt rồi xoá trong repo gói', async () => {
+    await mount(PACK_FONT);
+    expect(host.querySelector('button[aria-expanded]')).toBeNull();
+    expect(buttons('Thay file')).toHaveLength(0);
+    expect(buttons('Xoá họ')).toHaveLength(0);
+    expect(host.textContent).toContain('Font gốc của gói (chỉ đọc)');
+    expect(host.textContent).toContain('Dùng ở 1 trang');
+    expect(host.textContent).toContain('Token: font-display, font-body');
+    const note = host.querySelector('[data-font-pack-note]')!.textContent!;
+    expect(note).toContain('pnpm fonts:adopt');
+    expect(note).toContain('projects/maimoney/styles/fonts.css');
+    expect(host.querySelector('[data-font-source="pack"]')).not.toBeNull();
+  });
+
+  it('đã adopt: ghi chú nói file trong gói giờ xoá được', async () => {
+    await mount({ ...PACK_FONT, pack: { ...PACK_FONT.pack!, adopted: true } });
+    expect(host.querySelector('[data-font-pack-note]')!.textContent).toContain('Đã chuyển vào kho');
+  });
+
+  it('font gốc chưa có token nào trỏ tới: không hiện huy hiệu token và nút chép', async () => {
+    await mount({ ...PACK_FONT, token: '', pack: { ...PACK_FONT.pack!, tokens: [] } });
+    expect(host.querySelector('[data-font-token]')).toBeNull();
+    expect(host.querySelector('button[aria-label^="Chép token"]')).toBeNull();
+    expect(host.querySelector('[data-font-row="pack:SF Pro Display"]')).not.toBeNull();
+  });
+});
