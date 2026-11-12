@@ -42,6 +42,8 @@ export interface TargetSnapshot {
    * trong gói. `key`: khoá file của face — khoá theo nội dung mang 8 hex đầu của sha256.
    */
   fontFamilies: { id: string; slug: string; cssName: string; faces: { weight: string; style: string; unicodeRange: string; key: string }[] }[];
+  /** Tên font GỐC của gói dự án ở đích (`generated/pack-fonts/<gói>.json`) — chỉ đọc, không tạo trùng. */
+  packFamilies?: string[];
 }
 export type ImportTarget = { kind: 'existing'; pageId: string } | { kind: 'new'; slug: string; title: string };
 export interface AssetPlanRow { sourceId: string; name: string; sha256: string; bytes: number; mime: string; folder: string | null; alt: string | null; file: string; status: 'reuse' | 'restore' | 'upload'; targetId: string | null; targetKey: string }
@@ -127,6 +129,7 @@ function planFonts(bundle: PageBundle, snap: TargetSnapshot): { rows: FontPlanRo
 
     const clash = snap.fontFamilies.find((x) => nameKey(x.cssName) === nameKey(f.cssName));
     const reason = isReservedFamilyName(f.cssName) ? 'đó là tên một font có sẵn hoặc tên dự phòng của hệ thống'
+      : snap.packFamilies?.some((n) => nameKey(n) === nameKey(f.cssName)) ? 'đó là font gốc của gói dự án ở đây (chỉ đọc)'
       : clash ? `ở đây đã có họ "${clash.cssName}" (token font-${clash.slug})`
       : null;
     if (reason) issues.push(issue('font-name-taken', 'block', { vars: { name: f.cssName, slug: f.slug, reason } }));

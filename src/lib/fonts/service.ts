@@ -29,8 +29,9 @@ import { revalidateTag } from 'next/cache';
 
 import { BUILTIN_FAMILIES, isReservedFamilyName } from './builtin';
 import { toWoff2 } from './convert';
-import { familyNameKey } from './css';
+import { familyNameKey, fontStackNames } from './css';
 import { inspectFont } from './inspect';
+import { packFamilyNamed, readPackFonts, withPackVariables } from './pack';
 import { fontSealOf } from './seal';
 import { describeFontFamily, fontTokenName, fontTokenValue } from './token';
 import { SUBSET_UNICODE_RANGE } from './unicode';
@@ -97,7 +98,7 @@ export interface FontListItem {
   id: string | null;
   cssName: string;
   token: string;
-  source: 'builtin' | FontSource;
+  source: 'builtin' | 'pack' | FontSource;
   fallback: string;
   faces: {
     id: string | null;
@@ -112,6 +113,11 @@ export interface FontListItem {
   unpublished: boolean;
   licenseNote: string | null;
   licenseConfirmedBy: string | null;
+  /**
+   * Chỉ có ở font GỐC của gói (`source: 'pack'`): chỉ đọc, không có nút sửa/xoá. `adopted`:
+   * kho đã có họ cùng tên (đã chạy `fonts:adopt`) — file trong gói xoá được.
+   */
+  pack?: { name: string; css: string; tokens: string[]; files: string[]; adopted: boolean };
 }
 
 // ── Hằng số và hàm nhỏ ─────────────────────────────────────────────────────
@@ -194,8 +200,11 @@ async function familiesNamed(name: string) {
   return rows.filter((r) => familyNameKey(r.cssName) === key);
 }
 
-/** Luật tên cho một họ MỚI hoặc tên mới của họ (`excludeId` = chính họ đang đổi tên). */
-async function checkFamilyName(name: string, fallback: string, excludeId?: string): Promise<void> {
+/**
+ * Luật tên cho một họ MỚI hoặc tên mới của họ (`excludeId` = chính họ đang đổi tên).
+ * `allowPack`: chỉ `fonts:adopt` — nó chép font GỐC của gói vào kho, nên phải được trùng tên.
+ */
+async function checkFamilyName(name: string, fallback: string, excludeId?: string, allowPack = false): Promise<void> {
   if (!name) {
     throw new FontError('name_required', 'File font không ghi tên họ. Hãy nhập tên họ font.');
   }
@@ -203,6 +212,14 @@ async function checkFamilyName(name: string, fallback: string, excludeId?: strin
     throw new FontError(
       'name_reserved',
       `"${name}" là tên font có sẵn hoặc tên dự phòng của hệ thống, dùng nó sẽ trộn với font đó. Hãy đặt tên khác, ví dụ "${name} Web".`,
+    );
+  }
+  const pack = allowPack ? null : packFamilyNamed(name);
+  if (pack) {
+    throw new FontError(
+      'name_reserved',
+      `"${pack.cssName}" là font gốc của gói dự án (${readPackFonts().css ?? 'styles/fonts.css'}), đang dùng được sẵn. ` +
+        'Muốn quản lý nó ở đây thì chạy pnpm fonts:adopt; muốn thêm một họ khác thì đặt tên khác.',
     );
   }
   const other = (await familiesNamed(name)).find((f) => f.id !== excludeId);
@@ -273,7 +290,7 @@ async function planFamily(name: string, fallback: string, adoptToken?: boolean) 
   if (existing) {
     slug = existing.slug;
   } else {
-    await checkFamilyName(name, fallback);
+    await checkFamilyName(name, fallback, undefined, adoptToken);
     slug = slugify(name);
     if (!slug) {
       throw new FontError('name_required', 'Tên họ phải có chữ cái hoặc chữ số. Hãy nhập tên khác.');
@@ -752,11 +769,40 @@ export async function listFonts(): Promise<FontListItem[]> {
     fontSealOf(site?.activeRelease?.fonts).families.map((f) => [f.slug, sealKey(f.cssName, f.faces)]),
   );
 
+  // Font GỐC của gói: token nào (theo giá trị THẬT trên site, sau khi gói đè) nhắc tên họ.
+  const pack = readPackFonts();
+  const fontTokens = pack.families.length
+    ? withPackVariables(
+        await prisma.token.findMany({
+          where: { name: { startsWith: 'font-' }, deprecated: false },
+          select: { name: true, value: true },
+        }),
+        pack,
+      )
+    : [];
+  const packTokens = new Map(
+    pack.families.map((fam) => {
+      const key = familyNameKey(fam.cssName);
+      const names = (v: string) => fontStackNames(v).map(familyNameKey);
+      const first = fontTokens.filter((t) => names(t.value)[0] === key);
+      const rest = fontTokens.filter((t) => !first.includes(t) && names(t.value).includes(key));
+      return [fam.cssName, [...first, ...rest]] as const;
+    }),
+  );
+  const packRef = (cssName: string) => packTokens.get(cssName)?.[0]?.name ?? `pack:${cssName}`;
+
   const builtinTokens = BUILTIN_FAMILIES.flatMap((f) => f.tokens);
   const [usage, builtinRows, variables] = await Promise.all([
-    tokenUsageMany([...rows.map((r) => fontTokenName(r.slug)), ...builtinTokens]),
+    tokenUsageMany([
+      ...rows.map((r) => fontTokenName(r.slug)),
+      ...builtinTokens,
+      ...[...packTokens.values()].flat().map((t) => t.name),
+    ]),
     prisma.token.findMany({ where: { name: { in: builtinTokens } }, select: { name: true, value: true } }),
-    familyVariableRefs(rows.map((r) => ({ cssName: r.cssName, token: fontTokenName(r.slug) }))),
+    familyVariableRefs([
+      ...rows.map((r) => ({ cssName: r.cssName, token: fontTokenName(r.slug) })),
+      ...pack.families.map((fam) => ({ cssName: fam.cssName, token: packRef(fam.cssName) })),
+    ]),
   ]);
   const usageOf = (name: string): TokenUsage => usage.get(name) ?? { pages: [], components: [] };
 
@@ -818,5 +864,39 @@ export async function listFonts(): Promise<FontListItem[]> {
     };
   });
 
-  return [...uploaded, ...builtin];
+  const adopted = new Set(rows.map((r) => familyNameKey(r.cssName)));
+  const packed: FontListItem[] = pack.families.map((fam) => {
+    const tokens = packTokens.get(fam.cssName) ?? [];
+    const pages = new Map<string, UsageRef>();
+    const components = new Map<string, UsageRef>();
+    for (const t of tokens) {
+      for (const p of usageOf(t.name).pages) pages.set(p.id, p);
+      for (const c of usageOf(t.name).components) components.set(c.id, c);
+    }
+    return {
+      id: null,
+      cssName: fam.cssName,
+      token: tokens[0]?.name ?? '',
+      source: 'pack',
+      fallback: fallbackPartOf(tokens[0]?.value ?? '') ?? '',
+      faces: fam.faces.map((f) => ({ id: null, weight: f.weight, style: f.style, subset: '', bytes: f.bytes, warnings: [] })),
+      usage: {
+        pages: [...pages.values()],
+        components: [...components.values()],
+        variables: variables.get(packRef(fam.cssName)) ?? [],
+      },
+      unpublished: false,
+      licenseNote: pack.licenseNote || null,
+      licenseConfirmedBy: null,
+      pack: {
+        name: pack.pack ?? '',
+        css: pack.css ?? '',
+        tokens: tokens.map((t) => t.name),
+        files: fam.faces.map((f) => f.file),
+        adopted: adopted.has(familyNameKey(fam.cssName)),
+      },
+    };
+  });
+
+  return [...uploaded, ...packed, ...builtin];
 }

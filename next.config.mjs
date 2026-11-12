@@ -2,10 +2,24 @@ import { existsSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 
 import { assetRemotePatterns } from './scripts/asset-hosts.mjs';
+import { PACK_FONTS_DIR, packFontWarnings, writePackFonts } from './scripts/pack-fonts.mjs';
 import { projectDir } from './scripts/project-dir.mjs';
 
 /** Gói dự án đang chọn — QUILDER_PROJECT. Sai tên gói thì ném ngay, build dừng. */
 const project = projectDir();
+
+/*
+ * Font gốc của gói → `generated/pack-fonts/<gói>.json`, mỗi lần `next dev` / `next build` nạp config.
+ * Builder (Cài đặt › Font, ô chọn font, `list_fonts`) đọc file này; xem scripts/pack-fonts.mjs.
+ * Lỗi quét KHÔNG dừng build: site vẫn chạy bằng CSS của gói, chỉ builder không thấy font gốc.
+ */
+try {
+  const { manifest, changed } = writePackFonts(project);
+  const warn = changed ? packFontWarnings(manifest) : null;
+  if (warn) console.warn(warn);
+} catch (e) {
+  console.warn(`[pack-fonts] không quét được font gốc của gói: ${e instanceof Error ? e.message : e}`);
+}
 
 /**
  * Thư mục cấp một trong `public/` của gói (`img`, `svg`, `fonts`…) — phục vụ CẢ ở đường gốc
@@ -97,7 +111,11 @@ const nextConfig = {
     '/api/ai/tool': ['./node_modules/**/harfbuzzjs/dist/*.wasm'],
     // CSS và public/ của gói được ĐỌC lúc chạy (static-css.ts, route /p/), không import —
     // trình theo vết không thấy chúng. Khai cho mọi route để bản standalone mang theo.
-    ...(project.name ? { '/**': [`./${project.dir}/styles/**`, `./${project.dir}/public/**`] } : {}),
+    // `generated/pack-fonts/<gói>.json` cũng ĐỌC lúc chạy (src/lib/fonts/pack.ts) — cùng lý do.
+    '/**': [
+      `./${PACK_FONTS_DIR}/**`,
+      ...(project.name ? [`./${project.dir}/styles/**`, `./${project.dir}/public/**`] : []),
+    ],
   },
 
   // Thư viện cắt/đọc font nạp wasm lúc chạy: để Node tự nạp, không cho webpack gói.

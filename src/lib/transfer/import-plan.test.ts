@@ -243,6 +243,13 @@ describe('buildImportPlan - họ font (spec §13.2)', () => {
     expect(codes(plan(inter, snap()))).toContain('block:font-name-taken');
   });
 
+  it('tên trùng font GỐC của gói dự án ở đích → blocker, lý do nói là font gốc', () => {
+    const p = fontPlan({ packFamilies: ['GILROY'] });
+    const g = p.issues.find((i) => i.code === 'font-name-taken');
+    expect(g?.level).toBe('block');
+    expect(renderGuide(g!).why).toContain('font gốc của gói dự án');
+  });
+
   it('token font-<slug> đã có ở đích mà không thuộc họ nào → blocker riêng: chạy fonts:adopt hoặc xoá biến, không bảo đổi tên họ', () => {
     const p = fontPlan({ tokens: new Map([['font-gilroy', '"gilroy", serif']]) });
     expect(codes(p)).not.toContain('block:font-name-taken');
