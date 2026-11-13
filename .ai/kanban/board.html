@@ -1,0 +1,174 @@
+<!doctype html>
+<!-- qf-ai:managed — bảng kanban của qf-toolkit. Dữ liệu: board.data.js (qf-ai kanban … tự ghi). Đừng sửa tay. -->
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kanban</title>
+<style>
+  :root {
+    --bg: #f4f5f7; --panel: #ebecf0; --card: #fff; --text: #172b4d; --muted: #5e6c84; --line: #dfe1e6;
+    --accent: #0c66e4; --ok: #1f845a; --warn: #b65c02; --shadow: 0 1px 2px rgba(9, 30, 66, .25);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1d2125; --panel: #22272b; --card: #2c333a; --text: #dee4ea; --muted: #9fadbc; --line: #38414a;
+      --accent: #579dff; --ok: #4bce97; --warn: #f5cd47; --shadow: 0 1px 2px rgba(0, 0, 0, .5);
+    }
+  }
+  :root { color-scheme: light dark; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  header { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; padding: 14px 20px; border-bottom: 1px solid var(--line); }
+  h1 { margin: 0; font-size: 18px; }
+  .meta { color: var(--muted); font-size: 12px; }
+  .progress { flex: 1 1 160px; max-width: 260px; height: 8px; border-radius: 4px; background: var(--panel); overflow: hidden; }
+  .progress > i { display: block; height: 100%; background: var(--ok); transition: width .3s; }
+  .filters { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 20px 0; }
+  .chip { border: 1px solid var(--line); background: var(--card); color: var(--text); border-radius: 14px; padding: 3px 10px; font-size: 12px; cursor: pointer; }
+  .chip[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+  main { display: grid; grid-template-columns: repeat(6, minmax(220px, 1fr)); gap: 12px; padding: 14px 20px 24px; overflow-x: auto; }
+  .col { background: var(--panel); border-radius: 8px; padding: 8px; min-height: 120px; }
+  .col h2 { margin: 2px 4px 10px; font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); display: flex; justify-content: space-between; }
+  .card { background: var(--card); border-radius: 6px; box-shadow: var(--shadow); padding: 10px; margin-bottom: 8px; cursor: pointer; border-left: 3px solid transparent; }
+  .card:hover { outline: 1px solid var(--accent); }
+  .card.fresh { border-left-color: var(--accent); }
+  .card .title { font-weight: 500; margin-bottom: 8px; word-break: break-word; }
+  .row { display: flex; align-items: center; justify-content: space-between; gap: 6px; font-size: 12px; color: var(--muted); }
+  .tag { font-size: 11px; padding: 1px 6px; border-radius: 3px; background: var(--panel); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 150px; }
+  .who { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
+  .avatar { flex: none; width: 22px; height: 22px; border-radius: 50%; color: #fff; font-size: 10px; font-weight: 700; display: grid; place-items: center; }
+  .note { margin-top: 6px; font-size: 12px; color: var(--muted); border-top: 1px dashed var(--line); padding-top: 6px; word-break: break-word; }
+  .empty { padding: 80px 20px; text-align: center; color: var(--muted); }
+  .empty b { display: block; font-size: 16px; color: var(--text); margin-bottom: 6px; }
+  dialog { border: none; border-radius: 10px; padding: 0; width: min(640px, calc(100vw - 32px)); background: var(--card); color: var(--text); box-shadow: 0 8px 32px rgba(0, 0, 0, .3); }
+  dialog::backdrop { background: rgba(9, 30, 66, .45); }
+  .detail { padding: 18px 20px; max-height: 80vh; overflow: auto; }
+  .detail h3 { margin: 0 0 6px; font-size: 17px; }
+  .detail h4 { margin: 16px 0 6px; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+  .detail ul, .detail ol { margin: 0; padding-left: 20px; }
+  .detail code { font-size: 12px; background: var(--panel); padding: 1px 4px; border-radius: 3px; }
+  .close { float: right; border: none; background: none; color: var(--muted); font-size: 22px; cursor: pointer; line-height: 1; }
+  @media (max-width: 760px) {
+    header, .filters { padding-left: 16px; padding-right: 16px; }
+    main { grid-template-columns: repeat(6, 82vw); padding: 12px 16px; scroll-snap-type: x mandatory; }
+    .col { scroll-snap-align: start; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1 id="title">Kanban</h1>
+  <div class="progress" title="Tiến độ"><i id="bar" style="width:0"></i></div>
+  <span class="meta" id="meta"></span>
+</header>
+<div class="filters" id="filters"></div>
+<div id="root"></div>
+<dialog id="dlg"><div class="detail" id="detail"></div></dialog>
+<script>
+(() => {
+  const COLS = [['todo', 'To do'], ['in-progress', 'In progress'], ['in-test', 'In test'], ['ready-review', 'Ready review'], ['in-review', 'In review'], ['done', 'Done']];
+  let board, version = '', filter = '';
+
+  // Dựng DOM bằng textContent — dữ liệu do agent ghi, không bao giờ đi qua innerHTML.
+  const h = (tag, attrs, ...kids) => {
+    const el = document.createElement(tag);
+    for (const [k, v] of Object.entries(attrs || {})) {
+      if (k === 'class') el.className = v;
+      else if (k === 'style') el.style.cssText = v;
+      else if (k.startsWith('on')) el.addEventListener(k.slice(2), v);
+      else el.setAttribute(k, v);
+    }
+    for (const kid of kids.flat()) if (kid != null && kid !== false) el.append(kid instanceof Node ? kid : String(kid));
+    return el;
+  };
+  const hue = (s) => [...s].reduce((a, c) => (a * 31 + c.charCodeAt(0)) >>> 0, 7) % 360;
+  const initials = (s) => (s.match(/[a-z0-9]+/gi) || ['?']).slice(0, 2).map((w) => w[0].toUpperCase()).join('');
+  const ago = (iso) => {
+    const s = Math.max(0, (Date.now() - new Date(iso)) / 1000);
+    return s < 60 ? 'vừa xong' : s < 3600 ? `${Math.floor(s / 60)} phút trước` : s < 86400 ? `${Math.floor(s / 3600)} giờ trước` : new Date(iso).toLocaleString();
+  };
+  const avatar = (name) => h('span', { class: 'avatar', style: `background:hsl(${hue(name)} 55% 45%)`, title: name }, initials(name));
+
+  function card(t) {
+    const last = t.history?.at(-1);
+    const fresh = last && Date.now() - new Date(last.at) < 60000;
+    const note = t.notes?.at(-1);
+    const tier = [t.model, t.effort].filter(Boolean).join(' · ');
+    return h('div', { class: `card${fresh ? ' fresh' : ''}`, onclick: () => open(t) },
+      h('div', { class: 'title' }, t.title),
+      h('div', { class: 'row' },
+        h('span', { class: 'who' }, t.agent ? [avatar(t.agent), h('span', { class: 'tag', title: t.agent }, t.agent)] : h('span', {}, 'chưa giao')),
+        h('span', {}, t.id)),
+      (t.epic || tier) && h('div', { class: 'row', style: 'margin-top:6px' }, h('span', { class: 'tag' }, t.epic || ''), tier && h('span', { class: 'tag' }, tier)),
+      note && h('div', { class: 'note' }, `${note.by}: ${note.text}`),
+      last && h('div', { class: 'row', style: 'margin-top:6px' }, h('span', {}, ''), h('span', {}, ago(last.at))));
+  }
+
+  function open(t) {
+    const sec = (title, body) => (body ? h('div', {}, h('h4', {}, title), body) : null);
+    const files = (t.files || []).map((f) => (typeof f === 'string' ? h('li', {}, h('code', {}, f)) : h('li', {}, h('code', {}, f.path), f.what ? ` — ${f.what}` : '')));
+    const d = document.getElementById('detail');
+    d.replaceChildren(...[
+      h('button', { class: 'close', 'aria-label': 'Đóng', onclick: () => document.getElementById('dlg').close() }, '×'),
+      h('h3', {}, `${t.id} · ${t.title}`),
+      h('div', { class: 'meta' }, [t.status, t.agent, [t.model, t.effort].filter(Boolean).join('/'), t.epic].filter(Boolean).join(' · ')),
+      sec('File', files.length && h('ul', {}, files)),
+      sec('Các bước', t.steps?.length && h('ol', {}, t.steps.map((s) => h('li', {}, s)))),
+      sec('Xong khi', t.done_when?.length && h('ul', {}, t.done_when.map((s) => h('li', {}, s)))),
+      sec('Kiểm tra', t.verify && h('code', {}, t.verify)),
+      sec('Phụ thuộc', t.depends_on?.length && t.depends_on.join(', ')),
+      sec('Ghi chú', t.notes?.length && h('ul', {}, t.notes.map((n) => h('li', {}, `${new Date(n.at).toLocaleTimeString()} · ${n.by}: ${n.text}`)))),
+      sec('Lịch sử', t.history?.length && h('ul', {}, t.history.map((x) => h('li', {}, `${new Date(x.at).toLocaleString()} · ${x.by} → ${x.status}`)))),
+    ].filter(Boolean));
+    document.getElementById('dlg').showModal();
+  }
+
+  function render() {
+    const root = document.getElementById('root');
+    const filters = document.getElementById('filters');
+    if (!board) {
+      document.getElementById('title').textContent = 'Kanban';
+      document.getElementById('meta').textContent = '';
+      document.getElementById('bar').style.width = '0';
+      filters.replaceChildren();
+      root.replaceChildren(h('div', { class: 'empty' }, h('b', {}, 'Không có phiên nào đang chạy'), 'Bảng hiện khi agent chạy qf-ai kanban init. Trang tự cập nhật.'));
+      return;
+    }
+    const tasks = board.tasks || [];
+    const done = tasks.filter((t) => t.status === 'done').length;
+    document.title = `${done}/${tasks.length} · ${board.title}`;
+    document.getElementById('title').textContent = board.title;
+    document.getElementById('meta').textContent = [`${done}/${tasks.length} xong`, board.sprint, board.session && `phiên ${board.session.slice(0, 8)}`, board.updatedAt && `cập nhật ${ago(board.updatedAt)}`].filter(Boolean).join(' · ');
+    document.getElementById('bar').style.width = `${tasks.length ? (done / tasks.length) * 100 : 0}%`;
+    const agents = [...new Set(tasks.map((t) => t.agent).filter(Boolean))].sort();
+    if (filter && !agents.includes(filter)) filter = '';
+    filters.replaceChildren(...(agents.length > 1 ? [['', 'Tất cả'], ...agents.map((a) => [a, a])] : []).map(([v, label]) =>
+      h('button', { class: 'chip', 'aria-pressed': String(filter === v), onclick: () => { filter = v; render(); } }, label)));
+    const shown = tasks.filter((t) => !filter || t.agent === filter);
+    root.replaceChildren(h('main', {}, COLS.map(([key, label]) => {
+      const items = shown.filter((t) => t.status === key);
+      return h('section', { class: 'col' }, h('h2', {}, h('span', {}, label), h('span', {}, items.length)), items.map(card));
+    })));
+  }
+
+  // Mở thẳng từ ổ đĩa (file://) thì fetch bị chặn, nên nạp lại board.data.js bằng thẻ <script> mỗi 2 giây.
+  function poll() {
+    const s = document.createElement('script');
+    s.src = `board.data.js?t=${Date.now()}`;
+    s.onload = s.onerror = () => {
+      s.remove();
+      const next = window.__KANBAN__ ?? null;
+      const v = next ? `${next.session}|${next.updatedAt}` : 'none';
+      if (v !== version) { version = v; board = next; render(); }
+      else if (board) document.getElementById('meta').textContent = document.getElementById('meta').textContent.replace(/cập nhật .*$/, `cập nhật ${ago(board.updatedAt)}`);
+    };
+    document.head.append(s);
+  }
+  render();
+  poll();
+  setInterval(poll, 2000);
+})();
+</script>
+</body>
+</html>

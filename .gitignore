@@ -67,3 +67,10 @@ projects/*
 
 # Bộ nhớ của agent Claude Code — ghi chú cục bộ, có thể nhắc dự án riêng; không bao giờ lên repo.
 .claude/agent-memory/
+
+# .ai/ — dữ liệu chỉ của máy này (qf-ai)
+.ai/trash/
+.ai/.state/
+.ai/folder-tree/tree.md
+.ai/kanban/board.json
+.ai/kanban/board.data.js
