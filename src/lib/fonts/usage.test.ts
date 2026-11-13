@@ -1,3 +1,6 @@
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
+
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
@@ -124,13 +127,17 @@ describe('familyVariableRefs — họ được nhắc theo TÊN qua biến CSS',
     expect(refs.get('font-unused')).toEqual([]);
   });
 
-  it('CSS tĩnh thật của gói maimoney (QUILDER_PROJECT) đọc được lúc chạy: SF Pro Display dùng bởi --font-display', async () => {
-    vi.stubEnv('QUILDER_PROJECT', 'maimoney');
-    try {
-      const refs = await familyVariableRefs([{ cssName: 'SF Pro Display', token: 'font-sf-pro-display' }]);
-      expect(refs.get('font-sf-pro-display')).toContain('--font-display');
-    } finally {
-      vi.unstubAllEnvs();
-    }
-  });
+  // Gói maimoney là repo riêng, CI không clone nó: thiếu gói thì bỏ qua thay vì đỏ.
+  it.skipIf(!existsSync(join(process.cwd(), 'projects', 'maimoney', 'styles', 'fonts.css')))(
+    'CSS tĩnh thật của gói maimoney (QUILDER_PROJECT) đọc được lúc chạy: SF Pro Display dùng bởi --font-display',
+    async () => {
+      vi.stubEnv('QUILDER_PROJECT', 'maimoney');
+      try {
+        const refs = await familyVariableRefs([{ cssName: 'SF Pro Display', token: 'font-sf-pro-display' }]);
+        expect(refs.get('font-sf-pro-display')).toContain('--font-display');
+      } finally {
+        vi.unstubAllEnvs();
+      }
+    },
+  );
 });
