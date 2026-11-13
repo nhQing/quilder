@@ -112,3 +112,22 @@ test('Toàn trang: chọn node ở sâu trong cây Lớp thì PANE cuộn tới 
     .toBe(true);
   expect((await measure(page)).paneScroll).toBeGreaterThan(0);
 });
+
+test('Toàn trang: cuộn pane thì dock "Thêm component" vẫn đứng ở đáy, không trôi lên giữa', async ({ page }) => {
+  await openHome(page);
+  await page.locator('[data-stage-full-page]').click();
+  await expect.poll(async () => (await measure(page)).innerScroll, { timeout: 15_000 }).toBeLessThanOrEqual(1);
+
+  const dock = page.getByRole('button', { name: 'Thêm component' });
+  const gap = () =>
+    dock.evaluate((btn) => {
+      const pane = document.querySelector<HTMLElement>('[data-stage]')!.getBoundingClientRect();
+      return Math.round(pane.bottom - btn.getBoundingClientRect().bottom);
+    });
+  const before = await gap();
+  expect(before).toBeGreaterThanOrEqual(0);
+
+  await page.locator('[data-stage]').evaluate((el) => el.scrollTo(0, el.scrollHeight / 2));
+  expect((await measure(page)).paneScroll).toBeGreaterThan(0);
+  expect(await gap(), 'dock trôi theo nội dung pane').toBe(before);
+});
