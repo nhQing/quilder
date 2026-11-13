@@ -869,87 +869,95 @@ export function Canvas({
         onToggleFullPage={fitContent ? undefined : toggleFullPage}
       />
 
-      {/* Vùng xem. Cuộn dọc là chuyện thường; cuộn ngang chỉ xảy ra ở chế độ 100%. */}
-      <div
-        ref={paneRef}
-        data-stage=""
-        className="relative min-h-0 flex-1 overflow-auto"
-      >
+      {/*
+        Lớp bọc ĐỨNG YÊN quanh vùng cuộn — chỗ neo của dock chèn. Dock từng nằm TRONG
+        vùng cuộn: phần tử `absolute` trong một khối `overflow: auto` trôi theo nội dung,
+        nên `bottom: 5%` chỉ đúng khi chưa cuộn; cuộn trang dài ("Toàn trang") là dock
+        bị kéo lên giữa màn (người dùng báo 13/11/2026).
+      */}
+      <div className="relative flex min-h-0 flex-1 flex-col">
+        {/* Vùng xem. Cuộn dọc là chuyện thường; cuộn ngang chỉ xảy ra ở chế độ 100%. */}
         <div
-          // Bo góc và bóng ở lớp CHƯA thu: đặt trên khung đã `scale` thì góc bo co
-          // theo mức thu, và ở 25% nó còn chưa tới 3px.
-          className="mx-auto overflow-hidden rounded shadow-shell-pop"
-          style={{
-            // Bề rộng sau khi thu, để phần tử cha cuộn đúng và khung nằm giữa.
-            width: screen.width * scale,
-            height: frameHeight * scale,
-            marginBlock: GUTTER / 2,
-          }}
+          ref={paneRef}
+          data-stage=""
+          className="relative min-h-0 flex-1 overflow-auto"
         >
-          {/*
-            `overflow-hidden` là BẮT BUỘC, không phải để cho gọn.
-
-            Viền chọn/hover lấy `height` từ `getBoundingClientRect()` bên trong iframe,
-            nên một section cao 5.000px trong khung 900px sẽ vẽ ra một div cao 5.000px.
-            Không cắt thì nó làm pane cuộn phình ra và **sinh thêm một thanh cuộn** cạnh
-            thanh cuộn của chính trang — đúng lỗi người dùng báo ngày 20/08/2026: thanh
-            cuộn tự xuất hiện khi chỉ di chuột vào một phần tử.
-
-            Cắt ở đây là đúng chỗ: khung là khung nhìn của thiết bị, và một phần tử cao
-            hơn khung thì trên thiết bị thật cũng chỉ thấy được phần trong khung.
-          */}
           <div
-            data-stage-frame=""
-            className="relative overflow-hidden bg-shell-paper"
+            // Bo góc và bóng ở lớp CHƯA thu: đặt trên khung đã `scale` thì góc bo co
+            // theo mức thu, và ở 25% nó còn chưa tới 3px.
+            className="mx-auto overflow-hidden rounded shadow-shell-pop"
             style={{
-              width: screen.width,
-              height: frameHeight,
-              transform: `scale(${scale})`,
-              transformOrigin: 'top left',
+              // Bề rộng sau khi thu, để phần tử cha cuộn đúng và khung nằm giữa.
+              width: screen.width * scale,
+              height: frameHeight * scale,
+              marginBlock: GUTTER / 2,
             }}
           >
-            {[shownKey, ...(nextKey === null ? [] : [nextKey])].map((key) => {
-              const shown = key === shownKey;
-              return (
-                <iframe
-                  // Token nằm trong key: `src` không đổi giữa hai lần lưu nên React sẽ
-                  // không nạp lại, mà bản server render thì đã mới.
-                  //
-                  // `src` CŨNG nằm trong key: đổi `src` của một iframe đang sống (trang →
-                  // component) là một lượt điều hướng trong khung, và trình duyệt ghi nó vào
-                  // lịch sử CHUNG của tab. Nút Back khi đó lùi cái iframe chứ không lùi
-                  // trang (đo 16/10/2026: `history.back()` không ra `popstate` nào, URL đứng
-                  // yên). Iframe MỚI nạp lần đầu thì không thêm mục lịch sử nào.
-                  key={`${renderSrc}#${key}`}
-                  ref={(el) => {
-                    if (el) frameEls.current.set(key, el);
-                    else frameEls.current.delete(key);
-                    if (el && shown) frameRef.current = el;
-                  }}
-                  src={renderSrc}
-                  title={shown ? `Xem trước ${screen.width}px` : 'Bản mới đang nạp'}
-                  aria-hidden={shown ? undefined : true}
-                  tabIndex={shown ? undefined : -1}
-                  data-canvas-frame={shown ? 'shown' : 'next'}
-                  onLoad={(e) => {
-                    // Đóng băng TRƯỚC khi khung lên hiện: khung bản mới không được chớp
-                    // một hero cao bằng cả trang.
-                    prepareFrame(e.currentTarget);
-                    if (shown) setLoaded((n) => n + 1);
-                    else promote(key);
-                  }}
-                  className={cn(
-                    'h-full w-full border-0',
-                    !shown && 'pointer-events-none invisible absolute inset-0',
-                  )}
-                />
-              );
-            })}
+            {/*
+              `overflow-hidden` là BẮT BUỘC, không phải để cho gọn.
 
-            {hovBox && hoveredId !== selectedId && (
-              <Outline box={hovBox} scale={scale} tone="hover" />
-            )}
-            {selBox && <Outline box={selBox} scale={scale} tone="select" label={selectedId} />}
+              Viền chọn/hover lấy `height` từ `getBoundingClientRect()` bên trong iframe,
+              nên một section cao 5.000px trong khung 900px sẽ vẽ ra một div cao 5.000px.
+              Không cắt thì nó làm pane cuộn phình ra và **sinh thêm một thanh cuộn** cạnh
+              thanh cuộn của chính trang — đúng lỗi người dùng báo ngày 20/08/2026: thanh
+              cuộn tự xuất hiện khi chỉ di chuột vào một phần tử.
+
+              Cắt ở đây là đúng chỗ: khung là khung nhìn của thiết bị, và một phần tử cao
+              hơn khung thì trên thiết bị thật cũng chỉ thấy được phần trong khung.
+            */}
+            <div
+              data-stage-frame=""
+              className="relative overflow-hidden bg-shell-paper"
+              style={{
+                width: screen.width,
+                height: frameHeight,
+                transform: `scale(${scale})`,
+                transformOrigin: 'top left',
+              }}
+            >
+              {[shownKey, ...(nextKey === null ? [] : [nextKey])].map((key) => {
+                const shown = key === shownKey;
+                return (
+                  <iframe
+                    // Token nằm trong key: `src` không đổi giữa hai lần lưu nên React sẽ
+                    // không nạp lại, mà bản server render thì đã mới.
+                    //
+                    // `src` CŨNG nằm trong key: đổi `src` của một iframe đang sống (trang →
+                    // component) là một lượt điều hướng trong khung, và trình duyệt ghi nó vào
+                    // lịch sử CHUNG của tab. Nút Back khi đó lùi cái iframe chứ không lùi
+                    // trang (đo 16/10/2026: `history.back()` không ra `popstate` nào, URL đứng
+                    // yên). Iframe MỚI nạp lần đầu thì không thêm mục lịch sử nào.
+                    key={`${renderSrc}#${key}`}
+                    ref={(el) => {
+                      if (el) frameEls.current.set(key, el);
+                      else frameEls.current.delete(key);
+                      if (el && shown) frameRef.current = el;
+                    }}
+                    src={renderSrc}
+                    title={shown ? `Xem trước ${screen.width}px` : 'Bản mới đang nạp'}
+                    aria-hidden={shown ? undefined : true}
+                    tabIndex={shown ? undefined : -1}
+                    data-canvas-frame={shown ? 'shown' : 'next'}
+                    onLoad={(e) => {
+                      // Đóng băng TRƯỚC khi khung lên hiện: khung bản mới không được chớp
+                      // một hero cao bằng cả trang.
+                      prepareFrame(e.currentTarget);
+                      if (shown) setLoaded((n) => n + 1);
+                      else promote(key);
+                    }}
+                    className={cn(
+                      'h-full w-full border-0',
+                      !shown && 'pointer-events-none invisible absolute inset-0',
+                    )}
+                  />
+                );
+              })}
+
+              {hovBox && hoveredId !== selectedId && (
+                <Outline box={hovBox} scale={scale} tone="hover" />
+              )}
+              {selBox && <Outline box={selBox} scale={scale} tone="select" label={selectedId} />}
+            </div>
           </div>
         </div>
 
