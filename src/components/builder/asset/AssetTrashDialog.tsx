@@ -351,7 +351,7 @@ export function AssetTrashDialog({
                 {deletable.slice(0, THUMB_MAX).map((d) => (
                   <li key={d.id} className="min-w-0">
                     <span className="block aspect-square w-full overflow-hidden rounded-sm bg-shell-raised">
-                      <AssetThumb mime={d.mime} assetKey={d.key} url={d.url} lazy sheet="sm" className="size-full" />
+                      <AssetThumb mime={d.mime} assetKey={d.key} url={d.url} lazy thumb={128} sheet="sm" className="size-full" />
                     </span>
                     <p className="mt-1 truncate text-mini" title={d.key}>
                       {displayName(d.key)}
