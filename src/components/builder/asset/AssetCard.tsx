@@ -254,6 +254,7 @@ export function AssetCard({
             assetKey={asset.key}
             url={asset.url}
             lazy
+            thumb={260}
             className={cn('absolute inset-0 size-full', trashed && 'opacity-70')}
           />
         )}

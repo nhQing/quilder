@@ -143,11 +143,9 @@ export function AssetPane({ doc }: { doc: Doc }) {
                     : 'cursor-not-allowed opacity-40',
                 )}
               >
-                {/* `ImageThumb` là `<img>` thường, không `next/image`: đây là chrome của
-                    công cụ, và optimizer chỉ nhận host của CDN đã khai trong
-                    `next.config`. Một ảnh 80px trong pane không đáng một vòng qua
-                    `/_next/image`. Khung shimmer cho tới khi ảnh vẽ xong. */}
-                <ImageThumb url={a.url} alt={a.filename} lazy className="size-full" />
+                {/* `ImageThumb` lấy bản thu nhỏ qua optimizer (`thumb`), host lạ thì tự rơi về
+                    file gốc. Khung shimmer cho tới khi ảnh vẽ xong. */}
+                <ImageThumb url={a.url} alt={a.filename} lazy thumb={96} className="size-full" />
               </button>
             ))}
           </div>

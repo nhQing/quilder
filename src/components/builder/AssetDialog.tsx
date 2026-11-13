@@ -335,7 +335,7 @@ export function AssetDialog({
                           )}
                         >
                           <span className="block h-22 overflow-hidden rounded bg-shell-raised">
-                            <AssetThumb mime={a.mime} assetKey={a.key} url={a.url} lazy sheet="sm" className="size-full" />
+                            <AssetThumb mime={a.mime} assetKey={a.key} url={a.url} lazy thumb={200} sheet="sm" className="size-full" />
                           </span>
                           <span className="flex min-w-0 flex-col gap-0.5 px-1 pb-0.5">
                             <span className="block truncate text-small font-semibold" title={a.key}>

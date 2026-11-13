@@ -112,7 +112,7 @@ export function BlockedAssetList({ items }: { items: SkippedAsset[] }) {
               style={CHECKER}
               aria-hidden
             >
-              {a.mime.startsWith('image/') && <ImageThumb url={a.url} lazy className="size-8" />}
+              {a.mime.startsWith('image/') && <ImageThumb url={a.url} lazy thumb={32} className="size-8" />}
             </span>
             <span className="min-w-0 flex-1 truncate text-small font-medium text-shell-ink" title={a.key}>
               {displayName(a.key)}

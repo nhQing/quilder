@@ -16,6 +16,7 @@
 import { useEffect, useRef, useState } from 'react';
 
 import { assetKind, extOf } from '@/lib/assets/kind';
+import { thumbSrc } from '@/lib/assets/thumb';
 import { cn } from '@/lib/builder/cn';
 
 import { Skeleton } from '../ui/Skeleton';
@@ -50,6 +51,7 @@ export function AssetThumb({
   className,
   lazy,
   sheet = 'md',
+  thumb,
 }: {
   mime: string;
   /** `Asset.key`, dùng để lấy đuôi file khi mime không nói đủ. */
@@ -60,12 +62,14 @@ export function AssetThumb({
   lazy?: boolean;
   /** Cỡ tờ giấy cho file không phải ảnh. */
   sheet?: 'sm' | 'md';
+  /** Bề rộng hiển thị (px CSS) để lấy ảnh thu nhỏ — xem `ImageThumb`. Bỏ trống = file gốc. */
+  thumb?: number;
 }) {
   const info = assetKind(mime, assetKey);
   const ext = extOf(assetKey);
 
   if (info.previewable) {
-    return <ImageThumb url={url} lazy={lazy} className={className} />;
+    return <ImageThumb url={url} lazy={lazy} thumb={thumb} className={className} />;
   }
 
   return (
@@ -88,12 +92,19 @@ export function AssetThumb({
  *
  * Lớp shimmer bị gỡ khi ảnh tải xong HOẶC lỗi — một khung chạy shimmer mãi vì ảnh
  * hỏng là nói dối "sắp có". PNG trong suốt cũng nhờ thế mà không lộ dải sáng phía sau.
+ *
+ * `thumb` (09/11/2026): bề rộng ô tính bằng px CSS. Có thì ảnh raster lấy bản THU NHỎ
+ * qua `/_next/image` (1x + 2x, xem `lib/assets/thumb.ts`) thay vì tải file gốc vài MB
+ * cho một ô 200px. Optimizer từ chối (host chưa khai, kho tạm ở dev) thì `onError` rơi
+ * về file gốc — ô không bao giờ vỡ chỉ vì đường thu nhỏ hỏng. Bỏ trống ở chỗ cần đúng
+ * từng điểm ảnh của file (bộ chọn favicon, `AssetPickerBox`).
  */
 export function ImageThumb({
   url,
   lazy,
   alt = '',
   fit = 'contain',
+  thumb,
   className,
 }: {
   url: string;
@@ -102,34 +113,40 @@ export function ImageThumb({
   alt?: string;
   /** Xem docblock: `contain` ở mọi chỗ xem trước, `cover` chỉ khi mô phỏng một khung cắt. */
   fit?: 'contain' | 'cover';
+  /** Bề rộng hiển thị (px CSS) để lấy ảnh thu nhỏ. Bỏ trống = file gốc. */
+  thumb?: number;
   className?: string;
 }) {
   const [done, setDone] = useState(false);
+  const [original, setOriginal] = useState(false);
   const img = useRef<HTMLImageElement>(null);
+  const small = thumb && !original ? thumbSrc(url, thumb) : null;
 
   // Đổi file thì chờ lại từ đầu — TRỪ khi ảnh đã xong sẵn. Ảnh nằm trong cache có thể
   // xong trước khi React gắn `onLoad` (ô vừa mount lại, hoặc HTML từ server): khi đó
   // không còn sự kiện nào bắn nữa và khung sẽ kẹt shimmer mãi.
   useEffect(() => {
+    setOriginal(false);
     setDone(Boolean(img.current?.complete));
   }, [url]);
 
   return (
     <span className={cn('relative block overflow-hidden', className)}>
       {!done && <Skeleton className="absolute inset-0 rounded-none" />}
-      {/* Thẻ img thuần, không `next/image`: đây là vỏ builder, không phải ảnh của site
-          — không cần srcset, và `next/image` chỉ thêm một vòng qua server cho mỗi ô.
+      {/* Thẻ img thuần, không `next/image`: đây là vỏ builder, không phải ảnh của site —
+          ô thu nhỏ tự dựng URL optimizer (`thumb`), không cần component của Next.
           `draggable={false}`: kéo trên thẻ Thư viện là kéo CẢ THẺ (dời ảnh), không
           phải kéo riêng tấm ảnh ra khỏi trang. */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         ref={img}
-        src={url}
+        src={small?.src ?? url}
+        srcSet={small?.srcSet}
         alt={alt}
         draggable={false}
         loading={lazy ? 'lazy' : undefined}
         onLoad={() => setDone(true)}
-        onError={() => setDone(true)}
+        onError={() => (small ? setOriginal(true) : setDone(true))}
         className={cn(
           'relative size-full transition-opacity duration-300',
           fit === 'cover' ? 'object-cover' : 'object-contain',
