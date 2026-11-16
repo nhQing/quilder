@@ -29,6 +29,9 @@ const doc = {
 const assets = {
   mau: { url: '/mau.jpg', mime: 'image/jpeg', width: 800, height: 600 },
   bia: { url: '/bia.jpg', mime: 'image/jpeg', width: 1200, height: 860 },
+  vid: { url: 'https://cdn.example/bia.mp4', mime: 'video/mp4', width: null, height: null },
+  vidKhongMime: { url: 'https://cdn.example/clip.webm', mime: null, width: null, height: null },
+  thumb: { url: '/thumb.jpg', mime: 'image/jpeg', width: 400, height: 300 },
 };
 
 const html = (entryBody?: Map<string, EntryBody>) => {
@@ -48,6 +51,38 @@ describe('Image part="entry:<field>"', () => {
     const out = html();
     expect(out).toContain('mau.jpg');
     expect(out).toContain('alt="Ảnh mẫu"');
+  });
+
+  it('asset của bài là video thì vẽ thẻ <video> tự chạy, câm, lặp — không phải <img>', () => {
+    const out = html(new Map([['cover', { kind: 'image', assetId: 'vid', alt: 'Video đầu bài' }]]));
+    expect(out).toContain('<video');
+    expect(out).toContain('src="https://cdn.example/bia.mp4"');
+    expect(out).toMatch(/autoPlay=""|autoplay=""/i);
+    expect(out).toContain('muted');
+    expect(out).toContain('loop');
+    expect(out).toContain('playsInline');
+    expect(out).not.toContain('<img');
+    expect(out).not.toContain('mau.jpg');
+  });
+
+  it('video nhận ra bằng đuôi khi asset không có mime', () => {
+    const out = html(new Map([['cover', { kind: 'image', assetId: 'vidKhongMime', alt: '' }]]));
+    expect(out).toContain('<video');
+  });
+
+  it('video lấy ảnh `thumbnail` của bài làm poster', () => {
+    const out = html(new Map<string, EntryBody>([
+      ['cover', { kind: 'image', assetId: 'vid', alt: '' }],
+      ['thumbnail', { kind: 'image', assetId: 'thumb', alt: '' }],
+    ]));
+    expect(out).toContain('poster="/thumb.jpg"');
+  });
+
+  it('asset video chỉ đổi node sang <video> khi nó đến từ BÀI, không phải từ assetId mẫu', () => {
+    const d = structuredClone(doc) as unknown as { nodes: Record<string, { assetId?: string }> };
+    d.nodes.cover!.assetId = 'vid';
+    const ctx: RenderContext = { doc: d as unknown as Doc, scope: { site: {}, page: {} }, assets };
+    expect(renderToStaticMarkup(<NodeRenderer nodeId="page" ctx={ctx} />)).not.toContain('<video');
   });
 
   it('không gắn data-mm-article — đó là kiểu chữ của thân bài, không phải của ảnh', () => {

@@ -29,7 +29,7 @@
  * của entry. Dùng lại nó là kéo cả editor store vào màn nhập nội dung.
  */
 
-import { IMAGE_KINDS, type AssetKind } from '@/lib/assets/kind';
+import { IMAGE_KINDS, IMAGE_OR_VIDEO_KINDS, type AssetKind } from '@/lib/assets/kind';
 
 import { AssetPickerBox } from './asset/AssetPickerBox';
 
@@ -42,17 +42,20 @@ export function AssetField({
   value,
   onPick,
   imageOnly,
+  allowVideo = false,
 }: {
   value: string | null;
   onPick: (id: string | null) => void;
   imageOnly: boolean;
+  /** Chỉ có nghĩa khi `imageOnly`: nhận thêm video (field `image` khai `allowVideo`). */
+  allowVideo?: boolean;
 }) {
   return (
     <AssetPickerBox
       value={value}
       onPick={(a) => onPick(a?.id ?? null)}
-      label={imageOnly ? 'ảnh' : 'tệp'}
-      kinds={imageOnly ? IMAGE_KINDS : ANY_KINDS}
+      label={imageOnly ? (allowVideo ? 'ảnh hoặc video' : 'ảnh') : 'tệp'}
+      kinds={imageOnly ? (allowVideo ? IMAGE_OR_VIDEO_KINDS : IMAGE_KINDS) : ANY_KINDS}
       /*
        * Chặn bề rộng.
        *

@@ -40,6 +40,7 @@ import { siteEndpoint } from '@/lib/doc/site-bindings';
 import { applyOverride, isLayoutTransparent, styleAssetIds } from './instance';
 import type { ContentOverride } from '@/lib/doc/types';
 import { entryFieldOf } from '@/lib/doc/types';
+import { assetKind } from '@/lib/assets/kind';
 import { parseCompositeParams } from '@/lib/composites/registry';
 import { projectComposite } from '@/lib/project/active';
 import { CustomCodeBlock } from '@/components/site/CustomCodeBlock';
@@ -754,6 +755,31 @@ export function NodeRenderer({ nodeId, ctx }: { nodeId: NodeId; ctx: RenderConte
       const alt = fromEntry ? fromEntry.alt : node.alt;
       const asset = assetId ? ctx.assets[assetId] : undefined;
       if (!asset) return null;
+
+      // Field `image` khai `allowVideo` có thể giữ một .mp4 (ảnh bìa bài có video ở đầu trang
+      // chi tiết). `next/image` không vẽ được video, nên node Image đổi sang thẻ <video> —
+      // chỉ với dữ liệu của BÀI, không bao giờ với `assetId` mẫu của node.
+      if (fromEntry && assetKind(asset.mime, asset.url).kind === 'video') {
+        const posterBody = ctx.entryBody?.get('thumbnail');
+        const poster = posterBody?.kind === 'image' ? ctx.assets[posterBody.assetId] : undefined;
+        return (
+          <video
+            {...common(node, ctx)}
+            src={asset.url}
+            poster={poster && assetKind(poster.mime, poster.url).kind !== 'video' ? poster.url : undefined}
+            width={asset.width ?? undefined}
+            height={asset.height ?? undefined}
+            aria-label={node.decorative ? undefined : alt || undefined}
+            {...(node.decorative ? { 'aria-hidden': true } : {})}
+            autoPlay
+            muted
+            loop
+            playsInline
+            controls
+            preload="auto"
+          />
+        );
+      }
 
       const ratio = baseOf(node.ratio, null);
       const priority = ctx.lcpNodeId === node.id;
