@@ -10,3 +10,20 @@ test-results
 playwright-report
 README.md
 tmp-page.html
+
+# Không vào image và không được làm đổi `COPY . .` — đổi tài liệu hay file tạm không
+# phải là lý do để build lại (16/11/2026).
+**/.git
+.claude
+_to_delete
+docs
+e2e
+# `tests/` KHÔNG bỏ: test font import fixture ở đó, và `next build` kiểm kiểu cả file test.
+mcp
+branding
+*.md
+.release.json
+tsconfig.tsbuildinfo
+.next-e2e
+projects/*/e2e
+

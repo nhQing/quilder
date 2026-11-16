@@ -163,7 +163,10 @@ function readAssetHosts() {
 }
 
 function run(cmd, args) {
-  const res = spawnSync(cmd, args, { stdio: 'inherit', shell: false });
+  // BuildKit bắt buộc: Dockerfile dùng `RUN --mount=type=cache` để giữ kho pnpm và
+  // `.next/cache` giữa các lần build. Docker 23+ / Docker Desktop đã mặc định bật; đặt
+  // tường minh cho máy còn builder cũ.
+  const res = spawnSync(cmd, args, { stdio: 'inherit', shell: false, env: { ...process.env, DOCKER_BUILDKIT: '1' } });
   if (res.error) fail(`không chạy được \`${cmd}\`: ${res.error.message}`);
   if (res.status !== 0) fail(`\`${cmd} ${args.join(' ')}\` thoát với mã ${res.status}`);
 }
@@ -373,6 +376,10 @@ function main() {
   detail(`ASSET_HOSTS=${assetHosts}`);
   const project = readProject();
   detail(project ? `QUILDER_PROJECT=${project}` : 'QUILDER_PROJECT trống — Quilder thuần');
+  // pnpm đúng bản `packageManager` — Dockerfile chuẩn bị sẵn nó trong layer base.
+  const pnpmVersion =
+    /^pnpm@([\w.-]+)/.exec(JSON.parse(readFileSync('package.json', 'utf8')).packageManager ?? '')?.[1] ?? '';
+  if (pnpmVersion) detail(`PNPM_VERSION=${pnpmVersion}`);
   for (const { name, target } of images) {
     const ref = `${REGISTRY}/${name}:${tag}`;
     say(`Build ${target} → ${ref}`);
@@ -381,6 +388,7 @@ function main() {
       '--target', target,
       '--build-arg', `ASSET_HOSTS=${assetHosts}`,
       '--build-arg', `QUILDER_PROJECT=${project}`,
+      ...(pnpmVersion ? ['--build-arg', `PNPM_VERSION=${pnpmVersion}`] : []),
       '-t', ref,
       // Trả lời được "image này là commit nào" bằng `docker inspect`, mãi về sau.
       '--label', `org.opencontainers.image.revision=${sha.out}`,

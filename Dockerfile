@@ -1,4 +1,24 @@
+# syntax=docker/dockerfile:1.7
+#
 # Multi-stage, tự chứa.
+#
+# ## Cache giữa các lần build (16/11/2026)
+#
+# Trước đây mỗi bản release build lại gần như từ đầu: `COPY . .` đổi ở mọi commit nên
+# `next build` chạy lạnh (không có `.next/cache`), và mỗi lần `package.json` đổi một dòng
+# thì `pnpm install` tải lại toàn bộ package. Giờ dùng cache mount của BuildKit — thư mục
+# sống TRONG builder của Docker, không nằm trong image, giữ qua các lần build:
+#
+#   - `quilder-pnpm-store`: kho package của pnpm. Lockfile đổi thì chỉ tải phần mới.
+#   - `quilder-next-cache`: `.next/cache` (cache webpack/SWC). `next build` chỉ biên lại
+#     phần code đổi.
+#
+# Layer `deps` (node_modules) vẫn cache theo lockfile như cũ: lockfile không đổi thì
+# không cài lại gì. Muốn build sạch hoàn toàn: `docker builder prune --filter
+# type=exec.cachemount` (xoá cache mount) hoặc `docker build --no-cache`.
+#
+# Cần BuildKit (mặc định từ Docker 23 / Docker Desktop). Dòng `# syntax` ở trên là bắt buộc
+# cho `RUN --mount`.
 #
 # KHÔNG kéo node_modules từ một image cache của registry riêng (kiểu
 #   COPY --from=<registry>/<app>:cache … node_modules)
@@ -12,13 +32,20 @@
 
 FROM node:22-alpine AS base
 RUN apk add --no-cache libc6-compat
-RUN corepack enable pnpm
+# pnpm đúng bản của `packageManager` (release.mjs truyền vào), chuẩn bị SẴN trong layer
+# base — nếu không corepack tải lại pnpm ở mọi stage, mọi lần build.
+ARG PNPM_VERSION=11.25.0
+ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0
+RUN corepack enable pnpm && corepack prepare pnpm@${PNPM_VERSION} --activate
 
 # ── deps ──────────────────────────────────────────────────────────────────
 FROM base AS deps
 WORKDIR /app
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-RUN pnpm install --frozen-lockfile
+# Kho package nằm trong cache mount: lockfile đổi thì pnpm chỉ tải package mới, phần còn
+# lại chép từ kho (cache mount khác filesystem nên không hardlink được — chép là đúng).
+RUN --mount=type=cache,id=quilder-pnpm-store,target=/pnpm/store \
+    pnpm install --frozen-lockfile --store-dir /pnpm/store
 
 # ── builder ───────────────────────────────────────────────────────────────
 FROM base AS builder
@@ -43,7 +70,10 @@ ENV ASSET_HOSTS=$ASSET_HOSTS
 # Sai tên gói thì `next build` dừng (scripts/project-dir.mjs).
 ARG QUILDER_PROJECT=""
 ENV QUILDER_PROJECT=$QUILDER_PROJECT
-RUN pnpm run build
+# `.next/cache` trong cache mount: build sau chỉ biên lại phần code đổi. Nó KHÔNG vào
+# image (runner chỉ chép `.next/standalone` và `.next/static`).
+RUN --mount=type=cache,id=quilder-next-cache,target=/app/.next/cache \
+    pnpm run build
 
 # ── migrate ───────────────────────────────────────────────────────────────
 # Stage riêng, chứa Prisma CLI, dùng để áp migration đúng MỘT lần khi deploy.
