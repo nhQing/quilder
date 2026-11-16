@@ -21,6 +21,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 
 import type { AdminEntryRow } from '@/lib/collections/admin-queries';
+import { bulkTargets } from '@/lib/collections/bulk-status';
 import { cn } from '@/lib/builder/cn';
 import { focusRing, ui, type Tone } from '@/lib/builder/ui';
 
@@ -107,11 +108,14 @@ export function EntryTable(props: {
     });
   }
 
+  /** Dòng nào mỗi hành động thật sự đổi được — xem `bulk-status.ts`. */
+  const targets = bulkTargets(props.rows, picked);
+
   async function bulk(action: 'publish' | 'draft' | 'archive') {
     setBusy(true);
     // Tuần tự, không `Promise.all`: mỗi lần đổi trạng thái gọi `revalidateTag`,
     // và bắn 50 lượt cùng lúc là 50 lượt invalidate cho cùng một tag.
-    for (const id of picked) {
+    for (const id of targets[action]) {
       if (action === 'archive') {
         // DELETE ở đây là LƯU TRỮ, không xoá hẳn — bài rời site và rời bảng này,
         // dữ liệu còn nguyên. Xoá hẳn là một hành động riêng (`?purge=1`) và cố ý
@@ -226,12 +230,20 @@ export function EntryTable(props: {
         <div className="flex flex-wrap items-center gap-2.5 rounded-lg bg-shell-accent-soft py-2.5 pr-3 pl-4.5">
           <span className="text-ui font-semibold tabular-nums">Đã chọn {picked.size}</span>
           <span className="ml-auto flex flex-wrap gap-2">
-            <Button variant="primary" size="md" icon="send" disabled={busy} onClick={() => void bulk('publish')}>
-              Đăng
-            </Button>
-            <Button size="md" disabled={busy} onClick={() => void bulk('draft')}>
-              Chuyển về nháp
-            </Button>
+            {/* Mỗi nút chỉ hiện khi có dòng nó đổi được; chọn lẫn lộn thì nút ghi
+                số dòng nó sẽ đụng tới, để "Đăng" không nghe như "đăng cả 12". */}
+            {targets.publish.length > 0 && (
+              <Button variant="primary" size="md" icon="send" disabled={busy} onClick={() => void bulk('publish')}>
+                {targets.publish.length < picked.size ? `Đăng ${targets.publish.length}` : 'Đăng'}
+              </Button>
+            )}
+            {targets.draft.length > 0 && (
+              <Button size="md" disabled={busy} onClick={() => void bulk('draft')}>
+                {targets.draft.length < picked.size
+                  ? `Chuyển ${targets.draft.length} về nháp`
+                  : 'Chuyển về nháp'}
+              </Button>
+            )}
             <Button
               variant="danger"
               size="md"
