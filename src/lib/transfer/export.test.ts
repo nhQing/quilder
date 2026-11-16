@@ -128,7 +128,7 @@ describe('buildExport - họ font (spec §13.1)', () => {
     { weight: '300', style: 'normal', unicodeRange: '', subset: '', assetId: 'cfont300' },
   ];
 
-  async function run(faces: typeof gilroyFaces = gilroyFaces) {
+  async function run(faces: typeof gilroyFaces = gilroyFaces, onProgress?: Parameters<typeof import('./export').buildExport>[2]) {
     vi.resetModules();
     const fontQuery = vi.fn(async () => [{
       slug: 'gilroy', cssName: 'Gilroy', fallback: 'system-ui, sans-serif', source: 'upload', googleFamily: null, licenseNote: 'Mua bản web',
@@ -158,7 +158,7 @@ describe('buildExport - họ font (spec §13.1)', () => {
     vi.doMock('@/lib/assets/s3', () => ({ getObject: async () => new Uint8Array([1, 2, 3]) }));
     vi.doMock('@/lib/site/origin', () => ({ configuredSiteOrigin: async () => null }));
     const { buildExport } = await import('./export');
-    const r = await buildExport('p1', 'a@b.c');
+    const r = await buildExport('p1', 'a@b.c', onProgress);
     return { r, fontQuery };
   }
 
@@ -179,6 +179,13 @@ describe('buildExport - họ font (spec §13.1)', () => {
     // File font đi cùng đường với ảnh: files/<sha256>.<đuôi>.
     expect(r.files.map((f) => f.entry)).toEqual([expect.stringMatching(/^files\/[0-9a-f]{64}\.woff2$/)]);
     expect(r.bundle.tokens.map((t) => t.name)).toEqual(['mau-rieng']);
+  });
+
+  it('báo tiến độ: một lần trước file đầu (0/2) rồi sau mỗi file, lần cuối bằng tổng', async () => {
+    const seen: { done: { files: number; bytes: number }; total: { files: number; bytes: number } }[] = [];
+    await run(gilroyFaces, (p) => seen.push(p));
+    expect(seen.map((p) => p.done.files)).toEqual([0, 1, 2]);
+    expect(seen.at(-1)).toEqual({ done: { files: 2, bytes: 6 }, total: { files: 2, bytes: 6 } });
   });
 
   it('họ đã xoá hết face (R19): không vào fonts[], token font-gilroy đi như token tự tạo thường, gói vẫn hợp lệ', async () => {
