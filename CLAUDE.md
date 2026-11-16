@@ -44,6 +44,7 @@
 - Dải trượt: effect `slider` (part viewport/track/slide/prev/next). Mũi tên của maimoney.com
   không bao giờ mờ ở hai đầu dải.
 - "Xem thêm / Thu gọn": effect `show-more` (part more-toggle / more-panel).
+- Nút lọc theo tham số URL (`/events?place=ha-noi`): effect `filter` gắn lên node bọc cả nút lẫn lưới; nút là Button link mang part `filter-option` (href chứa tham số, "Tất cả" không tham số), mục lặp mang `filter-item`, chữ giá trị trong mục mang `filter-value`. So khớp bỏ dấu/hoa thường. Nút đang chọn style bằng state `filter-active`. Trang site KHÔNG đọc query ở server — lọc chạy ở trình duyệt.
 - Hiện dần khi cuộn (framer `whileInView` của maimoney.com): `scroll-reveal` với `delay` riêng,
   `rootMargin: "0px 0px 0px 0px"` (live kích hoạt ngay khi ló vào), và customCss
   `html[data-reveal-ready="true"] & { opacity: 0; transform: … }` +

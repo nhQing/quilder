@@ -1,6 +1,6 @@
 <!-- SINH TỰ ĐỘNG bởi scripts/gen-docs.ts từ src/lib/motion/effects (EFFECT_REGISTRY + manifest của từng effect). Đừng sửa tay: chạy `pnpm docs:gen`. -->
 
-# Effect (20)
+# Effect (21)
 
 | Key | Gắn vào | Chi phí | Xung đột | State ghi ra | Params |
 |---|---|---|---|---|---|
@@ -9,6 +9,7 @@
 | `counter` | `Text` | light | — | — | `to`, `from?`, `duration?`, `decimals?`, `suffix?`, `prefix?` |
 | `cursor` | — | light | — | — | `hoverSelector?`, `trail?` |
 | `drag-scroll` | — | light | — | `dragging` | `trackPart?`, `itemPart?`, `momentum?`, `snap?` |
+| `filter` | — | light | — | `filter-active`, `filter-inactive` | `param?`, `optionPart?`, `itemPart?`, `valuePart?` |
 | `image-sequence` | `Section` | heavy | `rail-pin` | `seq-ready` | `frames`, `framesNarrow?`, `narrowBelow?`, `framesSuper?`, `superMinPx?`, `folder?`, `span?`, `tail?`, `pinPart?`, `framePart?` |
 | `magnetic` | — | light | `tilt` | `magnetic-active` | `strength?`, `radius?` |
 | `marquee` | — | medium | `slider`, `carousel` | `marquee-ready` | `speed?`, `direction?`, `reverseOnScroll?`, `velocityBoost?` |
