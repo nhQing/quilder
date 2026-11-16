@@ -240,3 +240,23 @@ describe('setOverride.patch — đủ bộ khoá của ContentOverride', () => {
     ).toBe(true);
   });
 });
+
+describe('layout.display — họ table và inline-block (bảng so sánh /maicash)', () => {
+  const withDisplay = (display: string) => ({ ...textNode, type: 'Stack' as const, direction: { base: 'row' }, style: { base: { layout: { display } } } });
+  const { content: _c, tag: _t, ...stackBase } = withDisplay('table');
+
+  it('node mang display bảng là node hợp lệ', () => {
+    for (const d of ['table', 'table-header-group', 'table-row-group', 'table-footer-group', 'table-row', 'table-cell', 'inline-block']) {
+      expect(zNode.safeParse({ ...stackBase, style: { base: { layout: { display: d } } } }).success, d).toBe(true);
+    }
+  });
+
+  it('op setStyle đặt được display bảng (không cần mượn duplicateNode)', () => {
+    expect(zOp.safeParse({ op: 'setStyle', nodeId: 'n1', target: 'base', patch: { layout: { display: 'table-cell' } } }).success).toBe(true);
+  });
+
+  it('giá trị lạ vẫn bị chặn', () => {
+    expect(zNode.safeParse({ ...stackBase, style: { base: { layout: { display: 'table-caption' } } } }).success).toBe(false);
+    expect(zNode.safeParse({ ...stackBase, style: { base: { layout: { display: 'inline' } } } }).success).toBe(false);
+  });
+});

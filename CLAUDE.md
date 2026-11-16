@@ -31,8 +31,12 @@
   có kiểu, `transform`/`opacity`, hoặc selector từ node cha (`&&& > button:disabled {…}`).
 - Button không có con: icon/mũi tên làm bằng `fill.image` (SVG vẽ sẵn trong khung đúng tỉ
   lệ nút), nút có ảnh bên trong thì dựng Stack + nút "link-cover" phủ kín.
-- AI không đặt được `display: table-row`… → `duplicateNode` node sẵn có rồi `moveNode`,
-  tách hai batch (validator không thấy node vừa duplicate trong cùng batch).
+- `layout.display` nhận họ table (`table`, `table-header-group`, `table-row-group`,
+  `table-footer-group`, `table-row`, `table-cell`) và `inline-block` — đặt thẳng bằng `setStyle`. Trước 16/11/2026
+  enum thiếu họ này: phải `duplicateNode` node sẵn có rồi `moveNode` (tách hai batch — validator
+  không thấy node vừa duplicate trong cùng batch), và bản nháp mang nó bị Xuất trang chặn.
+- `htmlId` phải là slug (`a-z0-9-`, bắt đầu bằng chữ). Id camelCase ghi vào bằng đường khác
+  (script, DB) vẫn render nhưng làm Xuất trang báo "Bản nháp không hợp lệ".
 - `get_node` ≤ 20 id, `apply_ops` ≤ 80 op; luôn `dryRun` trước batch lớn.
 - Font thân của site là SF Pro (`--font-body` bị đè), maimoney.com dùng Inter — chủ ý, giữ SF Pro.
 - Header/Footer dùng Instance của component dùng chung; header `fixed` cao 92px nên section

@@ -134,7 +134,18 @@ function makeStyleProps(w: Wrap) {
   return z
     .object({
       layout: group({
-        display: w(z.enum(['flex', 'grid', 'block', 'inline-flex', 'contents', 'none'])),
+        /*
+         * Họ `table*` và `inline-block` có ở đây vì bảng so sánh của /maicash dựng bằng Stack mang
+         * display bảng (cột phải thẳng hàng giữa các hàng — flex/grid từng hàng không làm được), và
+         * logo trong ô là ảnh `inline-block` để `vertical-align` của ô có tác dụng. Renderer phát
+         * `display` nguyên văn nên trang chạy đúng từ đầu, nhưng enum thiếu các giá trị này nên mọi
+         * phép kiểm cả doc (`zDoc`: xuất trang, nhập trang, clone) gọi bản nháp đó là "không hợp
+         * lệ", và AI không đặt được chúng bằng op (phải mượn `duplicateNode`).
+         */
+        display: w(z.enum([
+          'flex', 'grid', 'block', 'inline-flex', 'inline-block', 'contents', 'none',
+          'table', 'table-header-group', 'table-row-group', 'table-footer-group', 'table-row', 'table-cell',
+        ])),
         flexDirection: w(z.enum(['row', 'column', 'row-reverse', 'column-reverse'])),
         gap: w(zLen),
         rowGap: w(zLen),

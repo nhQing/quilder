@@ -78,7 +78,7 @@ import { EmptyState } from './ui/Page';
  * Mọi nút đều có `hint` đi vào tooltip + `aria-label`, nên icon không phải là thông tin
  * duy nhất — WCAG 1.1.1.
  */
-/** `display`: bốn giá trị hay dùng nằm trên dải, hai giá trị còn lại sau nút "…". */
+/** `display`: bốn giá trị hay dùng nằm trên dải, các giá trị còn lại (kể cả họ table) sau nút "…". */
 const DISPLAY = [
   { value: 'block', label: 'block', hint: 'block — khối thường' },
   { value: 'flex', label: 'flex', hint: 'flex — xếp con theo một trục' },
@@ -88,7 +88,15 @@ const DISPLAY = [
 
 const DISPLAY_MORE = [
   { value: 'inline-flex', label: 'inline-flex', hint: 'inline-flex' },
+  { value: 'inline-block', label: 'inline-block', hint: 'inline-block — nằm trên dòng chữ, có kích thước (logo trong ô bảng)' },
   { value: 'contents', label: 'contents', hint: 'contents — bỏ hộp, con lên cấp trên' },
+  // Bảng dựng bằng Stack (bảng so sánh /maicash): khung → nhóm hàng → hàng → ô.
+  { value: 'table', label: 'table', hint: 'table — khung bảng' },
+  { value: 'table-header-group', label: 'table-header-group', hint: 'table-header-group — nhóm hàng tiêu đề' },
+  { value: 'table-row-group', label: 'table-row-group', hint: 'table-row-group — nhóm hàng thân bảng' },
+  { value: 'table-footer-group', label: 'table-footer-group', hint: 'table-footer-group — nhóm hàng cuối' },
+  { value: 'table-row', label: 'table-row', hint: 'table-row — một hàng' },
+  { value: 'table-cell', label: 'table-cell', hint: 'table-cell — một ô' },
 ] as const;
 
 const FLEX_DIRECTION = [
