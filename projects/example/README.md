@@ -11,6 +11,8 @@ projects/<tên>/
   index.ts          defineProject({ name, composites, guideNotes })
   effects.ts        effect riêng: Record<string, Entry> — chạy CẢ ở trình duyệt, chỉ khai
                     import() động, đừng kéo code chỉ-server vào đây
+  forms.ts          bộ nhận form phía server: Record<string, FormHandler> — mở ở
+                    POST /api/forms/<khoá>; secret đọc từ biến môi trường (xem src/lib/project/forms.ts)
   styles.css        @import './styles/index.css'   (đường bundler: canvas builder)
   styles/index.css  CSS của gói, nối SAU CSS lõi    (site công khai, niêm phong khi Publish)
   styles/tokens.css (tuỳ chọn) token tĩnh của gói — `:root { --x: … }`, có thể kèm @media
@@ -56,6 +58,15 @@ export const hello = defineComposite({
 `effects.ts` export `Record<string, Entry>`: `{ 'ten-effect': { load: () => import('./src/effects/x'), gates? } }`.
 Module effect dùng `defineEffect` của lõi (`@/lib/motion/effects/types`). Trùng tên effect lõi
 thì ném lúc nạp. `conflicts` chỉ cần khai MỘT phía — validator đọc cả hai.
+
+## Bộ nhận form (server)
+
+`forms.ts` export `Record<string, FormHandler>`. Lõi mở mỗi khoá ở `POST /api/forms/<khoá>` —
+cùng origin với site, nên Form của builder gửi tới mà không vướng CORS. Đặt URL đầy đủ
+(`https://<domain>/api/forms/<khoá>`) vào Cài đặt › Endpoint rồi chọn khoá đó cho Form.
+Handler trả 2xx = thành công; JSON `{ userMessage, field }` là câu hiện cho khách và ô bị sai.
+Secret đọc từ `process.env` lúc chạy — không đặt trong doc hay globals. Chỉ route server nạp
+file này. `FORMS_ALLOWED_ORIGINS` (tuỳ chọn) giới hạn origin được gửi.
 
 ## CSS
 

@@ -32,6 +32,7 @@ import { RichDocView } from './richdoc';
 import { itemOverrides, type RepeatItem } from '@/lib/collections/repeat';
 import { EFFECT_ASSET_PARAMS } from '@/lib/builder/asset-refs';
 import { Form } from '@/lib/composites/Form';
+import { resolveHiddenValue } from '@/lib/composites/form-hidden';
 import { Accordion } from '@/lib/composites/Accordion';
 import { NavChart } from '@/lib/composites/NavChart';
 import type { AccordionParams, FormParams, NavChartParams } from '@/lib/composites/registry';
@@ -558,6 +559,12 @@ function renderComposite(
       <div {...props} data-composite={node.composite}>
         <Form
           {...params}
+          // Ô ẩn: thay chỗ giữ chỗ ({entry.title}…) bằng bài đang mở — xem form-hidden.ts.
+          fields={params.fields.map((f) =>
+            f.kind === 'hidden' ? { ...f, value: resolveHiddenValue(f.value, ctx.scope) } : f,
+          )}
+          // Site key công khai của captcha: biến môi trường lúc chạy, không nằm trong doc.
+          captchaSiteKey={params.captcha === 'turnstile' ? process.env.TURNSTILE_SITE_KEY || null : null}
           action={siteEndpoint(ctx.scope.site, params.endpointKey)}
           heading={<Slot ids={node.slots.heading} renderChild={renderChild} />}
           note={<Slot ids={node.slots.note} renderChild={renderChild} />}

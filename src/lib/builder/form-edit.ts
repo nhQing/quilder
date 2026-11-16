@@ -43,6 +43,7 @@ export const FIELD_KINDS: { kind: FieldKind; label: string; defaultLabel: string
   { kind: 'textarea', label: 'Đoạn văn', defaultLabel: 'Lời nhắn' },
   { kind: 'select', label: 'Danh sách chọn', defaultLabel: 'Chọn một mục' },
   { kind: 'checkbox', label: 'Ô đánh dấu', defaultLabel: 'Tôi đồng ý' },
+  { kind: 'hidden', label: 'Ô ẩn (gửi kèm)', defaultLabel: 'Sự kiện' },
 ];
 
 /** `autocomplete` mặc định — trình duyệt điền sẵn đúng thứ khách đã lưu. */
@@ -109,6 +110,8 @@ export function addField(params: unknown, kind: FieldKind): FormEdit {
     required: false,
     ...(AUTOCOMPLETE[kind] ? { autocomplete: AUTOCOMPLETE[kind] } : {}),
     ...(kind === 'select' ? { options: DEFAULT_OPTIONS.map((o) => ({ ...o })) } : {}),
+    // Ô ẩn không có giá trị không qua schema nghiêm — gợi ý sẵn tên bài/sự kiện đang mở.
+    ...(kind === 'hidden' ? { value: '{entry.title}' } : {}),
   };
   return finish({ ...rawOf(params), fields: [...fields, field] });
 }

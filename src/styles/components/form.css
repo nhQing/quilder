@@ -120,6 +120,16 @@
   display: none;
 }
 
+/* Ô bị nơi nhận báo sai (`{ field }` trong phản hồi) — xem `serverNotice` ở Form.tsx. */
+.mm-form__input[aria-invalid='true'] {
+  border-color: var(--color-accent);
+}
+
+/* Ô captcha rỗng (chưa nạp script) không chiếm chỗ. */
+.mm-form__captcha:empty {
+  display: none;
+}
+
 .mm-form[data-status='error'] .mm-form__status {
   color: var(--color-accent);
 }

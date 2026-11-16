@@ -53,7 +53,7 @@ const formField = z.object({
    * (`field-def.ts`: `^[a-z][a-z0-9_]*$`) để hai chỗ không lệch quy ước.
    */
   name: z.string().regex(/^[a-z][a-z0-9_]*$/, 'tên trường: a-z, 0-9, _').max(40),
-  kind: z.enum(['text', 'email', 'tel', 'number', 'textarea', 'select', 'checkbox']),
+  kind: z.enum(['text', 'email', 'tel', 'number', 'textarea', 'select', 'checkbox', 'hidden']),
   label: z.string().min(1).max(120),
   placeholder: z.string().max(120).optional(),
   required: z.boolean().default(false),
@@ -66,6 +66,13 @@ const formField = z.object({
   help: z.string().max(200).optional(),
   /** Giá trị `autocomplete` của HTML, ví dụ "email", "tel", "name". */
   autocomplete: z.string().max(40).optional(),
+  /**
+   * Chỉ `hidden`: giá trị gửi kèm mà khách không thấy (vd tên sự kiện của trang). Nhận
+   * hai chỗ giữ chỗ, thay ở server lúc render: `{entry.title}` và `{entry.slug}` — bài /
+   * sự kiện đang mở trên trang chi tiết; `{page.path}` — đường dẫn trang. Trang không có
+   * bài đang mở thì chỗ giữ chỗ thành chuỗi rỗng.
+   */
+  value: z.string().max(200).optional(),
 });
 
 /** Trần số ô của một form — schema dùng, và sidebar dùng để tắt nút "Thêm ô". */
@@ -161,6 +168,14 @@ const formObject = z
      * (xem `resolveAfterSubmit`) để form cũ chạy y như cũ mà không cần migrate dữ liệu.
      */
     afterSubmit: z.enum(['inline', 'dialog', 'panel']).optional(),
+    /**
+     * Captcha trước nút gửi. `turnstile` = Cloudflare Turnstile; site key đọc từ biến môi
+     * trường `TURNSTILE_SITE_KEY` của server lúc render (không nằm trong doc: đổi key là
+     * việc vận hành, không phải sửa nội dung). Token đi kèm body ở khoá
+     * `cf-turnstile-response`; nơi nhận PHẢI tự xác minh với Cloudflare. Thiếu site key
+     * thì form hiện tắt kèm dòng báo, như thiếu endpoint.
+     */
+    captcha: z.enum(['turnstile']).optional(),
   });
 
 const formParams = formObject.catch(FORM_DEFAULTS);
@@ -175,6 +190,13 @@ const formParams = formObject.catch(FORM_DEFAULTS);
  */
 const formStrict = formObject.superRefine((p, ctx) => {
   p.fields.forEach((f, i) => {
+    if (f.kind === 'hidden' && !f.value) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['fields', i, 'value'],
+        message: 'ô ẩn cần giá trị (vd "{entry.title}") — không thì nó luôn gửi chuỗi rỗng',
+      });
+    }
     // Hai lựa chọn cùng giá trị: BE nhận một giá trị mà không biết khách chọn dòng nào.
     const values = (f.options ?? []).map((o) => o.value);
     if (new Set(values).size !== values.length) {

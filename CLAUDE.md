@@ -89,6 +89,8 @@
 - Form `afterSubmit` (`inline`|`panel`|`dialog`): `dialog` dùng slot `success` / `error` cho nội dung hộp thoại; form cũ không có `afterSubmit` giữ hành vi cũ.
 - Form hệ thống (`mau-form`, `system` ≠ null) chỉ nhân bản: `duplicate_component` / chèn như bản sao; sửa/xoá/PATCH/ops → 409 `Mẫu hệ thống — nhân bản rồi sửa bản sao.`; chèn Instance của nó vào trang → 422 (`SYSTEM_PRESET_INSTANCE_REFUSAL`).
 - Bản sao Form bắt đầu KHÔNG có nơi nhận (`endpointKey: ''`); URL nhận dữ liệu đặt ở sidebar do admin — AI không tạo/đặt được URL mới, chỉ gán `endpointKey` là khoá ĐÃ CÓ trong `Site.globals.endpoint`; chưa có thì báo người dùng.
+- Form: kiểu ô `hidden` (giá trị `{entry.title}` / `{entry.slug}` / `{page.path}`, thay ở server), `captcha: "turnstile"` (site key từ env `TURNSTILE_SITE_KEY`), và nơi nhận trả JSON `{ userMessage, field }` thì form hiện đúng câu đó và đánh dấu ô sai.
+- Nơi nhận form cần secret: gói dự án khai `forms.ts` (`Record<string, FormHandler>`), lõi mở `POST /api/forms/<khoá>`; endpoint của Form là URL đầy đủ của chính site. MaiMoney: `dang-ky-su-kien` (Graph + SendGrid + Turnstile), env xem README của gói.
 - Font động (Cài đặt › Font): gán bằng `typography.family: {$token:'font-<slug>'}`; font mới chỉ lên site thật sau Publish (release niêm phong font), bản nháp thì thấy ngay. Font GỐC của gói (`source: 'pack'`, quét từ `styles/fonts.css` ra `generated/pack-fonts/<gói>.json`) chỉ đọc: không xoá/thay, không tải trùng tên.
 - Chạy thử local với dữ liệu MaiMoney cần `QUILDER_PROJECT=maimoney`, nếu không header/menu
   của gói dự án không nạp và trông như "chưa dịch".

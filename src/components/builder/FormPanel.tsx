@@ -627,7 +627,18 @@ function FieldEditor({
         onCommit={(v) => onPatch({ label: v }, 'label')}
         onUnchanged={() => onUnchanged('label')}
       />
-      {field.kind !== 'checkbox' && (
+      {field.kind === 'hidden' && (
+        <CommitText
+          label="Giá trị gửi kèm"
+          value={str(field.value)}
+          disabled={locked}
+          error={at('value')}
+          hint="Khách không thấy ô này. {entry.title} = tên bài/sự kiện đang mở, {entry.slug} = đường dẫn của nó, {page.path} = đường dẫn trang."
+          onCommit={(v) => onPatch({ value: v || undefined }, 'value')}
+          onUnchanged={() => onUnchanged('value')}
+        />
+      )}
+      {field.kind !== 'checkbox' && field.kind !== 'hidden' && (
         <CommitText
           label="Chữ gợi ý"
           value={str(field.placeholder)}

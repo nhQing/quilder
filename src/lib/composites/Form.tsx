@@ -82,6 +82,62 @@ export interface FormProps extends FormParams {
    * tương ứng bằng CSS chèn vào khung (`formPreviewCss`), không cần nạp lại trang.
    */
   canvasPreview?: boolean;
+  /**
+   * Site key Turnstile khi `captcha = 'turnstile'`, đọc từ biến môi trường của server lúc
+   * render. `null` khi form có captcha mà server chưa đặt key: form hiện tắt kèm dòng báo.
+   */
+  captchaSiteKey?: string | null;
+}
+
+/** Script Turnstile — nạp một lần cho cả trang, chế độ `render=explicit`. */
+const TURNSTILE_SRC = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
+
+interface TurnstileApi {
+  render: (el: HTMLElement, opts: Record<string, unknown>) => string;
+  reset: (id?: string) => void;
+  remove: (id: string) => void;
+}
+
+let turnstileLoading: Promise<TurnstileApi> | null = null;
+
+function loadTurnstile(): Promise<TurnstileApi> {
+  const w = window as unknown as { turnstile?: TurnstileApi };
+  if (w.turnstile) return Promise.resolve(w.turnstile);
+  turnstileLoading ??= new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = TURNSTILE_SRC;
+    s.async = true;
+    s.defer = true;
+    s.onload = () => (w.turnstile ? resolve(w.turnstile) : reject(new Error('turnstile')));
+    s.onerror = () => {
+      turnstileLoading = null;
+      reject(new Error('turnstile'));
+    };
+    document.head.append(s);
+  });
+  return turnstileLoading;
+}
+
+/**
+ * Câu báo cho KHÁCH mà nơi nhận gửi kèm (`{ userMessage, field }`).
+ *
+ * Chỉ đọc khoá `userMessage` — khoá có tên riêng nói rõ "câu này viết cho người dùng
+ * cuối", nên nơi nhận phải chủ động đặt nó. Mọi khoá khác (`error`, `message`, stack) bị
+ * bỏ qua: chúng có thể mang chi tiết nội bộ. Trần độ dài chặn một nơi nhận lỗi đổ cả
+ * trang HTML vào ô báo.
+ */
+export async function serverNotice(res: Response): Promise<{ message?: string; field?: string }> {
+  try {
+    const body = (await res.json()) as { userMessage?: unknown; field?: unknown };
+    const message =
+      typeof body.userMessage === 'string' && body.userMessage.trim() && body.userMessage.length <= 300
+        ? body.userMessage.trim()
+        : undefined;
+    const field = typeof body.field === 'string' && /^[a-z][a-z0-9_]*$/.test(body.field) ? body.field : undefined;
+    return { message, field };
+  } catch {
+    return {};
+  }
 }
 
 function inputMode(kind: FormFieldDef['kind']): 'email' | 'tel' | 'numeric' | undefined {
@@ -106,6 +162,8 @@ export function Form({
   success,
   error,
   canvasPreview = false,
+  captcha,
+  captchaSiteKey = null,
 }: FormProps) {
   const uid = useId();
   const [status, setStatus] = useState<Status>('idle');
@@ -126,6 +184,43 @@ export function Form({
   const submitRef = useRef<HTMLButtonElement>(null);
   /** Hộp thoại đang hiện kết quả nào; `null` = đóng (và slot không mount). */
   const [shown, setShown] = useState<'success' | 'error' | null>(null);
+  /** Câu báo riêng của nơi nhận (thay `successMessage` / `errorMessage`) và ô bị báo sai. */
+  const [notice, setNotice] = useState<string | null>(null);
+  const [invalidField, setInvalidField] = useState<string | null>(null);
+
+  /*
+   * Captcha. Widget dựng bằng JS (render=explicit) SAU hydrate — HTML server chỉ có ô
+   * chứa trống, nên không lệch hydrate. Widget tự chèn `<input name="cf-turnstile-response">`
+   * vào ô chứa nằm TRONG form, nên `FormData` mang token đi mà không cần state.
+   * Không dựng trong khung builder: ở đó không ai gửi form.
+   */
+  const needsCaptcha = captcha === 'turnstile';
+  const captchaRef = useRef<HTMLDivElement>(null);
+  const widgetId = useRef<string | null>(null);
+  useEffect(() => {
+    if (!needsCaptcha || !captchaSiteKey || canvasPreview) return;
+    let cancelled = false;
+    loadTurnstile()
+      .then((ts) => {
+        if (cancelled || !captchaRef.current || widgetId.current) return;
+        widgetId.current = ts.render(captchaRef.current, { sitekey: captchaSiteKey, language: 'vi' });
+      })
+      .catch(() => {
+        /* Không tải được script: nơi nhận sẽ từ chối vì thiếu token, form báo lỗi chung. */
+      });
+    return () => {
+      cancelled = true;
+      const ts = (window as unknown as { turnstile?: TurnstileApi }).turnstile;
+      if (ts && widgetId.current) ts.remove(widgetId.current);
+      widgetId.current = null;
+    };
+  }, [needsCaptcha, captchaSiteKey, canvasPreview]);
+
+  /** Token Turnstile chỉ dùng được MỘT lần — xin token mới sau mỗi lượt gửi. */
+  const resetCaptcha = () => {
+    const ts = (window as unknown as { turnstile?: TurnstileApi }).turnstile;
+    if (ts && widgetId.current) ts.reset(widgetId.current);
+  };
 
   // `showModal()` cho focus trap, Esc và lớp nền của trình duyệt — không tự dựng lại.
   useEffect(() => {
@@ -146,11 +241,14 @@ export function Form({
     submitRef.current?.focus();
   };
 
-  const disabled = !action || status === 'sending';
+  const captchaMissing = needsCaptcha && !captchaSiteKey;
+  const disabled = !action || captchaMissing || status === 'sending';
 
   const onSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!action) return;
+    if (!action || captchaMissing) return;
+    setNotice(null);
+    setInvalidField(null);
 
     const form = event.currentTarget;
     const data = new FormData(form);
@@ -183,7 +281,13 @@ export function Form({
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(Object.fromEntries(data)),
       });
-      if (!res.ok) throw new Error(String(res.status));
+      const { message, field } = await serverNotice(res);
+      if (!res.ok) {
+        setNotice(message ?? null);
+        setInvalidField(field ?? null);
+        throw new Error(String(res.status));
+      }
+      setNotice(message ?? null);
       setStatus('ok');
       if (mode === 'dialog') setShown('success');
       // Báo cho modal bao ngoài (nếu có) chuyển sang panel cảm ơn — xem `successPanel`.
@@ -197,6 +301,8 @@ export function Form({
       // trang đã duyệt.
       setStatus('error');
       if (mode === 'dialog') setShown('error');
+    } finally {
+      if (needsCaptcha) resetCaptcha();
     }
   };
 
@@ -215,12 +321,16 @@ export function Form({
         {fields.map((f) => {
           const id = `${uid}-${f.name}`;
           const helpId = f.help ? `${id}-help` : undefined;
+          if (f.kind === 'hidden') {
+            return <input key={f.name} type="hidden" name={f.name} value={f.value ?? ''} />;
+          }
           const common = {
             id,
             name: f.name,
             required: f.required,
             disabled,
             'data-part': `field-${f.name}`,
+            ...(invalidField === f.name ? { 'aria-invalid': true as const } : {}),
             ...(helpId ? { 'aria-describedby': helpId } : {}),
             ...(f.autocomplete ? { autoComplete: f.autocomplete } : {}),
           };
@@ -298,6 +408,10 @@ export function Form({
           />
         </div>
 
+        {needsCaptcha && !canvasPreview && (
+          <div ref={captchaRef} className="mm-form__captcha" data-part="captcha" />
+        )}
+
         <button
           ref={submitRef}
           type="submit"
@@ -315,7 +429,13 @@ export function Form({
         */}
         <p className="mm-form__status" data-part="status" role="status" aria-live="polite">
           {/* Chế độ dialog: kết quả nằm trong hộp thoại, đọc hai lần là ồn. */}
-          {mode === 'dialog' ? '' : status === 'ok' ? successMessage : status === 'error' ? errorMessage : ''}
+          {mode === 'dialog'
+            ? ''
+            : status === 'ok'
+              ? (notice ?? successMessage)
+              : status === 'error'
+                ? (notice ?? errorMessage)
+                : ''}
         </p>
 
         {!action && (
@@ -328,6 +448,11 @@ export function Form({
               </>
             ) : null}
             .
+          </p>
+        )}
+        {action && captchaMissing && (
+          <p className="mm-form__misconfig" data-part="misconfig">
+            Form bật captcha nhưng server chưa đặt <code>TURNSTILE_SITE_KEY</code>.
           </p>
         )}
       </form>
