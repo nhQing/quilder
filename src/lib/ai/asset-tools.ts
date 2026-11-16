@@ -22,6 +22,7 @@ import { z } from 'zod';
 
 import { normalizeFolder } from '@/lib/assets/folder';
 import { listFolders } from '@/lib/builder/asset-folders';
+import { renameAsset, replaceAsset } from '@/lib/builder/replace-asset';
 import { MAX_ASSET_BYTES, uploadAsset } from '@/lib/builder/upload-asset';
 import { prisma } from '@/lib/db';
 import type { ToolContext, ToolDef } from './tools';
@@ -146,7 +147,7 @@ const listAssetsTool: ToolDef = {
   name: 'list_assets',
   title: 'Ảnh đang có',
   description:
-    'Liệt kê ảnh trong kho, mới nhất trước.\n\n' +
+    'Liệt kê ảnh trong kho, mới nhất trước. `q` lọc theo tên file/URL.\n\n' +
     'Gọi nó TRƯỚC khi tải ảnh mới: ảnh cần dùng có thể đã có sẵn, và tải lại chỉ ' +
     'tạo thêm một bản trùng để người dùng phải phân biệt.\n\n' +
     '`folder` lọc theo NHÁNH: `trang-chu` trả cả `trang-chu/hero`.',
@@ -154,10 +155,16 @@ const listAssetsTool: ToolDef = {
     .object({
       limit: z.number().int().min(1).max(200).default(50),
       folder: z.string().max(120).optional().describe('Chỉ ảnh trong nhánh thư mục này.'),
+      q: z
+        .string()
+        .min(1)
+        .max(120)
+        .optional()
+        .describe('Lọc theo tên file hoặc URL (khớp một phần, không phân biệt hoa thường), vd "cdn-dev" hay "google-play".'),
     })
     .strict(),
   readOnly: true,
-  async run(input: { limit: number; folder?: string }) {
+  async run(input: { limit: number; folder?: string; q?: string }) {
     const folder = normalizeFolder(input.folder);
     if (!folder.ok) return { ok: false, error: folder.error };
 
@@ -166,6 +173,18 @@ const listAssetsTool: ToolDef = {
         trashedAt: null,
         ...(folder.value
           ? { OR: [{ folder: folder.value }, { folder: { startsWith: `${folder.value}/` } }] }
+          : {}),
+        ...(input.q
+          ? {
+              AND: [
+                {
+                  OR: [
+                    { key: { contains: input.q, mode: 'insensitive' as const } },
+                    { url: { contains: input.q, mode: 'insensitive' as const } },
+                  ],
+                },
+              ],
+            }
           : {}),
       },
       orderBy: { createdAt: 'desc' },
@@ -211,4 +230,116 @@ const listAssetFoldersTool: ToolDef = {
   },
 };
 
-export const ASSET_TOOLS: ToolDef[] = [uploadAssetTool, listAssetsTool, listAssetFoldersTool];
+
+/**
+ * Thay file của một ảnh mà giữ nguyên assetId — luật ở `builder/replace-asset.ts`.
+ * `filePath` bị `mcp/server.mjs` bắt tại chỗ (POST multipart vào /api/assets/<id>/replace),
+ * cùng lý do với `upload_asset`.
+ */
+const replaceAssetTool: ToolDef = {
+  name: 'replace_asset',
+  title: 'Thay file ảnh',
+  description:
+    'Thay FILE của một ảnh đang có trong kho, GIỮ NGUYÊN assetId: mọi node, component và bài ' +
+    'viết đang dùng ảnh đó nhận file mới cùng lúc, không phải gắn lại từng chỗ.\n\n' +
+    'ƯU TIÊN `filePath` (file trên máy người dùng, không đi qua hội thoại); `sourceUrl` khi ảnh ' +
+    'ở trên web; `bytesBase64` chỉ cho file rất nhỏ.\n\n' +
+    '`name` (tuỳ chọn) đổi luôn tên file. Không có thì giữ tên cũ, đuôi theo file mới.\n\n' +
+    'Ảnh trong cây node của trang lên site thật sau lần Publish kế tiếp; ảnh của bài viết ' +
+    '(ảnh bìa, thumbnail) đổi trên site NGAY. File cũ vẫn giữ trên CDN cho các release cũ.\n\n' +
+    'Ảnh ↔ SVG thay chéo được; video chỉ thay bằng video. Font không thay bằng tool này.',
+  input: z
+    .object({
+      assetId: z.string().min(1).max(64),
+      filePath: z.string().optional().describe('Đường dẫn trên máy người dùng. Ưu tiên dùng cái này.'),
+      sourceUrl: z.string().url().optional().describe('Tải file mới từ URL này.'),
+      bytesBase64: z.string().optional().describe('Chỉ cho file rất nhỏ. Tối đa 256 KB.'),
+      name: z.string().max(120).optional().describe('Tên mới cho ảnh (tuỳ chọn).'),
+    })
+    .strict(),
+  readOnly: false,
+  async run(
+    input: { assetId: string; filePath?: string; sourceUrl?: string; bytesBase64?: string; name?: string },
+    ctx: ToolContext,
+  ) {
+    let bytes: Uint8Array;
+    let fileName = '';
+    if (input.sourceUrl) {
+      let res: Response;
+      try {
+        res = await fetch(input.sourceUrl);
+      } catch (e) {
+        return { ok: false, error: `Không tải được ${input.sourceUrl}: ${String(e)}` };
+      }
+      if (!res.ok) return { ok: false, error: `Tải ${input.sourceUrl} trả về ${res.status}` };
+      const buf = new Uint8Array(await res.arrayBuffer());
+      if (buf.length > MAX_ASSET_BYTES) {
+        return { ok: false, error: `File ở URL đó vượt ${MAX_ASSET_BYTES / 1024 / 1024} MB` };
+      }
+      bytes = buf;
+      fileName = new URL(input.sourceUrl).pathname.split('/').pop() ?? '';
+    } else if (input.bytesBase64) {
+      const buf = Buffer.from(input.bytesBase64, 'base64');
+      if (buf.length > MAX_BASE64_BYTES) {
+        return { ok: false, error: `Nhánh base64 chỉ nhận tối đa ${MAX_BASE64_BYTES / 1024} KB. Dùng filePath hoặc sourceUrl.` };
+      }
+      bytes = new Uint8Array(buf);
+    } else if (input.filePath) {
+      return {
+        ok: false,
+        error: 'filePath chỉ dùng được qua MCP server chạy trên máy bạn. Ở đây hãy dùng sourceUrl hoặc bytesBase64.',
+      };
+    } else {
+      return { ok: false, error: 'Cần một trong: filePath, sourceUrl, bytesBase64' };
+    }
+
+    const r = await replaceAsset({ assetId: input.assetId, bytes, fileName, name: input.name, actorSub: ctx.session.sub });
+    if (!r.ok) return { ok: false, error: r.error, ...(r.existingAssetId ? { existingAssetId: r.existingAssetId } : {}) };
+    return {
+      ok: true,
+      ...r.asset,
+      assetId: r.asset.id,
+      note: r.asset.unchanged
+        ? 'File mới giống hệt file đang có — không có gì thay đổi.'
+        : 'Đã thay. Ảnh trên trang lên site sau lần Publish kế tiếp; ảnh của bài viết đổi ngay.',
+    };
+  },
+};
+
+const renameAssetTool: ToolDef = {
+  name: 'rename_asset',
+  title: 'Đổi tên ảnh',
+  description:
+    'Đổi tên file của một ảnh, GIỮ NGUYÊN assetId và nội dung. URL đổi theo tên mới ' +
+    '(`…/<tên-mới>-<băm>.<đuôi>`); mọi chỗ đang dùng ảnh tự theo.\n\n' +
+    'Tên không kèm đuôi thì giữ đuôi cũ. Dấu tiếng Việt và khoảng trắng được chuẩn hoá ' +
+    '("Điện thoại MaiGreen" → `dien-thoai-maigreen.png`).\n\n' +
+    'File được ghi vào bucket ĐANG CẤU HÌNH, nên đổi tên một ảnh nằm ở CDN khác (vd cdn-dev ' +
+    'trên builder production) cũng chuyển nó sang CDN hiện tại. Ảnh trong cây node lên site ' +
+    'sau lần Publish kế tiếp; ảnh của bài viết đổi ngay.',
+  input: z
+    .object({
+      assetId: z.string().min(1).max(64),
+      name: z.string().min(1).max(120).describe('Tên mới, vd "dien-thoai-maigreen" hoặc "hero.png".'),
+    })
+    .strict(),
+  readOnly: false,
+  async run(input: { assetId: string; name: string }, ctx: ToolContext) {
+    const r = await renameAsset({ assetId: input.assetId, name: input.name, actorSub: ctx.session.sub });
+    if (!r.ok) return { ok: false, error: r.error, ...(r.existingAssetId ? { existingAssetId: r.existingAssetId } : {}) };
+    return {
+      ok: true,
+      ...r.asset,
+      assetId: r.asset.id,
+      note: r.asset.unchanged ? 'Tên mới trùng tên hiện tại — không có gì thay đổi.' : 'Đã đổi tên.',
+    };
+  },
+};
+
+export const ASSET_TOOLS: ToolDef[] = [
+  uploadAssetTool,
+  replaceAssetTool,
+  renameAssetTool,
+  listAssetsTool,
+  listAssetFoldersTool,
+];

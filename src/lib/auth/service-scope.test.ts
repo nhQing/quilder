@@ -43,6 +43,11 @@ describe('serviceMayReach', () => {
     // `/api/ai/tool` mở không có nghĩa là `/api/ai/tool-admin` mở theo.
     expect(serviceMayReach('/api/ai/tool-x', 'POST')).toBe(false);
     expect(serviceMayReach('/api/assets/purge', 'POST')).toBe(false);
+    // replace_asset với filePath: chỉ POST vào đúng /api/assets/<id>/replace.
+    expect(serviceMayReach('/api/assets/cmabc123/replace', 'POST')).toBe(true);
+    expect(serviceMayReach('/api/assets/cmabc123/replace', 'GET')).toBe(false);
+    expect(serviceMayReach('/api/assets/cmabc123', 'PATCH')).toBe(false);
+    expect(serviceMayReach('/api/assets/../users/replace', 'POST')).toBe(false);
     expect(serviceMayReach('/api/assets/trash', 'POST')).toBe(false);
     // Không có dấu `/` sau tiền tố thì không phải trang preview.
     expect(serviceMayReach('/previewx', 'GET')).toBe(false);

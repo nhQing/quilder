@@ -26,6 +26,8 @@ export function serviceMayReach(pathname: string, method: string): boolean {
   // upload_asset với `filePath`: proxy tự POST multipart vì byte ảnh không được
   // đi qua context của model. Xem `uploadLocalFile` trong mcp/server.mjs.
   if (pathname === '/api/assets') return method === 'POST';
+  // replace_asset với `filePath`: cùng lý do — proxy POST multipart file mới vào đúng ảnh.
+  if (/^\/api\/assets\/[A-Za-z0-9_-]{1,64}\/replace$/.test(pathname)) return method === 'POST';
   // upload_font với `filePath`: cùng lý do như /api/assets, byte font không đi qua context.
   // GET để list_fonts đọc danh sách. Sửa/xoá họ font KHÔNG mở cho máy.
   if (pathname === '/api/fonts') return method === 'POST' || method === 'GET';

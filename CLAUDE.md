@@ -94,4 +94,9 @@
 - Font động (Cài đặt › Font): gán bằng `typography.family: {$token:'font-<slug>'}`; font mới chỉ lên site thật sau Publish (release niêm phong font), bản nháp thì thấy ngay. Font GỐC của gói (`source: 'pack'`, quét từ `styles/fonts.css` ra `generated/pack-fonts/<gói>.json`) chỉ đọc: không xoá/thay, không tải trùng tên.
 - Chạy thử local với dữ liệu MaiMoney cần `QUILDER_PROJECT=maimoney`, nếu không header/menu
   của gói dự án không nạp và trông như "chưa dịch".
+- Thay file ảnh mà GIỮ assetId: `replace_asset` (filePath/sourceUrl/bytesBase64, tuỳ chọn `name`);
+  đổi tên: `rename_asset`. Cả hai ghi object MỚI dưới khoá mới, không xoá object cũ (release cũ
+  vẫn trỏ được). Ảnh trong cây node lên site sau Publish; ảnh của bài viết đổi NGAY. Tìm ảnh theo
+  tên/URL: `list_assets {q}`. Không có `sizes` thì ảnh dùng mặc định `(max-width: <gốc>px) 100vw,
+  <gốc>px` — ảnh biết rõ khung hiển thị thì đặt `sizes` riêng (setProps).
 - Không publish; người dùng tự bấm Publish sau khi xem bản nháp.

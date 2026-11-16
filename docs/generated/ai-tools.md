@@ -1,6 +1,6 @@
 <!-- SINH TỰ ĐỘNG bởi scripts/gen-docs.ts từ src/lib/ai/tools.ts (TOOLS). Đừng sửa tay: chạy `pnpm docs:gen`. -->
 
-# Tool AI (44, trong đó 17 tool ghi)
+# Tool AI (46, trong đó 19 tool ghi)
 
 Phục vụ qua `GET/POST /api/ai/tool`; `mcp/server.mjs` thêm `screenshot_page` chạy tại chỗ. **Không có tool publish, rollback hay xoá** — e2e/mcp.spec.ts khoá điều đó.
 
@@ -33,7 +33,9 @@ Phục vụ qua `GET/POST /api/ai/tool`; `mcp/server.mjs` thêm `screenshot_page
 | `list_locales` | đọc | — | Mã ngôn ngữ hợp lệ của site này. Gọi nó TRƯỚC `set_translation` hoặc `set_entry_locale` thay vì đoán mã. |
 | `get_draft_diff` | đọc | `pageId?` | So bản nháp với bản đang chạy trên site: trang nào mới, node nào thêm/mất, chữ nào đổi. |
 | `upload_asset` | **ghi** | `filePath?`, `sourceUrl?`, `bytesBase64?`, `fileName?`, `folder?` | Tải một ảnh lên kho asset và trả về assetId để gắn vào node Image. |
-| `list_assets` | đọc | `limit?`, `folder?` | Liệt kê ảnh trong kho, mới nhất trước. |
+| `replace_asset` | **ghi** | `assetId`, `filePath?`, `sourceUrl?`, `bytesBase64?`, `name?` | Thay FILE của một ảnh đang có trong kho, GIỮ NGUYÊN assetId: mọi node, component và bài viết đang dùng ảnh đó nhận file mới cùng lúc, không phải gắn lại từng chỗ. |
+| `rename_asset` | **ghi** | `assetId`, `name` | Đổi tên file của một ảnh, GIỮ NGUYÊN assetId và nội dung. URL đổi theo tên mới (`…/<tên-mới>-<băm>.<đuôi>`); mọi chỗ đang dùng ảnh tự theo. |
+| `list_assets` | đọc | `limit?`, `folder?`, `q?` | Liệt kê ảnh trong kho, mới nhất trước. `q` lọc theo tên file/URL. |
 | `list_asset_folders` | đọc | — | Liệt kê thư mục ảo trong kho ảnh, kèm số ảnh mỗi thư mục. |
 | `list_fonts` | đọc | — | Liệt kê các họ font của site: tên CSS, token, nguồn (builtin \| pack \| upload \| google), các face, fallback, nơi đang dùng (`usage`: trang, component, và `variables` — biến CSS như `--font-body` nhắc tên họ trong Token hoặc CSS của gói), cảnh báo và cờ chưa publish. |
 | `upload_font` | **ghi** | `filePath?`, `sourceUrl?`, `google?`, `family?`, `weight?`, `style?`, `fallback?`, `licenseConfirmed?`, `licenseNote?`, `dryRun?` | Thêm một face font vào kho font. Đúng MỘT nguồn trong ba: `filePath` (file trên máy người dùng, MCP server đọc tại chỗ), `sourceUrl` (server tải về) hoặc `google` ({ family, weights?, italic? } — lấy từ Google Fonts, không cần xác nhận giấy phép). |

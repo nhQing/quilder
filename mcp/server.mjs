@@ -1182,6 +1182,46 @@ async function uploadBuffer(bytes, fileName, folder) {
 }
 
 /**
+ * `replace_asset` với `filePath`: đọc file trên máy này rồi POST multipart vào
+ * `/api/assets/<assetId>/replace`. Cùng lý lẽ với `uploadLocalFile`; `name` phải append tay.
+ */
+async function replaceLocalFile(args) {
+  const { readFile } = await import('node:fs/promises');
+  const { basename } = await import('node:path');
+  if (typeof args.assetId !== 'string' || !/^[A-Za-z0-9_-]{1,64}$/.test(args.assetId)) {
+    throw new Error('replace_asset cần assetId hợp lệ.');
+  }
+  let bytes;
+  try {
+    bytes = await readFile(args.filePath);
+  } catch (error) {
+    throw new Error(`Không đọc được file ${args.filePath}. (${error.message})`);
+  }
+  const form = new FormData();
+  form.append('file', new Blob([bytes]), basename(args.filePath));
+  if (typeof args.name === 'string' && args.name.trim()) form.append('name', args.name.trim());
+
+  const response = await fetch(`${BASE}/api/assets/${encodeURIComponent(args.assetId)}/replace`, {
+    method: 'POST',
+    headers: { authorization: `Bearer ${TOKEN}`, 'x-mm-client': String(CLIENT_VERSION) },
+    body: form,
+  });
+  const text = await response.text();
+  if (!response.ok) {
+    let message = text;
+    try {
+      const parsed = JSON.parse(text);
+      message = parsed.error ?? text;
+      if (parsed.existingAssetId) message = `${message} (existingAssetId: ${parsed.existingAssetId})`;
+    } catch {
+      // Không phải JSON thì dùng nguyên văn.
+    }
+    throw new Error(`Thay ảnh thất bại (${response.status}): ${message}`);
+  }
+  return JSON.parse(text);
+}
+
+/**
  * `upload_font` với `filePath`: đọc file font trên máy này rồi POST multipart vào `/api/fonts`.
  * Cùng lý lẽ với `uploadLocalFile` (byte không đi qua context, không dùng `call()` vì boundary
  * do FormData sinh). Mọi tham số phải append tay — tham số nào quên là tham số biến mất.
@@ -1243,6 +1283,28 @@ async function callTool(params) {
   if (name === 'upload_font' && args.filePath) {
     const result = await uploadLocalFont(args);
     return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+  }
+
+  if (name === 'replace_asset' && args.filePath) {
+    const { asset } = await replaceLocalFile(args);
+    return {
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify(
+            {
+              ...asset,
+              assetId: asset.id,
+              note: asset.unchanged
+                ? 'File mới giống hệt file đang có — không có gì thay đổi.'
+                : 'Đã thay, assetId giữ nguyên. Ảnh trên trang lên site sau lần Publish kế tiếp; ảnh của bài viết đổi ngay.',
+            },
+            null,
+            2,
+          ),
+        },
+      ],
+    };
   }
 
   if (name === 'upload_asset' && args.filePath) {
