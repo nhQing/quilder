@@ -795,6 +795,7 @@ export function NodeRenderer({ nodeId, ctx }: { nodeId: NodeId; ctx: RenderConte
             alt={node.decorative ? '' : alt}
             width={asset.width}
             height={asset.height}
+            sizes={node.sizes}
             priority={priority}
             unoptimized={isVector(asset)}
             {...(node.decorative ? { 'aria-hidden': true } : {})}
@@ -813,6 +814,7 @@ export function NodeRenderer({ nodeId, ctx }: { nodeId: NodeId; ctx: RenderConte
             src={asset.url}
             alt={node.decorative ? '' : alt}
             fill
+            sizes={node.sizes}
             priority={priority}
             unoptimized={isVector(asset)}
           />

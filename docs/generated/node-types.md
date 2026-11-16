@@ -10,7 +10,7 @@
 | `Stack` | — | `name`, `render`, `a11y`, `htmlId`, `part`, `customCss`, `locked`, `direction` |
 | `Grid` | — | `name`, `render`, `a11y`, `htmlId`, `part`, `customCss`, `locked`, `areas`, `columns` |
 | `Text` | có | `name`, `render`, `a11y`, `htmlId`, `part`, `customCss`, `locked`, `tag`, `content` |
-| `Image` | có | `name`, `render`, `a11y`, `htmlId`, `part`, `customCss`, `locked`, `assetId`, `alt`, `decorative`, `fit`, `ratio` |
+| `Image` | có | `name`, `render`, `a11y`, `htmlId`, `part`, `customCss`, `locked`, `assetId`, `alt`, `decorative`, `fit`, `ratio`, `sizes` |
 | `Button` | có | `name`, `render`, `a11y`, `htmlId`, `part`, `customCss`, `locked`, `label`, `action`, `variant` |
 | `Video` | có | `name`, `render`, `a11y`, `htmlId`, `part`, `customCss`, `locked`, `assetId`, `posterAssetId`, `autoplay`, `loop`, `muted`, `controls`, `preload` |
 | `Canvas` | — | `name`, `render`, `a11y`, `htmlId`, `part`, `customCss`, `locked`, `program`, `uniforms`, `fallbackChildId` |

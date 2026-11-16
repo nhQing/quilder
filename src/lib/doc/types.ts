@@ -547,6 +547,12 @@ export interface ImageNode extends NodeBase {
   decorative?: boolean;
   fit: Responsive<'cover' | 'contain' | 'fill'>;
   ratio?: Responsive<string | null>;
+  /**
+   * `sizes` của <img>: bề rộng ô ảnh theo màn hình (vd. "(min-width: 1200px) 33vw, 100vw").
+   * Có nó thì srcset theo bề rộng và trình duyệt tải bản vừa ô; không có thì tải theo bề
+   * rộng GỐC của ảnh (x1, x2) — ảnh 3000px trong thẻ 400px.
+   */
+  sizes?: string;
   children: [];
 }
 

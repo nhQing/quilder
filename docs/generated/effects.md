@@ -1,6 +1,6 @@
 <!-- SINH TỰ ĐỘNG bởi scripts/gen-docs.ts từ src/lib/motion/effects (EFFECT_REGISTRY + manifest của từng effect). Đừng sửa tay: chạy `pnpm docs:gen`. -->
 
-# Effect (21)
+# Effect (22)
 
 | Key | Gắn vào | Chi phí | Xung đột | State ghi ra | Params |
 |---|---|---|---|---|---|
@@ -17,6 +17,7 @@
 | `modal` | `Section` | light | — | `modal-open`, `modal-visible`, `modal-swapping`, `modal-panel` | `panelPart?`, `closePart?`, `scrimPart?`, `bodyPart?`, `headerSelector?`, `swapMs?`, `fadeMs?` |
 | `nav-collapse` | `Section` | light | — | `collapsed` | `collapseAt?`, `hysteresis?` |
 | `nav-invert` | `Section` | light | — | `inverted` | `markerSelector?` |
+| `paginate` | — | light | — | `page-active`, `page-inactive`, `page-gap`, `page-disabled` | `pageSize?`, `param?`, `itemPart?`, `siblings?`, `scrollToTop?` |
 | `parallax` | — | medium | `scrub-timeline` | — | `speed?`, `overscaleFactor?`, `scrub?` |
 | `rail-pin` | `Section` | medium | `image-sequence` | `rail-pin-ready` | `pinPart?`, `viewportPart?`, `tail?` |
 | `scroll-reveal` | — | light | — | `revealed` | `stagger?`, `delay?`, `rootMargin?`, `once?` |

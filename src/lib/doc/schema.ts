@@ -808,6 +808,16 @@ export const zNode = z.discriminatedUnion('type', [
     decorative: z.boolean().optional(),
     fit: responsive(z.enum(['cover', 'contain', 'fill'])),
     ratio: responsive(z.string().nullable()).optional(),
+    /**
+     * Thuộc tính `sizes` của <img> — bề rộng ô ảnh theo màn hình, để trình duyệt
+     * chọn đúng bản trong srcset. Thiếu nó, ảnh gốc 3000px trong thẻ 400px tải
+     * bản ~3840px. Chỉ nhận chữ của cú pháp media query + đơn vị độ dài.
+     */
+    sizes: z
+      .string()
+      .max(300)
+      .regex(/^[a-zA-Z0-9 (),.:%+*/-]+$/, 'sizes chỉ nhận media query và độ dài, ví dụ "(min-width: 1024px) 33vw, 100vw"')
+      .optional(),
     children: zLeafChildren,
     // Luật "alt rỗng chỉ hợp lệ khi decorative = true" nằm ở tầng ngữ nghĩa
     // trong validate.ts, không phải ở đây: `.refine()` biến schema thành

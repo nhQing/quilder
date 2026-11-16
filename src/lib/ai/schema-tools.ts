@@ -65,7 +65,7 @@ const TYPE_FIELDS: Record<NodeType, { required: Record<string, string>; note?: s
       alt: 'Bắt buộc. Chuỗi rỗng CHỈ hợp lệ khi decorative = true',
       fit: 'Responsive: { base: "cover" | "contain" | "fill" }',
     },
-    note: 'Có width/height từ bảng Asset thì renderer đi nhánh giữ chỗ, CLS = 0. `ratio` dạng { base: "16/9" }.',
+    note: 'Có width/height từ bảng Asset thì renderer đi nhánh giữ chỗ, CLS = 0. `ratio` dạng { base: "16/9" }. `sizes` (tuỳ chọn) là thuộc tính sizes của <img>, vd. "(min-width: 1200px) 33vw, (min-width: 768px) 50vw, 100vw" — đặt cho ảnh trong thẻ/lưới, nếu không trình duyệt tải ảnh theo bề rộng GỐC.',
   },
   Button: {
     required: {
