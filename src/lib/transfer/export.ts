@@ -173,9 +173,13 @@ export function missingComponentRefs(
   return out;
 }
 
+/** Đã đọc bao nhiêu file / byte trong số phải đọc. Gọi một lần trước file đầu và sau mỗi file. */
+export type ExportProgress = (p: { done: { files: number; bytes: number }; total: { files: number; bytes: number } }) => void;
+
 export async function buildExport(
   pageId: string,
   exportedBy: string,
+  onProgress?: ExportProgress,
 ): Promise<{ ok: true; bundle: PageBundle; files: ExportFile[]; issues: TransferIssue[] } | { ok: false; status: number; error: string }> {
   const page = await prisma.page.findUnique({
     where: { id: pageId },
@@ -270,6 +274,11 @@ export async function buildExport(
   const seen = new Set<string>();
   const unreadable: { file: ExportFile; error: unknown }[] = [];
   const bundleAssets: PageBundle['assets'] = [];
+  // Tổng theo `bytes` trong DB — đúng thứ hộp thoại đã hứa ("N file, X MB"). File đọc lỗi vẫn
+  // được đếm là đã xử lý: thanh tiến độ đo việc đã làm, không đo việc thành công.
+  const total = { files: assetRows.length, bytes: assetRows.reduce((s, a) => s + a.bytes, 0) };
+  const done = { files: 0, bytes: 0 };
+  onProgress?.({ done: { ...done }, total });
   for (const a of assetRows) {
     let sha: string;
     try {
@@ -278,6 +287,10 @@ export async function buildExport(
     } catch (error) {
       unreadable.push({ file: { entry: '', asset: { id: a.id, key: a.key, url: a.url } }, error });
       continue;
+    } finally {
+      done.files += 1;
+      done.bytes += a.bytes;
+      onProgress?.({ done: { ...done }, total });
     }
     const entry = fileEntryName(sha, a.key);
     // Cùng nội dung thì chỉ một entry trong zip; nhiều dòng asset cùng trỏ vào nó.
