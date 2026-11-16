@@ -230,6 +230,8 @@ export interface RenderContext {
    * `await` được nên nó sẽ phải trở thành async — xem ghi chú ngay trên.
    */
   repeatGroupEntries?: ReadonlyMap<NodeId, ReadonlyMap<string, RepeatItem[]>>;
+  /** Gốc href theo loại của từng khối lặp — `ResolvedRepeats.bases`. */
+  repeatBases?: ReadonlyMap<NodeId, { detailBase?: string; taxonomyBase?: string }>;
   /** Item của khối đang lặp — cho binding `collection` và cho cấp lồng. */
   item?: RepeatItem;
   /** Danh mục của khối cha đang lặp, do cấp ngoài truyền xuống. */
@@ -966,8 +968,9 @@ export function NodeRenderer({ nodeId, ctx }: { nodeId: NodeId; ctx: RenderConte
             const merged = {
               ...node.overrides,
               ...itemOverrides(item, spec, {
-                detailBase: ctx.detailBase,
-                taxonomyBase: ctx.taxonomyBase,
+                // Gốc theo loại của KHỐI trước, gốc của trang sau — xem `ResolvedRepeats.bases`.
+                detailBase: ctx.repeatBases?.get(node.id)?.detailBase ?? ctx.detailBase,
+                taxonomyBase: ctx.repeatBases?.get(node.id)?.taxonomyBase ?? ctx.taxonomyBase,
               }),
             };
             const childCtx: RenderContext = {

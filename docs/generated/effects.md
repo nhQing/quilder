@@ -1,6 +1,6 @@
 <!-- SINH TỰ ĐỘNG bởi scripts/gen-docs.ts từ src/lib/motion/effects (EFFECT_REGISTRY + manifest của từng effect). Đừng sửa tay: chạy `pnpm docs:gen`. -->
 
-# Effect (22)
+# Effect (23)
 
 | Key | Gắn vào | Chi phí | Xung đột | State ghi ra | Params |
 |---|---|---|---|---|---|
@@ -21,6 +21,7 @@
 | `parallax` | — | medium | `scrub-timeline` | — | `speed?`, `overscaleFactor?`, `scrub?` |
 | `rail-pin` | `Section` | medium | `image-sequence` | `rail-pin-ready` | `pinPart?`, `viewportPart?`, `tail?` |
 | `scroll-reveal` | — | light | — | `revealed` | `stagger?`, `delay?`, `rootMargin?`, `once?` |
+| `share-link` | `Button` | light | — | `share-copied` | `copiedMs?`, `network?` |
 | `show-more` | — | light | — | `more-open` | `togglePart?`, `panelPart?`, `labelOpen?` |
 | `slider` | — | medium | `marquee`, `carousel` | `slider-ready`, `slider-begin`, `slider-end` | `preset?`, `slidesPerView?`, `spaceBetween?`, `centeredSlides?`, `grabCursor?`, `autoplay?`, `pauseOnHover?`, `disableOnInteraction?`, `reverseDirection?`, `direction?`, `breakpoints?`, `a11yLabel?`, `loop?`, `freeMode?`, `speedMs?`, `autoplayDelayMs?` |
 | `steps` | — | light | — | `step-active`, `step-inactive` | `stepPart?`, `mediaPart?`, `initial?` |

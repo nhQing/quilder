@@ -47,6 +47,9 @@
 - Nút lọc theo tham số URL (`/events?place=ha-noi`): effect `filter` gắn lên node bọc cả nút lẫn lưới; nút là Button link mang part `filter-option` (href chứa tham số, "Tất cả" không tham số), mục lặp mang `filter-item`, chữ giá trị trong mục mang `filter-value`. So khớp bỏ dấu/hoa thường. Nút đang chọn style bằng state `filter-active`. Trang site KHÔNG đọc query ở server — lọc chạy ở trình duyệt.
 - Phân trang danh sách (`?page=2`): effect `paginate` gắn lên node bọc cả lưới lẫn thanh số trang; mục lặp mang part `page-item`, thanh số trang là node part `pager` chứa MỘT Button mẫu part `page-link` (effect nhân bản cho từng số, style nút mẫu = style cả dãy), tuỳ chọn Button `page-prev`/`page-next`. Style nút đang chọn bằng state `page-active`, nút lùi/tới ở hai đầu bằng `page-disabled`. Thẻ ngoài trang bị `display:none` nên ảnh lazy không tải.
 - Ảnh trong thẻ/lưới: đặt prop `sizes` trên node Image (vd `"(min-width: 1200px) 33vw, (min-width: 768px) 50vw, 100vw"`). Thiếu nó, next/image tải theo bề rộng GỐC của ảnh — ảnh CMS 3000px trong thẻ 400px.
+- Thẻ bấm được cả khối: Button "link-cover" phủ kín thẻ + `repeat.map` dùng `also` để đổ cùng field vào thêm node, vd `slug: {nodeId:"tt", as:"href", also:[{nodeId:"lk", as:"href"}]}`, `title: {nodeId:"tt", as:"label", also:[{nodeId:"lk", as:"a11yLabel"}]}`.
+- Gốc href của khối lặp suy từ loại nội dung của chính khối (trang `entry`/`taxonomy` của loại đó), không cần trang chứa khai `collection`. Trước 16/11/2026 thẻ tin trên trang thường ra `href="<slug>"` → 404.
+- Nút "Chia sẻ": effect `share-link` trên Button (action none); `network` facebook (mặc định, hộp chia sẻ FB — ảnh lấy từ og:image của trang) | native | copy.
 - Hiện dần khi cuộn (framer `whileInView` của maimoney.com): `scroll-reveal` với `delay` riêng,
   `rootMargin: "0px 0px 0px 0px"` (live kích hoạt ngay khi ló vào), và customCss
   `html[data-reveal-ready="true"] & { opacity: 0; transform: … }` +

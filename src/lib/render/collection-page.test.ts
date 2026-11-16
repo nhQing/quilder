@@ -347,3 +347,32 @@ describe('entryBodies — field ảnh', () => {
     expect(out.bodies.has('cover')).toBe(false);
   });
 });
+
+import { prisma as mockedPrisma } from '@/lib/db';
+
+/*
+ * 16/11/2026: thẻ tin trên trang THƯỜNG (`/blogs` clone tĩnh, `/maicash`) ra
+ * `href="<slug>"` vì gốc href chỉ đến từ `collection` của trang. Gốc giờ suy từ loại
+ * của chính khối lặp.
+ */
+describe('resolveAllRepeats — gốc href theo loại của khối lặp', () => {
+  it('khối nguồn taxonomy + cấp trong group-entries mang gốc của loại', async () => {
+    const pageFind = mockedPrisma.page.findMany as unknown as ReturnType<typeof vi.fn>;
+    pageFind.mockImplementation(async () => [
+      { slug: 'hoi-dap/[slug]', collection: { typeKey: 'faq', param: 'entry' } },
+      { slug: 'hoi-dap/muc/[cat]', collection: { typeKey: 'faq', param: 'taxonomy' } },
+    ]);
+    try {
+      const out = await resolveAllRepeats(faqDoc(), {});
+      expect(out.bases.get('outer')).toEqual({ detailBase: '/hoi-dap', taxonomyBase: '/hoi-dap/muc' });
+      expect(out.bases.get('inner')).toEqual(out.bases.get('outer'));
+    } finally {
+      pageFind.mockImplementation(async () => []);
+    }
+  });
+
+  it('loại không có trang mẫu thì không đặt gốc — renderer rơi về gốc của trang', async () => {
+    const out = await resolveAllRepeats(faqDoc(), {});
+    expect(out.bases.size).toBe(0);
+  });
+});

@@ -201,6 +201,7 @@ export async function PublishedPageView({
     repeatItems: resolved.items,
     repeatGroups: resolved.groups,
     repeatGroupEntries: resolved.groupEntries,
+    repeatBases: resolved.bases,
     navSeries,
     projectData,
     detailBase,

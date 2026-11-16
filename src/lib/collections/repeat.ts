@@ -315,7 +315,13 @@ export function itemOverrides(
 ): Record<NodeId, ContentOverride> {
   const out: Record<NodeId, ContentOverride> = {};
 
-  for (const [fieldKey, target] of Object.entries(spec.map)) {
+  // `also`: cùng field đổ thêm vào node khác (vd href của nút link phủ kín thẻ). Đi
+  // lại đúng thân vòng lặp cho mỗi đích, để vai của từng đích được xử lý như dòng chính.
+  const pairs = Object.entries(spec.map).flatMap(([fieldKey, primary]) =>
+    [primary, ...(primary.also ?? [])].map((target) => [fieldKey, target] as const),
+  );
+
+  for (const [fieldKey, target] of pairs) {
     const read = readField(item, fieldKey);
 
     /*

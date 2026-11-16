@@ -246,6 +246,7 @@ export default async function PreviewPage({
     repeatItems: resolved.items,
     repeatGroups: resolved.groups,
     repeatGroupEntries: resolved.groupEntries,
+    repeatBases: resolved.bases,
     detailBase: binding.detailBase,
     taxonomyBase: binding.taxonomyBase,
     entryBody: body?.bodies,

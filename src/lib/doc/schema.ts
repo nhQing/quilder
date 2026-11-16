@@ -640,7 +640,15 @@ export const zRepeatSpec = z
     ]),
     map: z.record(
       zFieldKey,
-      z.object({ nodeId: z.string().min(1).max(40), as: z.enum(OVERRIDE_FIELDS) }).strict(),
+      z.object({
+        nodeId: z.string().min(1).max(40),
+        as: z.enum(OVERRIDE_FIELDS),
+        // Đổ cùng field vào thêm node — xem `RepeatMapTarget` ở types.ts.
+        also: z
+          .array(z.object({ nodeId: z.string().min(1).max(40), as: z.enum(OVERRIDE_FIELDS) }).strict())
+          .max(4)
+          .optional(),
+      }).strict(),
     ),
     blockComponents: z.record(z.string().min(1).max(40), z.string().min(1)).optional(),
     empty: z

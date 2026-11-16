@@ -351,6 +351,17 @@ export interface ResolvedRepeats {
   items: Map<NodeId, RepeatItem[]>;
   groups: Map<NodeId, { item: RepeatItem; taxonomyId: string }[]>;
   groupEntries: Map<NodeId, Map<string, RepeatItem[]>>;
+  /**
+   * Gốc href của từng khối lặp, theo LOẠI NỘI DUNG của chính khối đó.
+   *
+   * Trước 16/11/2026 gốc href chỉ đến từ trang: trang khai `collection` thì khối lặp
+   * biết `/blogs/post`, trang thường (`/blogs` clone tĩnh, `/maicash`) thì không, và
+   * mọi thẻ tin ra `href="<slug>"` — tương đối, bấm ra `/<slug>` → 404. Khối lặp
+   * nguồn `query`/`related`/`taxonomy` đã mang `typeKey`, nên gốc suy được từ đó, bất
+   * kể trang chứa nó là gì. Thiếu (loại không có trang mẫu) thì renderer rơi về gốc
+   * của trang như cũ.
+   */
+  bases: Map<NodeId, { detailBase?: string; taxonomyBase?: string }>;
 }
 
 function repeatNodes(doc: Doc): InstanceNode[] {
@@ -402,13 +413,59 @@ function hasAncestor(doc: Doc, nodeId: NodeId, ancestorId: NodeId): boolean {
  * component. Đó là ràng buộc khác và nó vẫn đúng — cây ở đây nằm trong DOC.
  */
 export async function resolveAllRepeats(doc: Doc, ctx: RepeatContext): Promise<ResolvedRepeats> {
-  const out: ResolvedRepeats = { items: new Map(), groups: new Map(), groupEntries: new Map() };
+  const out: ResolvedRepeats = {
+    items: new Map(),
+    groups: new Map(),
+    groupEntries: new Map(),
+    bases: new Map(),
+  };
   const all = repeatNodes(doc);
 
-  await resolveEach(all, doc, ctx, out);
+  await Promise.all([resolveEach(all, doc, ctx, out), resolveBases(all, doc, out)]);
   await expandAllRelations(out, ctx.locale);
 
   return out;
+}
+
+/** Loại nội dung mà một khối lặp đọc, nếu nguồn của nó khai. */
+export function repeatTypeKey(spec: NonNullable<InstanceNode['repeat']>): string | undefined {
+  const src = spec.source;
+  if (src.kind === 'query') return src.query.typeKey;
+  if (src.kind === 'related' || src.kind === 'taxonomy') return src.typeKey;
+  return undefined;
+}
+
+/**
+ * Gốc href cho mỗi khối lặp, theo loại của nó. Cấp trong (`group-entries`) mượn
+ * loại của khối `taxonomy` bọc ngoài. Hai hàm gốc đã cache, và mỗi LOẠI chỉ hỏi
+ * một lần dù trang có bao nhiêu khối.
+ */
+async function resolveBases(all: InstanceNode[], doc: Doc, out: ResolvedRepeats): Promise<void> {
+  const typeOf = new Map<NodeId, string>();
+  for (const n of all) {
+    const k = repeatTypeKey(n.repeat!);
+    if (k) typeOf.set(n.id, k);
+  }
+  for (const n of all) {
+    if (typeOf.has(n.id) || n.repeat!.source.kind !== 'group-entries') continue;
+    const outer = all.find((m) => m.repeat!.source.kind === 'taxonomy' && hasAncestor(doc, n.id, m.id));
+    const k = outer ? typeOf.get(outer.id) : undefined;
+    if (k) typeOf.set(n.id, k);
+  }
+  const types = [...new Set(typeOf.values())];
+  if (!types.length) return;
+  const byType = new Map(
+    await Promise.all(
+      types.map(async (k) => {
+        const [detailBase, taxonomyBase] = await Promise.all([detailBaseForType(k), taxonomyBaseForType(k)]);
+        return [k, { detailBase: detailBase ?? undefined, taxonomyBase: taxonomyBase ?? undefined }] as const;
+      }),
+    ),
+  );
+  for (const [id, k] of typeOf) {
+    const b = byType.get(k);
+    if (b && (b.detailBase || b.taxonomyBase)) out.bases.set(id, b);
+  }
 }
 
 async function resolveEach(

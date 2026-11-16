@@ -868,6 +868,18 @@ export type RepeatSource =
  *
  * `optional` là điều kiện để `schemaVersion` giữ nguyên 1.
  */
+/**
+ * Một dòng của `RepeatSpec.map`. `also` đổ CÙNG field đó vào thêm node khác — ca gốc:
+ * thẻ tin bấm được cả khối, nên `slug` vừa là href của tiêu đề vừa là href của nút
+ * link phủ kín thẻ, và `title` vừa là chữ tiêu đề vừa là nhãn đọc của nút phủ. Khoá
+ * của `map` là field nên không lặp được; `also` là chỗ cho dòng thứ hai.
+ */
+export interface RepeatMapTarget {
+  nodeId: NodeId;
+  as: keyof ContentOverride;
+  also?: { nodeId: NodeId; as: keyof ContentOverride }[];
+}
+
 export interface RepeatSpec {
   source: RepeatSource;
   /**
@@ -875,7 +887,7 @@ export interface RepeatSpec {
    * nó. Cùng cách địa chỉ hoá như `overrides`, nên node bị xoá khỏi component thì
    * ánh xạ bị BỎ QUA lúc render — y như override mồ côi.
    */
-  map: Record<string, { nodeId: NodeId; as: keyof ContentOverride }>;
+  map: Record<string, RepeatMapTarget>;
   /** Chỉ cho `source.kind === 'field'` trên một field `blocks`: loại khối → `Preset.id`. */
   blockComponents?: Record<string, string>;
   /** Không có item nào thì làm gì. Vắng = hiện đúng một lần với nội dung của component. */

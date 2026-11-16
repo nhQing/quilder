@@ -279,3 +279,21 @@ describe('taxonomyBindingData', () => {
     expect(taxonomyBindingData({ key: 'dau-tu', name: 'Đầu tư' }, 'en').taxonomy).toBe('Đầu tư');
   });
 });
+
+describe('itemOverrides — also (một field, nhiều node)', () => {
+  const spec: RepeatSpec = {
+    source: { kind: 'query', query: { typeKey: 'news', limit: 10 } },
+    map: {
+      title: { nodeId: 'tt', as: 'label', also: [{ nodeId: 'lk', as: 'a11yLabel' }] },
+      slug: { nodeId: 'tt', as: 'href', also: [{ nodeId: 'lk', as: 'href' }] },
+    },
+  };
+
+  it('thẻ bấm được cả khối: slug ra href cho cả tiêu đề lẫn nút phủ, title ra nhãn đọc', () => {
+    const o = itemOverrides(ITEM, spec, { detailBase: '/blogs/post' });
+    expect(o.tt?.href).toBe('/blogs/post/lai-suat-thang-8');
+    expect(o.lk?.href).toBe('/blogs/post/lai-suat-thang-8');
+    expect(o.lk?.a11yLabel).toBe('Lãi suất tháng 8');
+    expect(o.tt?.label).toEqual([{ t: 'text', v: 'Lãi suất tháng 8' }]);
+  });
+});
