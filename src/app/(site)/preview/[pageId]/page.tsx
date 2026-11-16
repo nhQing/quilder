@@ -22,6 +22,7 @@ import {
   typeShape,
 } from '@/lib/render/collection-page';
 import { allowedEmbedHostnames } from '@/lib/render/embed-origins';
+import { ARTICLE_CSS } from '@/lib/render/article-css';
 import { draftSiteGlobals } from '@/lib/render/draft-globals';
 import { PreviewChrome } from '@/components/site/PreviewChrome';
 import { PREVIEW_PILL_SPACE } from '@/components/site/preview-pill';
@@ -271,6 +272,15 @@ export default async function PreviewPage({
         // eslint-disable-next-line react/no-danger
         dangerouslySetInnerHTML={{ __html: css }}
       />
+      {/* Như PublishedPageView: thiếu khối này thì thân bài trong bản nháp là một khối
+          chữ phẳng (reset.css gỡ bullet, khoảng cách đoạn), còn site thật thì có. */}
+      {body && body.bodies.size > 0 && (
+        <style
+          data-mm-article-css=""
+          // eslint-disable-next-line react/no-danger
+          dangerouslySetInnerHTML={{ __html: ARTICLE_CSS }}
+        />
+      )}
       {/* Trong iframe của vỏ giả lập thì KHÔNG dựng dải: vỏ ngoài đã có một cái. */}
       {!embed && (
         <PreviewChrome pageId={pageId} locale={locale} locales={locales} width={null} binding={binding.label} />
