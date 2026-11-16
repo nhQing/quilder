@@ -19,7 +19,11 @@ _to_delete
 docs
 e2e
 # `tests/` KHÔNG bỏ: test font import fixture ở đó, và `next build` kiểm kiểu cả file test.
-mcp
+# `mcp/` bỏ, TRỪ `server.mjs`: `/api/tokens/client` đọc nó lúc chạy để người dùng tải về
+# cắm vào Claude Desktop (outputFileTracingIncludes trong next.config.mjs). Bỏ cả thư mục
+# thì v1.4.8 trả 500 và trình duyệt tải về "client.json" (16/11/2026).
+mcp/*
+!mcp/server.mjs
 branding
 *.md
 .release.json
