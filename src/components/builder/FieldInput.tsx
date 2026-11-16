@@ -33,6 +33,7 @@ import type { FieldDef, GroupTable } from '@/lib/collections/field-def';
 import { emptyBlock, emptyEntry, type FormPath } from '@/lib/collections/form-state';
 import { ArticleField } from './ArticleField';
 import { AssetField } from './AssetField';
+import { altOf, assetIdOf, pickAsset, withAlt } from '@/lib/collections/asset-value';
 import { SeoFieldInput, type SeoContext } from './SeoFieldInput';
 import { Badge } from './ui/Badge';
 import { Button, IconButton } from './ui/Button';
@@ -848,7 +849,21 @@ export function FieldInput(p: FieldInputProps) {
       const imageOnly = f.t === 'image';
       const allowVideo = f.t === 'image' && f.allowVideo === true;
       const multiple = f.t === 'image' && f.multiple === true;
-      const ids = Array.isArray(value) ? (value as string[]) : [];
+      // Giá trị lưu là `{ assetId, alt }` (zAssetPick) — xem asset-value.ts cho lý do
+      // ô này từng đọc nhầm thành chuỗi và hiện trống với mọi bài đã có ảnh.
+      const items = Array.isArray(value) ? (value as unknown[]) : [];
+      const altInput = (v: unknown, onAlt: (alt: string) => void, label: string) =>
+        imageOnly && assetIdOf(v) ? (
+          <input
+            type="text"
+            aria-label={label}
+            placeholder={f.t === 'image' && f.requireAlt ? 'Chữ thay ảnh (alt) — bắt buộc' : 'Chữ thay ảnh (alt)'}
+            value={altOf(v)}
+            maxLength={300}
+            onChange={(e) => onAlt(e.target.value)}
+            className={cn(box, 'mt-1 max-w-[13rem]')}
+          />
+        ) : null;
       return (
         <Field label={f.label} keyName={f.key} required={f.required} help={f.help}>
           {multiple ? (
@@ -856,30 +871,44 @@ export function FieldInput(p: FieldInputProps) {
             // xếp dọc N ô rộng bằng cột cho ra một cột cao vài nghìn pixel.
             // `auto-fill` để số ô mỗi hàng theo bề rộng thật của form.
             <div className="grid grid-cols-[repeat(auto-fill,minmax(9rem,1fr))] gap-2">
-              {ids.map((id, i) => (
-                <AssetField
-                  key={`${id}-${i}`}
-                  value={id}
-                  imageOnly={imageOnly}
-                  allowVideo={allowVideo}
-                  onPick={(next) => set(next === null ? ids.filter((_, j) => j !== i) : ids.map((x, j) => (j === i ? next : x)))}
-                />
+              {items.map((item, i) => (
+                <div key={`${assetIdOf(item) ?? 'x'}-${i}`} className="flex flex-col">
+                  <AssetField
+                    value={assetIdOf(item)}
+                    imageOnly={imageOnly}
+                    allowVideo={allowVideo}
+                    onPick={(next) =>
+                      set(
+                        next === null
+                          ? items.filter((_, j) => j !== i)
+                          : items.map((x, j) => (j === i ? pickAsset(x, next) : x)),
+                      )
+                    }
+                  />
+                  {altInput(
+                    item,
+                    (alt) => set(items.map((x, j) => (j === i ? withAlt(x, alt) : x))),
+                    `${f.label} ${i + 1}: chữ thay ảnh`,
+                  )}
+                </div>
               ))}
-              <AssetField value={null} imageOnly={imageOnly} allowVideo={allowVideo} onPick={(next) => next && set([...ids, next])} />
+              <AssetField
+                value={null}
+                imageOnly={imageOnly}
+                allowVideo={allowVideo}
+                onPick={(next) => next && set([...items, pickAsset(null, next)])}
+              />
             </div>
           ) : (
-            <AssetField
-              value={typeof value === 'string' ? value : null}
-              imageOnly={imageOnly}
-              allowVideo={allowVideo}
-              onPick={set}
-            />
-          )}
-          {f.t === 'image' && f.requireAlt && (
-            <p className={ui.hint}>
-              Loại này đòi chữ thay thế (alt). Đặt alt ở node ảnh trên trang, không ở đây —
-              cùng một ảnh dùng ở hai chỗ có thể cần hai câu alt khác nhau.
-            </p>
+            <div className="flex flex-col">
+              <AssetField
+                value={assetIdOf(value)}
+                imageOnly={imageOnly}
+                allowVideo={allowVideo}
+                onPick={(next) => set(pickAsset(value, next))}
+              />
+              {altInput(value, (alt) => set(withAlt(value, alt)), `${f.label}: chữ thay ảnh`)}
+            </div>
           )}
         </Field>
       );
