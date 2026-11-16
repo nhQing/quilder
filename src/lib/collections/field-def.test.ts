@@ -35,6 +35,13 @@ describe('zFieldDef', () => {
     expect(r.success).toBe(false);
   });
 
+  it('image nhận cờ allowVideo (boolean), và từ chối giá trị khác kiểu', () => {
+    expect(zFieldDef.safeParse({ t: 'image', key: 'cover', label: 'Ảnh bìa', allowVideo: true }).success).toBe(true);
+    expect(zFieldDef.safeParse({ t: 'image', key: 'cover', label: 'Ảnh bìa', allowVideo: 'yes' }).success).toBe(false);
+    // Các kiểu khác vẫn là strict: allowVideo không rò sang field khác.
+    expect(zFieldDef.safeParse({ t: 'file', key: 'f', label: 'F', allowVideo: true }).success).toBe(false);
+  });
+
   it('enum phải có ít nhất một lựa chọn — enum rỗng là một ô không chọn được gì', () => {
     expect(zFieldDef.safeParse({ t: 'enum', key: 'k', label: 'K', options: [] }).success).toBe(false);
     expect(

@@ -1046,6 +1046,7 @@ function FieldEditor({
             <Check checked={!!field.required} onChange={(v) => set({ required: v })} label="Bắt buộc" />
             <Check checked={!!field.multiple} onChange={(v) => set({ multiple: v })} label="Cho chọn nhiều ảnh" />
             <Check checked={!!field.requireAlt} onChange={(v) => set({ requireAlt: v })} label="Bắt buộc có chữ thay ảnh (alt) mới đăng được" />
+            <Check checked={!!field.allowVideo} onChange={(v) => set({ allowVideo: v })} label="Cho chọn cả video (.mp4, .webm) — trang chi tiết vẽ thẻ video" />
           </Checks>
           <p className={EXPLAIN}>
             Lưu <code>assetId</code>, dùng chung kho asset với trang và component. Không có đường upload thứ hai.

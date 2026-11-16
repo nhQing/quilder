@@ -166,6 +166,25 @@ describe('asSeo', () => {
   });
 });
 
+describe('resolveEntrySeo — field ảnh khai allowVideo', () => {
+  const fields = [
+    { t: 'text', key: 'title', label: 'Tiêu đề' },
+    { t: 'image', key: 'cover', label: 'Ảnh bìa', allowVideo: true },
+    { t: 'image', key: 'thumbnail', label: 'Ảnh thu nhỏ' },
+  ] as const;
+  const shape = { titleField: 'title', fields };
+
+  it('og:image suy ra bỏ qua field có thể giữ video khi còn field ảnh khác', () => {
+    const r = resolveEntrySeo(shape, { title: 'T', cover: { assetId: 'mp4' }, thumbnail: { assetId: 'thumb' } });
+    expect(r.imageAssetId).toBe('thumb');
+  });
+
+  it('chỉ có field allowVideo thì vẫn dùng nó', () => {
+    const r = resolveEntrySeo(shape, { title: 'T', cover: { assetId: 'mp4' } });
+    expect(r.imageAssetId).toBe('mp4');
+  });
+});
+
 describe('resolveEntrySeo', () => {
   const FIELDS: FieldDef[] = [
     { t: 'text', key: 'title', label: 'Tiêu đề' },

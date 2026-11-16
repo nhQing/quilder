@@ -116,6 +116,9 @@ export function dbKind(mime: string, key = ''): AssetKind {
 /** Hạng nào dùng được ở một node ảnh. Bộ chọn ảnh lọc theo đúng tập này. */
 export const IMAGE_KINDS: ReadonlySet<AssetKind> = new Set<AssetKind>(['image', 'svg']);
 
+/** Như `IMAGE_KINDS` nhưng nhận thêm video — cho field `image` khai `allowVideo` (ảnh bìa bài có thể là .mp4). */
+export const IMAGE_OR_VIDEO_KINDS: ReadonlySet<AssetKind> = new Set<AssetKind>(['image', 'svg', 'video']);
+
 /**
  * `accept` cho `<input type="file">` của trang Thư viện.
  *

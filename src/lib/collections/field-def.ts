@@ -33,7 +33,7 @@ export type FieldDef =
   | { t: 'boolean'; key: string; label: string; default?: boolean; help?: string }
   | { t: 'date'; key: string; label: string; required?: boolean; withTime?: boolean; help?: string }
   | { t: 'enum'; key: string; label: string; options: { value: string; label: string }[]; required?: boolean; help?: string }
-  | { t: 'image'; key: string; label: string; required?: boolean; multiple?: boolean; requireAlt?: boolean; help?: string }
+  | { t: 'image'; key: string; label: string; required?: boolean; multiple?: boolean; requireAlt?: boolean; allowVideo?: boolean; help?: string }
   | { t: 'file'; key: string; label: string; required?: boolean; accept?: string[]; help?: string }
   | { t: 'slug'; key: string; label: string; from: string; help?: string }
   | { t: 'relation'; key: string; label: string; typeKey: string; cardinality: 'one' | 'many'; help?: string }
@@ -105,7 +105,7 @@ export const zFieldDef: z.ZodType<FieldDef> = z.discriminatedUnion('t', [
   z.object({ t: z.literal('boolean'), key: zKey, label: zLabel, default: z.boolean().optional(), help: zHelp }).strict(),
   z.object({ t: z.literal('date'), key: zKey, label: zLabel, required: z.boolean().optional(), withTime: z.boolean().optional(), help: zHelp }).strict(),
   z.object({ t: z.literal('enum'), key: zKey, label: zLabel, options: z.array(z.object({ value: z.string().min(1).max(60), label: zLabel }).strict()).min(1), required: z.boolean().optional(), help: zHelp }).strict(),
-  z.object({ t: z.literal('image'), key: zKey, label: zLabel, required: z.boolean().optional(), multiple: z.boolean().optional(), requireAlt: z.boolean().optional(), help: zHelp }).strict(),
+  z.object({ t: z.literal('image'), key: zKey, label: zLabel, required: z.boolean().optional(), multiple: z.boolean().optional(), requireAlt: z.boolean().optional(), allowVideo: z.boolean().optional(), help: zHelp }).strict(),
   z.object({ t: z.literal('file'), key: zKey, label: zLabel, required: z.boolean().optional(), accept: z.array(z.string().max(40)).max(20).optional(), help: zHelp }).strict(),
   z.object({ t: z.literal('slug'), key: zKey, label: zLabel, from: zKey, help: zHelp }).strict(),
   z.object({ t: z.literal('relation'), key: zKey, label: zLabel, typeKey: z.string().min(1).max(40), cardinality: z.enum(['one', 'many']), help: zHelp }).strict(),

@@ -846,6 +846,7 @@ export function FieldInput(p: FieldInputProps) {
     case 'image':
     case 'file': {
       const imageOnly = f.t === 'image';
+      const allowVideo = f.t === 'image' && f.allowVideo === true;
       const multiple = f.t === 'image' && f.multiple === true;
       const ids = Array.isArray(value) ? (value as string[]) : [];
       return (
@@ -860,15 +861,17 @@ export function FieldInput(p: FieldInputProps) {
                   key={`${id}-${i}`}
                   value={id}
                   imageOnly={imageOnly}
+                  allowVideo={allowVideo}
                   onPick={(next) => set(next === null ? ids.filter((_, j) => j !== i) : ids.map((x, j) => (j === i ? next : x)))}
                 />
               ))}
-              <AssetField value={null} imageOnly={imageOnly} onPick={(next) => next && set([...ids, next])} />
+              <AssetField value={null} imageOnly={imageOnly} allowVideo={allowVideo} onPick={(next) => next && set([...ids, next])} />
             </div>
           ) : (
             <AssetField
               value={typeof value === 'string' ? value : null}
               imageOnly={imageOnly}
+              allowVideo={allowVideo}
               onPick={set}
             />
           )}

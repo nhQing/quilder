@@ -225,12 +225,25 @@ function derivedDescription(shape: { titleField: string | null; fields: readonly
 }
 
 function firstImage(fields: readonly FieldDef[], data: Record<string, unknown>): string | null {
-  for (const f of fields) {
-    if (f.t !== 'image') continue;
+  // Field khai `allowVideo` có thể đang giữ một .mp4 — không dùng làm og:image nếu còn field
+  // ảnh khác (vd. `thumbnail`). Chỉ rơi về nó khi không còn gì khác.
+  const pickOf = (f: FieldDef): string | null => {
     const v = data[f.key];
     const pick = Array.isArray(v) ? v[0] : v;
-    if (typeof pick === 'object' && pick !== null && typeof (pick as { assetId?: unknown }).assetId === 'string') {
-      return (pick as { assetId: string }).assetId;
+    return typeof pick === 'object' && pick !== null && typeof (pick as { assetId?: unknown }).assetId === 'string'
+      ? (pick as { assetId: string }).assetId
+      : null;
+  };
+  const images = fields.filter((f) => f.t === 'image');
+  for (const f of images) {
+    if (f.t === 'image' && f.allowVideo) continue;
+    const id = pickOf(f);
+    if (id) return id;
+  }
+  for (const f of images) {
+    if (f.t === 'image' && f.allowVideo) {
+      const id = pickOf(f);
+      if (id) return id;
     }
   }
   return null;

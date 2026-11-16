@@ -456,7 +456,7 @@ const createEntryTool: ToolDef = {
     '`data` là object khoá-field → giá trị, theo đúng schema của loại:\n' +
     '  text      → chuỗi\n' +
     '  richtext  → mảng InlineNode, ví dụ [{ "t":"text","v":"…" }]\n' +
-    '  image     → { assetId, alt } — `alt` bắt buộc khi field khai requireAlt\n' +
+    '  image     → { assetId, alt } — `alt` bắt buộc khi field khai requireAlt; field khai allowVideo nhận cả asset video (.mp4)\n' +
     '  blocks    → mảng object, mỗi object có `__type` là một khoá trong `allowed`\n' +
     '  slug      → bỏ trống để tự sinh từ tiêu đề; trùng thì hệ thống tự thêm hậu tố\n' +
     '  seo       → { metaTitle, metaDescription, keywords, ogImage:{assetId,alt}, canonicalUrl, ' +
