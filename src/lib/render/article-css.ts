@@ -39,7 +39,10 @@
  * nhớ nạp.
  */
 export const ARTICLE_CSS = `
-[data-mm-article] { max-width: 72ch; margin-inline: auto; }
+/* Bề rộng mặc định của ô thân bài nằm trong @layer base: style có kiểu của node
+   (@layer doc) đè được nó, nên một ô cắm cần tràn khung (vd thân bài sự kiện)
+   chỉ việc đặt maxWidth ở Inspector. Không node nào khai thì vẫn là 72ch như cũ. */
+@layer base { [data-mm-article] { max-width: 72ch; margin-inline: auto; } }
 [data-mm-article] > * + * { margin-block-start: var(--space-s); }
 [data-mm-article] h2,
 [data-mm-article] h3,
