@@ -64,6 +64,10 @@ services:
     ports:
       # 127.0.0.1: KHÔNG mở thẳng ra Internet. Reverse proxy phía trước.
       - '127.0.0.1:3000:3000'
+    volumes:
+      # Cache ảnh đã tối ưu của next/image — giữ qua các lần deploy (xem Dockerfile).
+      # Mất volume này không hỏng gì, chỉ làm ảnh chậm lại ở lượt xem đầu tiên.
+      - next-images:/app/.next/cache/images
     depends_on:
       postgres:
         condition: service_healthy
@@ -106,6 +110,7 @@ services:
 
 volumes:
   pgdata:
+  next-images:
 
 # ── Dùng Postgres CÓ SẴN trên server, không phải cái ở trên ──────────────────
 #

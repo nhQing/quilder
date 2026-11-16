@@ -159,7 +159,13 @@ RUN addgroup --system --gid 1001 nodejs \
  && adduser --system --uid 1001 nextjs
 
 COPY --from=builder /app/public ./public
-RUN mkdir .next && chown nextjs:nodejs .next
+# `.next/cache/images` có sẵn và thuộc nextjs: compose gắn một volume vào đó để ảnh đã
+# tối ưu (AVIF/WebP từ /_next/image) SỐNG QUA các lần deploy. Không có volume thì mỗi lần
+# tạo lại container là cache trống, và khách đầu tiên chờ server mã hoá lại từng ảnh —
+# ảnh gốc của tin tức có cái rộng 8000–9500px (16/11/2026). Thư mục phải có trong image
+# để Docker chép quyền sở hữu sang volume mới tạo; không thì volume thuộc root và Next
+# không ghi được cache.
+RUN mkdir -p .next/cache/images && chown -R nextjs:nodejs .next
 
 # output: 'standalone' gom sẵn server + node_modules tối thiểu.
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./

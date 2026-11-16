@@ -45,6 +45,7 @@ import { assetKind } from '@/lib/assets/kind';
 import { parseCompositeParams } from '@/lib/composites/registry';
 import { projectComposite } from '@/lib/project/active';
 import { CustomCodeBlock } from '@/components/site/CustomCodeBlock';
+import { defaultImageSizes } from './image-sizes';
 
 /* ── Effect manifest ──────────────────────────────────────────────────── */
 
@@ -804,7 +805,7 @@ export function NodeRenderer({ nodeId, ctx }: { nodeId: NodeId; ctx: RenderConte
             alt={node.decorative ? '' : alt}
             width={asset.width}
             height={asset.height}
-            sizes={node.sizes}
+            sizes={defaultImageSizes(node.sizes, asset.width)}
             priority={priority}
             unoptimized={isVector(asset)}
             {...(node.decorative ? { 'aria-hidden': true } : {})}
@@ -823,7 +824,7 @@ export function NodeRenderer({ nodeId, ctx }: { nodeId: NodeId; ctx: RenderConte
             src={asset.url}
             alt={node.decorative ? '' : alt}
             fill
-            sizes={node.sizes}
+            sizes={defaultImageSizes(node.sizes, null)}
             priority={priority}
             unoptimized={isVector(asset)}
           />
@@ -1119,6 +1120,9 @@ function InstanceChild({
           alt={node.decorative ? '' : node.alt}
           width={asset.width ?? 1200}
           height={asset.height ?? 800}
+          // Trước 16/11/2026 nhánh component bỏ qua `node.sizes` hoàn toàn: `sizes` đặt trên
+          // ảnh của thẻ tin (component) không có tác dụng gì.
+          sizes={defaultImageSizes(node.sizes, asset.width)}
           {...(node.decorative ? { 'aria-hidden': true } : {})}
         />
       );
