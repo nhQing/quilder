@@ -69,7 +69,7 @@ export function AssetThumb({
   const ext = extOf(assetKey);
 
   if (info.previewable) {
-    return <ImageThumb url={url} lazy={lazy} thumb={thumb} className={className} />;
+    return <ImageThumb url={url} mime={mime} lazy={lazy} thumb={thumb} className={className} />;
   }
 
   return (
@@ -105,9 +105,12 @@ export function ImageThumb({
   alt = '',
   fit = 'contain',
   thumb,
+  mime,
   className,
 }: {
   url: string;
+  /** Mime của file — cho URL không đuôi (ảnh nhập từ site cũ), xem `thumbSrc`. */
+  mime?: string;
   lazy?: boolean;
   /** Mặc định rỗng: ở hầu hết chỗ tên file đã nằm ngay cạnh khung. */
   alt?: string;
@@ -120,7 +123,7 @@ export function ImageThumb({
   const [done, setDone] = useState(false);
   const [original, setOriginal] = useState(false);
   const img = useRef<HTMLImageElement>(null);
-  const small = thumb && !original ? thumbSrc(url, thumb) : null;
+  const small = thumb && !original ? thumbSrc(url, thumb, mime) : null;
 
   // Đổi file thì chờ lại từ đầu — TRỪ khi ảnh đã xong sẵn. Ảnh nằm trong cache có thể
   // xong trước khi React gắn `onLoad` (ô vừa mount lại, hoặc HTML từ server): khi đó

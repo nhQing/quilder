@@ -68,8 +68,10 @@ interface FolderNode {
 type Tab = 'pick' | 'upload';
 
 
-/** Số ô render thêm mỗi lượt trong lưới chọn ảnh. */
+/** Số ảnh mỗi trang nạp từ server (`GET /api/assets?take=`). */
 const PAGE = 60;
+/** Chờ người dùng ngừng gõ rồi mới hỏi server. */
+const SEARCH_DEBOUNCE_MS = 250;
 
 export function AssetDialog({
   open,
@@ -99,7 +101,12 @@ export function AssetDialog({
   const fileRef = useRef<HTMLInputElement>(null);
 
   const [tab, setTab] = useState<Tab>('pick');
+  /** Các trang ĐÃ NẠP, nối nhau. `null` = trang đầu chưa về. */
   const [assets, setAssets] = useState<DialogAsset[] | null>(null);
+  /** Tổng số ảnh khớp bộ lọc hiện tại, theo server. */
+  const [total, setTotal] = useState(0);
+  const [hiddenByMime, setHiddenByMime] = useState(0);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [folders, setFolders] = useState<FolderNode[]>([]);
   const [folder, setFolder] = useState<string | null>(null);
   const [query, setQuery] = useState('');
@@ -108,13 +115,21 @@ export function AssetDialog({
   const [note, setNote] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
   /**
-   * Số ô đang render. Kho có hàng nghìn ảnh: dựng hết một lượt là hàng nghìn nút và
-   * thẻ `<img>` trong một dialog (17/11/2026: 1024 ảnh mỗi lần mở picker). Danh sách
-   * vẫn nạp đủ để ô tìm và bộ lọc thư mục thấy cả kho; chỉ phần HIỂN THỊ được cắt,
-   * và nới thêm `PAGE` mỗi khi cuộn tới cuối (hoặc bấm "Hiện thêm").
+   * Phân trang Ở SERVER (17/11/2026). Kho có hơn một nghìn ảnh: bản trước nạp danh
+   * sách cả kho (~290 KB) mỗi lần mở rồi cắt ở trình duyệt. Giờ mỗi lượt chỉ hỏi
+   * `PAGE` ảnh khớp thư mục + ô tìm + kiểu file, và hỏi trang kế khi cuộn tới cuối.
+   *
+   * `seq` đánh số mỗi lần bộ lọc đổi: câu trả lời của bộ lọc CŨ về muộn (gõ nhanh,
+   * mạng chậm) bị bỏ thay vì đè lên kết quả mới.
    */
-  const [limit, setLimit] = useState(PAGE);
+  const seq = useRef(0);
   const moreRef = useRef<HTMLDivElement>(null);
+  const [q, setQ] = useState('');
+  useEffect(() => {
+    const t = setTimeout(() => setQ(query.trim()), SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(t);
+  }, [query]);
+  const mimeKey = mimes ? [...mimes].sort().join(',') : '';
 
   /*
    * `showModal()` phải gọi bằng tay, không đặt thuộc tính `open`.
@@ -140,34 +155,68 @@ export function AssetDialog({
     return () => el.removeEventListener('close', onCloseEvent);
   }, [onClose]);
 
-  const load = useCallback(async () => {
-    setError(null);
-    try {
-      const [aRes, fRes] = await Promise.all([
-        fetch('/api/assets'),
-        fetch('/api/assets/folders'),
-      ]);
-      const aJson = (await aRes.json()) as { assets?: DialogAsset[]; error?: string };
-      if (!aRes.ok) throw new Error(aJson.error ?? `Lỗi ${aRes.status}`);
-      setAssets(aJson.assets ?? []);
-
-      // Cây thư mục hỏng thì lưới vẫn dùng được — chỉ mất bộ lọc. Không để nó kéo
-      // theo cả dialog.
-      if (fRes.ok) {
-        const fJson = (await fRes.json()) as { folders?: FolderNode[] };
-        setFolders(fJson.folders ?? []);
+  /** Nạp một trang bắt đầu từ `skip`. `skip = 0` là bộ lọc mới: thay cả lưới. */
+  const fetchPage = useCallback(
+    async (skip: number) => {
+      const mine = skip === 0 ? ++seq.current : seq.current;
+      const qs = new URLSearchParams({ take: String(PAGE), skip: String(skip) });
+      if (folder !== null) qs.set('folder', folder);
+      if (q) qs.set('q', q);
+      if (mimeKey) qs.set('mimes', mimeKey);
+      try {
+        const res = await fetch(`/api/assets?${qs.toString()}`);
+        const json = (await res.json()) as {
+          assets?: DialogAsset[];
+          total?: number;
+          hiddenByMime?: number;
+          error?: string;
+        };
+        if (mine !== seq.current) return;
+        if (!res.ok) throw new Error(json.error ?? `Lỗi ${res.status}`);
+        const page = json.assets ?? [];
+        setTotal(json.total ?? page.length);
+        setHiddenByMime(json.hiddenByMime ?? 0);
+        setAssets((prev) => {
+          if (skip === 0 || !prev) return page;
+          const seen = new Set(prev.map((a) => a.id));
+          return [...prev, ...page.filter((a) => !seen.has(a.id))];
+        });
+        setError(null);
+      } catch (e) {
+        if (mine === seq.current) setError(String(e instanceof Error ? e.message : e));
       }
-    } catch (e) {
-      setError(String(e instanceof Error ? e.message : e));
-    }
-  }, []);
+    },
+    [folder, q, mimeKey],
+  );
 
   // Nạp LÚC MỞ, không lúc mount: form Cài đặt dựng dialog này ngay cả khi không ai
-  // bấm vào nó.
+  // bấm vào nó. Đổi thư mục / ô tìm / kiểu file thì về trang đầu.
   useEffect(() => {
-    if (!open || assets) return;
-    void load();
-  }, [open, assets, load]);
+    if (!open) return;
+    void fetchPage(0);
+  }, [open, fetchPage]);
+
+  // Cây thư mục: một lần mỗi lần mở. Hỏng thì lưới vẫn dùng được — chỉ mất bộ lọc.
+  useEffect(() => {
+    if (!open) return;
+    let stale = false;
+    void fetch('/api/assets/folders')
+      .then((r) => (r.ok ? (r.json() as Promise<{ folders?: FolderNode[] }>) : null))
+      .then((j) => {
+        if (!stale && j) setFolders(j.folders ?? []);
+      })
+      .catch(() => {});
+    return () => {
+      stale = true;
+    };
+  }, [open]);
+
+  const remaining = Math.max(0, total - (assets?.length ?? 0));
+  const loadMore = useCallback(() => {
+    if (loadingMore || !assets || remaining <= 0) return;
+    setLoadingMore(true);
+    void fetchPage(assets.length).finally(() => setLoadingMore(false));
+  }, [loadingMore, assets, remaining, fetchPage]);
 
   async function upload(files: FileList | File[]) {
     const list = Array.from(files);
@@ -216,10 +265,8 @@ export function AssetDialog({
       invalidateAssets();
 
       const picked = json.asset;
-      setAssets((all) => {
-        if (!all) return all;
-        return all.some((a) => a.id === picked.id) ? all : [picked, ...all];
-      });
+      // Không đụng tổng: dialog đóng ngay sau đây, lần mở sau nạp lại từ server.
+      setAssets((all) => (!all || all.some((a) => a.id === picked.id) ? all : [picked, ...all]));
       onPick(picked);
       onClose();
     } catch (e) {
@@ -230,43 +277,27 @@ export function AssetDialog({
     }
   }
 
-  const all = assets ?? [];
-  const inFolder = all.filter((a) => {
-    if (folder === null) return true;
-    return a.folder === folder || a.folder?.startsWith(`${folder}/`);
-  });
-  const eligible = mimes ? inFolder.filter((a) => mimes.has(a.mime)) : inFolder;
-  const hiddenByMime = inFolder.length - eligible.length;
-
-  const q = query.trim().toLowerCase();
-  const shown = q ? eligible.filter((a) => a.key.toLowerCase().includes(q)) : eligible;
-  const visible = shown.slice(0, limit);
-  const remaining = shown.length - visible.length;
+  const visible = assets ?? [];
 
   const folderOptions = [
     { value: '', label: 'Tất cả thư mục' },
     ...folders.map((f) => ({ value: f.path, label: `${'— '.repeat(f.depth)}${f.name} (${f.total})` })),
   ];
 
-  // Đổi bộ lọc hay mở lại dialog thì về trang đầu: kết quả mới bắt đầu từ đầu lưới.
-  useEffect(() => {
-    setLimit(PAGE);
-  }, [folder, q, open, tab]);
-
-  // Cuộn tới cuối lưới thì hiện thêm. Nút "Hiện thêm" vẫn ở đó cho bàn phím và cho
+  // Cuộn tới cuối lưới thì nạp trang kế. Nút "Hiện thêm" vẫn ở đó cho bàn phím và cho
   // trình duyệt không có IntersectionObserver.
   useEffect(() => {
     const el = moreRef.current;
     if (!el || remaining <= 0 || typeof IntersectionObserver === 'undefined') return;
     const io = new IntersectionObserver(
       (entries) => {
-        if (entries.some((e) => e.isIntersecting)) setLimit((n) => n + PAGE);
+        if (entries.some((e) => e.isIntersecting)) loadMore();
       },
       { rootMargin: '0px 0px 400px 0px' },
     );
     io.observe(el);
     return () => io.disconnect();
-  }, [remaining]);
+  }, [remaining, loadMore]);
 
   return (
     <dialog
@@ -323,7 +354,7 @@ export function AssetDialog({
                 options={folderOptions}
                 wrapperClassName="w-56"
               />
-              <span className="ml-auto text-small text-shell-muted tabular-nums">{shown.length} ảnh</span>
+              <span className="ml-auto text-small text-shell-muted tabular-nums">{total} ảnh</span>
             </div>
 
             <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
@@ -341,7 +372,7 @@ export function AssetDialog({
                     </li>
                   ))}
                 </ul>
-              ) : shown.length === 0 ? (
+              ) : visible.length === 0 ? (
                 <p className="py-10 text-center text-ui text-shell-muted">
                   {hiddenByMime > 0
                     ? `Không có ảnh ${mimeLabel} nào ở đây.`
@@ -397,14 +428,15 @@ export function AssetDialog({
               {remaining > 0 && (
                 <div ref={moreRef} className="mt-4 flex items-center justify-center gap-3 text-small text-shell-muted">
                   <span>
-                    Đang hiện {visible.length}/{shown.length} ảnh
+                    Đang hiện {visible.length}/{total} ảnh
                   </span>
                   <button
                     type="button"
-                    onClick={() => setLimit((n) => n + PAGE)}
+                    disabled={loadingMore}
+                    onClick={loadMore}
                     className={cn('rounded-md px-3 py-1.5 font-semibold text-shell-ink hover:bg-shell-raised', focusRing)}
                   >
-                    Hiện thêm
+                    {loadingMore ? 'Đang tải…' : 'Hiện thêm'}
                   </button>
                 </div>
               )}

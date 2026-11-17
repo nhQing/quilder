@@ -22,6 +22,11 @@ const NEXT_WIDTHS = [16, 32, 48, 64, 96, 128, 256, 384, 640, 750, 828, 1080, 120
 const QUALITY = 75;
 
 const RASTER = /\.(png|jpe?g|webp|avif)$/i;
+/**
+ * Mime raster mà optimizer nhận. Dùng khi URL KHÔNG có đuôi: ảnh nhập từ site cũ mang
+ * khoá kiểu `large-z6147…-762bf66f` (17/11/2026: bộ chọn ảnh tải file gốc cho chúng).
+ */
+const RASTER_MIME = /^image\/(png|jpe?g|webp|avif)$/i;
 
 function pathOf(url: string): string | null {
   if (url.startsWith('/') && !url.startsWith('//')) return url.split(/[?#]/)[0] ?? null;
@@ -46,9 +51,17 @@ function optimized(url: string, w: number): string {
  * `src` + `srcSet` (1x, 2x) cho một ô hiển thị rộng khoảng `displayPx` px CSS,
  * hoặc `null` nếu file nên giữ nguyên gốc.
  */
-export function thumbSrc(url: string, displayPx: number): { src: string; srcSet: string } | null {
+export function thumbSrc(
+  url: string,
+  displayPx: number,
+  /** Mime đã biết của file. Đuôi trong URL thắng; không có đuôi thì xét mime. */
+  mime?: string,
+): { src: string; srcSet: string } | null {
   const path = pathOf(url);
-  if (!path || path.startsWith('/_next/image') || !RASTER.test(path)) return null;
+  if (!path || path.startsWith('/_next/image')) return null;
+  const hasExt = /\.[a-z0-9]{2,5}$/i.test(path);
+  const raster = hasExt ? RASTER.test(path) : !!mime && RASTER_MIME.test(mime);
+  if (!raster) return null;
   const w1 = pickWidth(displayPx);
   const w2 = pickWidth(displayPx * 2);
   return { src: optimized(url, w1), srcSet: `${optimized(url, w1)} 1x, ${optimized(url, w2)} 2x` };

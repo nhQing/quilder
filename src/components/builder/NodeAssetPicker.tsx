@@ -88,6 +88,7 @@ export function NodeAssetPicker({
         onPick={(a) => void write(a?.id ?? null)}
         label={label}
         kinds={kinds}
+        thumb={320}
         className={busy ? 'pointer-events-none opacity-50' : undefined}
       />
 

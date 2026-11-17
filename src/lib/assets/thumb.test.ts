@@ -38,4 +38,13 @@ describe('thumbSrc', () => {
   ])('%s → giữ gốc (null)', (_label, url) => {
     expect(thumbSrc(url, 200)).toBeNull();
   });
+
+  it('URL không đuôi (ảnh nhập từ site cũ) vẫn thu nhỏ khi mime là raster', () => {
+    const url = 'https://cdn.maimoney.com/public/builder/large-z6147996634766-762bf66f';
+    expect(thumbSrc(url, 200)).toBeNull();
+    expect(thumbSrc(url, 200, 'image/jpeg')?.src).toBe(`/_next/image?url=${encodeURIComponent(url)}&w=256&q=75`);
+    expect(thumbSrc(url, 200, 'image/svg+xml')).toBeNull();
+    // Có đuôi thì đuôi thắng: SVG mang mime sai vẫn không đi qua optimizer.
+    expect(thumbSrc('https://cdn.example/a.svg', 200, 'image/png')).toBeNull();
+  });
 });

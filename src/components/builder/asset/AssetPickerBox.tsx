@@ -90,6 +90,7 @@ export function AssetPickerBox({
    * tự tra.
    */
   known,
+  thumb,
   className,
 }: {
   value: string | null;
@@ -104,6 +105,12 @@ export function AssetPickerBox({
   accept?: string;
   dialogTitle?: string;
   known?: KnownAsset | null;
+  /**
+   * Bề rộng khung (px CSS) để xem bản THU NHỎ thay vì file gốc (17/11/2026: ô
+   * thumbnail của entry tải ảnh 4K 3840×2160 chỉ để vẽ khung ~300px). Bỏ trống ở
+   * chỗ cần đúng từng điểm ảnh của file — favicon, logo ở Cài đặt.
+   */
+  thumb?: number;
   className?: string;
 }) {
   const [open, setOpen] = useState(false);
@@ -209,6 +216,7 @@ export function AssetPickerBox({
             mime={shown.mime}
             assetKey={shown.key}
             url={shown.url}
+            thumb={thumb}
             /* Vừa khung bằng `object-contain` mặc định của AssetThumb — xem
                "Vì sao khung VUÔNG" ở đầu file. */
             className="size-full"

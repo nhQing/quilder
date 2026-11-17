@@ -56,6 +56,8 @@ export function AssetField({
       onPick={(a) => onPick(a?.id ?? null)}
       label={imageOnly ? (allowVideo ? 'ảnh hoặc video' : 'ảnh') : 'tệp'}
       kinds={imageOnly ? (allowVideo ? IMAGE_OR_VIDEO_KINDS : IMAGE_KINDS) : ANY_KINDS}
+      // Khung ~300px: xem bản thu nhỏ, không tải file gốc vài MB.
+      thumb={320}
       /*
        * Chặn bề rộng.
        *

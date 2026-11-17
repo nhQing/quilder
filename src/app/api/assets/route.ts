@@ -16,6 +16,7 @@ import { NextResponse } from 'next/server';
  */
 
 import { normalizeFolder } from '@/lib/assets/folder';
+import { parseAssetPageQuery } from '@/lib/assets/page-query';
 import { requireAuth } from '@/lib/auth/guard';
 import { MAX_ASSET_BYTES, uploadAsset } from '@/lib/builder/upload-asset';
 import { prisma } from '@/lib/db';
@@ -32,7 +33,8 @@ export async function GET(request: Request) {
    * = nhóm chưa phân loại; `folder=x` = nhánh x. Gộp hai cái đầu lại sẽ làm "xem
    * ảnh chưa phân loại" trở thành "xem tất cả".
    */
-  const raw = new URL(request.url).searchParams.get('folder');
+  const params = new URL(request.url).searchParams;
+  const raw = params.get('folder');
   let where = {};
   if (raw !== null) {
     const folder = normalizeFolder(raw);
@@ -40,6 +42,42 @@ export async function GET(request: Request) {
     where = folder.value === null
       ? { folder: null }
       : { OR: [{ folder: folder.value }, { folder: { startsWith: `${folder.value}/` } }] };
+  }
+
+  const select = {
+    id: true, key: true, url: true, mime: true,
+    width: true, height: true, bytes: true, createdAt: true, folder: true,
+  } as const;
+
+  /*
+   * Một TRANG cho bộ chọn ảnh (17/11/2026) — xem `lib/assets/page-query.ts`. Tìm, lọc
+   * thư mục và lọc kiểu chạy ở DB; `hiddenByMime` là số ảnh khớp phạm vi nhưng sai
+   * kiểu, để dialog nói được "N ảnh khác bị ẩn vì không phải PNG".
+   */
+  const page = parseAssetPageQuery(params);
+  if (page) {
+    const scope = [
+      where,
+      { trashedAt: null },
+      page.q ? { key: { contains: page.q, mode: 'insensitive' as const } } : {},
+    ];
+    const typed = [...scope, page.mimes ? { mime: { in: page.mimes } } : {}];
+    const [rows, total, inScope] = await Promise.all([
+      prisma.asset.findMany({
+        where: { AND: typed },
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        skip: page.skip,
+        take: page.take,
+        select,
+      }),
+      prisma.asset.count({ where: { AND: typed } }),
+      page.mimes ? prisma.asset.count({ where: { AND: scope } }) : Promise.resolve(null),
+    ]);
+    return NextResponse.json({
+      assets: rows.map((r) => ({ ...r, createdAt: r.createdAt.toISOString() })),
+      total,
+      hiddenByMime: inScope === null ? 0 : inScope - total,
+    });
   }
 
   const rows = await prisma.asset.findMany({
