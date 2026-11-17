@@ -67,6 +67,10 @@ interface FolderNode {
 
 type Tab = 'pick' | 'upload';
 
+
+/** Số ô render thêm mỗi lượt trong lưới chọn ảnh. */
+const PAGE = 60;
+
 export function AssetDialog({
   open,
   onClose,
@@ -103,6 +107,14 @@ export function AssetDialog({
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
+  /**
+   * Số ô đang render. Kho có hàng nghìn ảnh: dựng hết một lượt là hàng nghìn nút và
+   * thẻ `<img>` trong một dialog (17/11/2026: 1024 ảnh mỗi lần mở picker). Danh sách
+   * vẫn nạp đủ để ô tìm và bộ lọc thư mục thấy cả kho; chỉ phần HIỂN THỊ được cắt,
+   * và nới thêm `PAGE` mỗi khi cuộn tới cuối (hoặc bấm "Hiện thêm").
+   */
+  const [limit, setLimit] = useState(PAGE);
+  const moreRef = useRef<HTMLDivElement>(null);
 
   /*
    * `showModal()` phải gọi bằng tay, không đặt thuộc tính `open`.
@@ -228,11 +240,33 @@ export function AssetDialog({
 
   const q = query.trim().toLowerCase();
   const shown = q ? eligible.filter((a) => a.key.toLowerCase().includes(q)) : eligible;
+  const visible = shown.slice(0, limit);
+  const remaining = shown.length - visible.length;
 
   const folderOptions = [
     { value: '', label: 'Tất cả thư mục' },
     ...folders.map((f) => ({ value: f.path, label: `${'— '.repeat(f.depth)}${f.name} (${f.total})` })),
   ];
+
+  // Đổi bộ lọc hay mở lại dialog thì về trang đầu: kết quả mới bắt đầu từ đầu lưới.
+  useEffect(() => {
+    setLimit(PAGE);
+  }, [folder, q, open, tab]);
+
+  // Cuộn tới cuối lưới thì hiện thêm. Nút "Hiện thêm" vẫn ở đó cho bàn phím và cho
+  // trình duyệt không có IntersectionObserver.
+  useEffect(() => {
+    const el = moreRef.current;
+    if (!el || remaining <= 0 || typeof IntersectionObserver === 'undefined') return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) setLimit((n) => n + PAGE);
+      },
+      { rootMargin: '0px 0px 400px 0px' },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [remaining]);
 
   return (
     <dialog
@@ -315,7 +349,7 @@ export function AssetDialog({
                 </p>
               ) : (
                 <ul className="grid grid-cols-[repeat(auto-fill,minmax(8rem,1fr))] gap-3">
-                  {shown.map((a) => {
+                  {visible.map((a) => {
                     const on = a.id === value;
                     return (
                       <li key={a.id}>
@@ -358,6 +392,21 @@ export function AssetDialog({
                     );
                   })}
                 </ul>
+              )}
+
+              {remaining > 0 && (
+                <div ref={moreRef} className="mt-4 flex items-center justify-center gap-3 text-small text-shell-muted">
+                  <span>
+                    Đang hiện {visible.length}/{shown.length} ảnh
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setLimit((n) => n + PAGE)}
+                    className={cn('rounded-md px-3 py-1.5 font-semibold text-shell-ink hover:bg-shell-raised', focusRing)}
+                  >
+                    Hiện thêm
+                  </button>
+                </div>
               )}
 
               {/*
