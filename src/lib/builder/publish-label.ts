@@ -28,21 +28,32 @@ export interface PublishLook {
 
 const BASE = 'Publish trang này';
 
+/**
+ * `extra` (17/11/2026): thay đổi NGOÀI cây node — bản dịch và component — mà `seq` không
+ * thấy. Thiếu nó thì trang chỉ có bản tiếng Anh mới bị coi là "không có gì để đẩy" và
+ * nút mờ, dù bấm Publish sẽ đổi site thật. Xem `lib/publish/pending-extra.ts`.
+ */
 export function publishLook(a: {
   /** Bản nháp đang mở. `null` ở chế độ sửa component. */
   seq: number | null;
   /** Bản đang nằm trong release đang chạy. `null` = trang chưa publish lần nào. */
   baseSeq: number | null;
+  /** Bản dịch / component khác bản đang chạy — do server đếm lúc tải trang. */
+  extra?: { translations: number; components: number };
 }): PublishLook {
   if (a.seq === null) return { text: BASE, disabled: false };
   if (a.baseSeq === null) {
     return { text: `${BASE} · chưa publish lần nào`, disabled: false };
   }
 
+  // `<= 0` thì coi như không có lần sửa nào: số của client có thể đã cũ hơn server
+  // (người khác vừa publish), và một nhãn "-1 lần sửa" là cách nói "tôi không biết".
   const ahead = a.seq - a.baseSeq;
-  // `<= 0` chứ không `=== 0`: số của client có thể đã cũ hơn server (người khác vừa
-  // publish), và một nhãn "-1 lần sửa" là cách nói "tôi không biết" bằng con số.
-  if (ahead <= 0) return { text: BASE, disabled: true };
+  const parts: string[] = [];
+  if (ahead > 0) parts.push(`${ahead} lần sửa`);
+  if (a.extra?.translations) parts.push(`${a.extra.translations} bản dịch`);
+  if (a.extra?.components) parts.push(`${a.extra.components} component`);
 
-  return { text: `${BASE} · ${ahead} lần sửa chưa publish`, disabled: false };
+  if (!parts.length) return { text: BASE, disabled: true };
+  return { text: `${BASE} · ${parts.join(', ')} chưa publish`, disabled: false };
 }

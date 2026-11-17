@@ -46,6 +46,7 @@ export function EditorShell({
   doc,
   seq,
   baseSeq,
+  pendingExtra,
   pages,
   presets,
   tokens,
@@ -66,6 +67,8 @@ export function EditorShell({
   seq: number | null;
   /** `seq` của bản đang chạy trên site. `null` = trang chưa publish lần nào. */
   baseSeq: number | null;
+  /** Bản dịch / component khác bản đang chạy — `pendingExtras`. Vắng = không đếm. */
+  pendingExtra?: { translations: number; components: number };
   pages: PageSummary[];
   presets: PresetSummary[];
   tokens: TokenOption[];
@@ -528,7 +531,7 @@ export function EditorShell({
     : lastSeq.current.pageId === pageId
       ? lastSeq.current.seq
       : seq;
-  const pub = publishLook({ seq: savedSeq, baseSeq });
+  const pub = publishLook({ seq: savedSeq, baseSeq, extra: pendingExtra });
 
   return (
     <AiLinkProvider

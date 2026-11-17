@@ -1,7 +1,7 @@
 import { notFound } from 'next/navigation';
 
 import { EditorShell } from '@/components/builder/EditorShell';
-import { getDraftPage, listPages, listPresets, listTokens, publishedSeq, siteShareDefaults } from '@/lib/builder/queries';
+import { getDraftPage, listPages, listPresets, listTokens, pendingExtras, publishedSeq, siteShareDefaults } from '@/lib/builder/queries';
 import { getSession } from '@/lib/auth/guard';
 import { endpointUsage } from '@/lib/builder/site-settings';
 import { loadComponents } from '@/lib/render/components';
@@ -48,6 +48,13 @@ export default async function EditorPage({
 
   // Nạp SAU khi có doc: danh sách component cần nạp suy ra từ chính doc.
   const components = await loadComponents(page.doc);
+  // Bản dịch / component chưa publish — nút Publish không thấy chúng qua `seq`.
+  const pendingExtra = await pendingExtras(
+    page.id,
+    page.doc,
+    [...components.keys()],
+    locales.filter((l) => !l.isDefault).map((l) => l.code),
+  );
 
   return (
     <EditorShell
@@ -57,6 +64,7 @@ export default async function EditorPage({
       doc={page.doc}
       seq={page.seq}
       baseSeq={baseSeq}
+      pendingExtra={pendingExtra}
       pages={pages}
       presets={presets}
       tokens={tokens}

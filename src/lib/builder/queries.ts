@@ -15,6 +15,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { rollbackWindowIds } from '@/lib/builder/rollback-window';
+import { countComponentDrift, countTranslationDrift, type PendingExtra } from '@/lib/publish/pending-extra';
 import { prisma } from '@/lib/db';
 import { rootTokens, TOKENS_CSS } from '@/lib/design/token-source';
 import { withPackVariables } from '@/lib/fonts/pack';
@@ -223,6 +224,43 @@ export async function publishedSeq(pageId: string): Promise<number | null> {
     select: { version: { select: { seq: true } } },
   });
   return entry?.version.seq ?? null;
+}
+
+/**
+ * Bản dịch và component của trang khác bản đang chạy — cho nút Publish, vốn chỉ thấy
+ * sửa đổi trên cây node. Xem `lib/publish/pending-extra.ts`.
+ */
+export async function pendingExtras(
+  pageId: string,
+  doc: Doc,
+  componentIds: readonly string[],
+  localeCodes: readonly string[],
+): Promise<PendingExtra> {
+  const site = await prisma.site.findFirst({ select: { activeReleaseId: true } });
+  if (!site?.activeReleaseId) return { translations: 0, components: 0 };
+
+  const [release, rows, presets] = await Promise.all([
+    prisma.release.findUnique({
+      where: { id: site.activeReleaseId },
+      select: { translations: true, components: true },
+    }),
+    localeCodes.length
+      ? prisma.translation.findMany({
+          where: { pageId, locale: { in: [...localeCodes] } },
+          select: { locale: true, nodeId: true, field: true, value: true },
+        })
+      : Promise.resolve([]),
+    componentIds.length
+      ? prisma.preset.findMany({ where: { id: { in: [...componentIds] } }, select: { id: true, tree: true } })
+      : Promise.resolve([]),
+  ]);
+
+  return {
+    translations: countTranslationDrift(
+      rows, release?.translations, pageId, localeCodes, new Set(Object.keys(doc.nodes)),
+    ),
+    components: countComponentDrift(presets, release?.components),
+  };
 }
 
 export interface ReleaseSummary {

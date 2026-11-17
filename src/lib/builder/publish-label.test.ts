@@ -77,4 +77,26 @@ describe('publishLook', () => {
     ];
     for (const c of cases) expect(publishLook(c).text).toContain('Publish');
   });
+
+  it('chỉ có bản dịch mới (cây node không đổi) → nút SÁNG, nói rõ là bản dịch', () => {
+    // 17/11/2026: trang chỉ có bản tiếng Anh mới từng bị coi là "không có gì để đẩy".
+    expect(publishLook({ seq: 41, baseSeq: 41, extra: { translations: 12, components: 0 } })).toEqual({
+      text: 'Publish trang này · 12 bản dịch chưa publish',
+      disabled: false,
+    });
+  });
+
+  it('gộp lần sửa, bản dịch và component trong một nhãn', () => {
+    expect(publishLook({ seq: 43, baseSeq: 41, extra: { translations: 1, components: 2 } })).toEqual({
+      text: 'Publish trang này · 2 lần sửa, 1 bản dịch, 2 component chưa publish',
+      disabled: false,
+    });
+  });
+
+  it('không có gì khác bản đang chạy → vẫn mờ', () => {
+    expect(publishLook({ seq: 41, baseSeq: 41, extra: { translations: 0, components: 0 } })).toEqual({
+      text: 'Publish trang này',
+      disabled: true,
+    });
+  });
 });
