@@ -38,6 +38,16 @@ describe('countTranslationDrift', () => {
     expect(countTranslationDrift(rows, legacy, 'p1', ['en'], nodes)).toBe(0);
   });
 
+  it('bản dịch của node đã xoá khỏi trang không bị đếm (Publish không đưa nó lên)', () => {
+    const rows = [
+      { locale: 'en', nodeId: 'hero', field: 'content', value: [{ t: 'text', v: 'Hello' }] },
+      { locale: 'en', nodeId: '$meta', field: 'title', value: 'Home' },
+      { locale: 'en', nodeId: 'gone-note', field: 'content', value: [{ t: 'text', v: 'Old' }] },
+      { locale: 'en', nodeId: 'gone-inst/x', field: 'label', value: 'Old' },
+    ];
+    expect(countTranslationDrift(rows, snap, 'p1', ['en'], nodes)).toBe(0);
+  });
+
   it('trang chưa từng có bản dịch, giờ có → đếm đủ', () => {
     const rows = [{ locale: 'en', nodeId: 'hero', field: 'content', value: 'Hello' }];
     expect(countTranslationDrift(rows, null, 'p1', ['en'], nodes)).toBe(1);

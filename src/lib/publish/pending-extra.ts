@@ -56,7 +56,12 @@ export function countTranslationDrift(
     }
     const draft = new Map<string, string>();
     for (const r of rows) {
-      if (r.locale === locale) draft.set(unitKey(r.nodeId, r.field), JSON.stringify(r.value));
+      // Cùng bộ lọc với phía ảnh chụp: bản dịch của node đã bị xoá khỏi trang không được
+      // publish (release chỉ chụp đơn vị còn có node), nên đếm nó là một "bản dịch chưa
+      // publish" không bao giờ hết — Publish xong nút vẫn báo (17/11/2026, /events/[slug]).
+      if (r.locale === locale && ownsNode(r.nodeId)) {
+        draft.set(unitKey(r.nodeId, r.field), JSON.stringify(r.value));
+      }
     }
     for (const [key, value] of draft) if (live.get(key) !== value) drift++;
     for (const key of live.keys()) if (!draft.has(key)) drift++;
