@@ -88,7 +88,10 @@ function mayBeTransparent(mime: string): boolean {
  * đường dẫn khi hai thứ lệch nhau.
  */
 function usedByLabel(asset: AssetItem): string {
-  return asset.usedBy.map((u) => (u.slug ? `/${u.slug}` : 'Trang chủ')).join(', ');
+  // Entry (Kho dữ liệu) không có đường dẫn trang: nói tên loại + tên bài.
+  return asset.usedBy
+    .map((u) => (u.kind === 'entry' ? u.title : u.slug ? `/${u.slug}` : 'Trang chủ'))
+    .join(', ');
 }
 
 /** `2026-10-07T07:32:00Z` → `07/10/2026 14:32` (giờ địa phương, dd/MM/yyyy HH:mm). */

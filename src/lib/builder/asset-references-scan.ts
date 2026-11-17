@@ -488,6 +488,50 @@ const entryTitle = (e: EntrySource): string => {
   return typeof raw === 'string' && raw.trim() ? raw.trim() : e.slug;
 };
 
+/** Một entry đang dùng ảnh — cho nhãn "Dùng ở" của Thư viện. */
+export interface EntryAssetUse {
+  entryId: string;
+  /** "Sự kiện: The Art of Wealth" — cùng câu chữ với lời chặn xoá. */
+  label: string;
+  href: string;
+}
+
+/**
+ * assetId → những entry đang dùng nó, cho MỌI ảnh trong `assets`.
+ *
+ * ## Vì sao cần (17/11/2026)
+ *
+ * Nhãn "chưa dùng" của Thư viện (`listAssetsWithUsage`) từng chỉ đọc bản nháp các
+ * trang, nên ảnh bìa / thumbnail của bài trong Kho dữ liệu — đang hiện trên site — bị
+ * kê "chưa dùng" và lọt vào bộ lọc "Chưa dùng", đúng bộ lọc người ta mở khi dọn kho.
+ * Phép kiểm trước khi xoá đã thấy entry từ lâu; hàm này cho nhãn dùng CÙNG phép duyệt
+ * (`idsInEntry`: `{ assetId }` ở mọi độ sâu + URL trong field `html`), để hai chỗ không
+ * bao giờ nói khác nhau về cùng một ảnh.
+ */
+export function entryAssetUses(
+  entries: readonly EntrySource[],
+  assets: readonly ScanAsset[],
+): Map<string, EntryAssetUse[]> {
+  const ctx = createScanContext(
+    assets.map((a) => a.id),
+    assets,
+  );
+  const out = new Map<string, EntryAssetUse[]>();
+  for (const e of entries) {
+    const use: EntryAssetUse = {
+      entryId: e.id,
+      label: `${e.typeName}: ${entryTitle(e)}${e.archived ? ' (đã lưu trữ)' : ''}`,
+      href: `/builder/content/${e.typeKey}/${e.id}`,
+    };
+    for (const id of idsInEntry(e, ctx)) {
+      const list = out.get(id) ?? [];
+      list.push(use);
+      out.set(id, list);
+    }
+  }
+  return out;
+}
+
 const toIso = (d: Date | string) => (typeof d === 'string' ? d : d.toISOString());
 
 /**

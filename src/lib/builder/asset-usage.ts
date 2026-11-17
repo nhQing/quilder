@@ -22,14 +22,24 @@ import { migrateDoc } from '@/lib/doc/migrate';
 import type { Doc } from '@/lib/doc/types';
 import { componentIdsIn, loadComponents } from '@/lib/render/components';
 import { assetUsesInDoc } from './asset-refs';
+import { entryAssetUses } from './asset-references-scan';
 
 export interface AssetUse {
+  /** `entry` = bài trong Kho dữ liệu; vắng = trang dựng bằng builder. */
+  kind?: 'entry';
+  /** Rỗng với `kind: 'entry'`. */
   pageId: string;
   slug: string;
+  /** Tên trang, hoặc "Sự kiện: The Art of Wealth" với entry. */
   title: string;
-  /** Node trong trang đó đang trỏ tới asset. */
+  /** Node trong trang đó đang trỏ tới asset. Rỗng với entry. */
   nodeIds: string[];
+  /** Màn sửa entry. Chỉ có với `kind: 'entry'`. */
+  href?: string;
 }
+
+/** Số "nơi dùng": mỗi node của trang là một nơi, mỗi entry là một nơi. */
+export const useWeight = (u: AssetUse): number => (u.kind === 'entry' ? 1 : u.nodeIds.length);
 
 export interface AssetWithUsage {
   id: string;
@@ -179,6 +189,45 @@ export async function listAssetsWithUsage(
     }
   });
 
+  /*
+   * Bài trong Kho dữ liệu (17/11/2026). Ảnh bìa, thumbnail, ảnh tác giả… của entry KHÔNG
+   * nằm trong doc trang nào, nên trước đây chúng bị kê "chưa dùng" dù đang hiện trên
+   * site. Cùng phép duyệt với lời chặn xoá — xem `entryAssetUses`.
+   *
+   * Nạp `key` của mọi ảnh (không phải chỉ trang đang xem) vì phép quét URL trong field
+   * `html` cần biết key nào thuộc id nào, và bộ lọc `used`/con số `unused` tính trên
+   * cả kho. Hai cột ngắn cho vài nghìn hàng — rẻ hơn nhiều so với đọc doc các trang.
+   */
+  const [allAssets, entries] = await Promise.all([
+    prisma.asset.findMany({ where: { trashedAt: null }, select: { id: true, key: true } }),
+    prisma.entry.findMany({
+      select: {
+        id: true, typeKey: true, slug: true, archivedAt: true, data: true, i18n: true,
+        type: { select: { name: true, titleField: true } },
+      },
+    }),
+  ]);
+  const byEntry = entryAssetUses(
+    entries.map((e) => ({
+      id: e.id,
+      typeKey: e.typeKey,
+      typeName: e.type.name,
+      titleField: e.type.titleField,
+      slug: e.slug,
+      archived: e.archivedAt !== null,
+      data: e.data,
+      i18n: e.i18n,
+    })),
+    allAssets,
+  );
+  for (const [assetId, uses] of byEntry) {
+    const list = usage.get(assetId) ?? [];
+    for (const u of uses) {
+      list.push({ kind: 'entry', pageId: '', slug: '', title: u.label, nodeIds: [], href: u.href });
+    }
+    usage.set(assetId, list);
+  }
+
   const usedIds = [...usage.keys()];
   const usedWhere =
     opts.used === 'used'
@@ -218,7 +267,7 @@ export async function listAssetsWithUsage(
       return {
         ...a,
         createdAt: a.createdAt.toISOString(),
-        useCount: usedBy.reduce((n, u) => n + u.nodeIds.length, 0),
+        useCount: usedBy.reduce((n, u) => n + useWeight(u), 0),
         usedBy,
       };
     }),

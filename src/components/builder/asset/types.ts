@@ -9,10 +9,13 @@
 import { ASSET_PAGE_SIZE } from '@/lib/assets/paging';
 
 export interface AssetUse {
+  /** `entry` = bài trong Kho dữ liệu; vắng = trang dựng bằng builder. */
+  kind?: 'entry';
   pageId: string;
   slug: string;
   title: string;
   nodeIds: string[];
+  href?: string;
 }
 
 export interface AssetItem {

@@ -20,7 +20,7 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 
 type Args = Record<string, unknown>;
 
-const ALL_ASSET_IDS = ['logo-trong-component', 'that-su-khong-ai-dung'];
+const ALL_ASSET_IDS = ['logo-trong-component', 'that-su-khong-ai-dung', 'thumbnail-su-kien', 'anh-trong-bai'];
 
 const asset = (id: string) => ({
   id,
@@ -78,6 +78,22 @@ const pageFindMany = vi.fn(async (_a: Args): Promise<unknown> => [
   },
 ]);
 
+/**
+ * Bài trong Kho dữ liệu: thumbnail là `{ assetId }`, còn ảnh trong thân bài (field
+ * `html` của CKEditor) chỉ có URL — hai đường mà lời chặn xoá thấy, và nhãn giờ cũng thấy.
+ */
+const entryFindMany = vi.fn(async (_a: Args): Promise<unknown> => [
+  {
+    id: 'e1',
+    typeKey: 'su-kien',
+    slug: 'the-art-of-wealth',
+    archivedAt: null,
+    data: { title: 'The Art of Wealth', thumbnail: { assetId: 'thumbnail-su-kien' } },
+    i18n: { en: { body: '<p><img src="https://cdn.example/k/anh-trong-bai"></p>' } },
+    type: { name: 'Sự kiện', titleField: 'title' },
+  },
+]);
+
 vi.mock('next/cache', () => ({
   unstable_cache: (fn: (...a: unknown[]) => unknown) => fn,
   revalidateTag: vi.fn(),
@@ -104,6 +120,7 @@ vi.mock('@/lib/db', () => ({
       }),
     },
     page: { findMany: (a: Args) => pageFindMany(a) },
+    entry: { findMany: (a: Args) => entryFindMany(a) },
     preset: { findMany: (a: Args) => presetFindMany(a) },
   },
 }));
@@ -130,6 +147,25 @@ describe('listAssetsWithUsage — ảnh chỉ nằm trong component', () => {
   it('`unused` chỉ đếm ảnh thật sự không ai dùng', async () => {
     const out = await listAssetsWithUsage();
     expect(out.unused).toBe(1);
+  });
+
+  it('ảnh chỉ dùng trong bài Kho dữ liệu (thumbnail, ảnh trong thân bài) KHÔNG là "chưa dùng"', async () => {
+    // 17/11/2026: thumbnail sự kiện "The Art of Wealth" hiện trên /events mà Thư viện ghi "chưa dùng".
+    const out = await listAssetsWithUsage();
+    for (const id of ['thumbnail-su-kien', 'anh-trong-bai']) {
+      const a = out.assets.find((x) => x.id === id)!;
+      expect(a.useCount).toBe(1);
+      expect(a.usedBy).toEqual([
+        {
+          kind: 'entry',
+          pageId: '',
+          slug: '',
+          title: 'Sự kiện: The Art of Wealth',
+          nodeIds: [],
+          href: '/builder/content/su-kien/e1',
+        },
+      ]);
+    }
   });
 
   it('ảnh không ai dùng vẫn là 0 — test này phải đỏ nếu phép đếm nhận nhầm mọi thứ', async () => {
