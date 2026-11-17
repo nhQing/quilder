@@ -37,7 +37,7 @@ import { PageShare } from './PageShare';
 import { AiLinkProvider } from './AiLinkProvider';
 import { Button, buttonClass, Spinner } from './ui/Button';
 import { Icon } from './ui/Icon';
-import { Toast, ToastRegion } from './ui/Overlay';
+import { ConfirmDialog, Toast, ToastRegion } from './ui/Overlay';
 
 export function EditorShell({
   pageId,
@@ -104,6 +104,8 @@ export function EditorShell({
   const locale = useEditor((s) => s.locale);
 
   const [publishing, setPublishing] = useState(false);
+  /** Hộp xác nhận Publish đang mở — xem `askPublish`. */
+  const [confirmPublish, setConfirmPublish] = useState(false);
   // `{ ok, text }` chứ không phải một chuỗi trần: bản trước dùng CHUNG một state
   // cho cả thành công lẫn thất bại rồi luôn render bằng `text-shell-ok`, nên
   // publish hỏng vẫn hiện chữ xanh lá 10px và người dùng tưởng đã xong. Cùng mẫu
@@ -449,33 +451,30 @@ export function EditorShell({
    * người ta đến khi đang nghĩ về cả site, chứ không phải chỗ cách nút "Xem nháp"
    * 8px lúc đang sửa một dòng chữ.
    */
+  /*
+   * Publish là thao tác DUY NHẤT mà khách nhìn thấy ngay lập tức, nên nó luôn hỏi lại
+   * — cùng mức với xoá node, thu hồi token hay lùi bản. Nút lại nằm cách "Xem nháp" 8px.
+   *
+   * Hỏi bằng `ConfirmDialog`, KHÔNG bằng `window.confirm()` (17/11/2026): trình duyệt
+   * nhúng (khung Browser của app Claude, webview) chặn hộp thoại native và trả `false`
+   * ngay — nút Publish bấm vào không có phản ứng gì, không một dòng báo lỗi.
+   */
+  const askPublish = () => setConfirmPublish(true);
+
+  /*
+   * `hasUnpublishedChanges` so `draftVersionId` với bản live, tức nó CHỈ thấy
+   * thay đổi ở cây node của trang. Sửa component (`Preset.tree`) hay sửa bản
+   * dịch (`Translation`) không đụng tới nó, nhưng cả hai đều được chụp vào
+   * release lúc publish và đều lên site — xem mục 3.10 của HANDOFF.
+   *
+   * Nên câu "trang này không có gì thay đổi" không được nói trần: đúng vào lúc
+   * người dùng vừa sửa một component, nó mời họ bỏ qua trong khi thay đổi của
+   * họ sẽ lên site thật.
+   */
+  const pageChanged = pages.find((p) => p.id === pageId)?.hasUnpublishedChanges ?? true;
+
   const publish = async () => {
-    // Publish là thao tác DUY NHẤT mà khách nhìn thấy ngay lập tức, và trước đây
-    // là thao tác duy nhất không hỏi lại — trong khi xoá một node, thu hồi token
-    // hay lùi bản đều có xác nhận. Nút lại nằm cách "Xem nháp" 8px.
-    /*
-     * `hasUnpublishedChanges` so `draftVersionId` với bản live, tức nó CHỈ thấy
-     * thay đổi ở cây node của trang. Sửa component (`Preset.tree`) hay sửa bản
-     * dịch (`Translation`) không đụng tới nó, nhưng cả hai đều được chụp vào
-     * release lúc publish và đều lên site — xem mục 3.10 của HANDOFF.
-     *
-     * Nên câu "trang này không có gì thay đổi" không được nói trần: đúng vào lúc
-     * người dùng vừa sửa một component, nó mời họ bỏ qua trong khi thay đổi của
-     * họ sẽ lên site thật.
-     */
-    const changed = pages.find((p) => p.id === pageId)?.hasUnpublishedChanges ?? true;
-    const ok = confirm(
-      `Publish trang /${slug} lên site thật?\n\n`
-        + (changed
-          ? ''
-          : 'Cây node của TRANG này không đổi so với bản đang chạy — nhưng thay đổi ở '
-            + 'component hoặc bản dịch không được tính ở đây và vẫn sẽ lên site.\n\n')
-        + 'Các trang khác giữ nguyên bản đang chạy; bản nháp của chúng vẫn là nháp.\n'
-        + 'Component, token và dữ liệu chung dùng chung cho cả site, nên sửa ở đó sẽ lên '
-        + 'sóng cho mọi trang.\n\n'
-        + 'Khách sẽ thấy ngay lập tức. Lùi lại được ở Lịch sử publish.',
-    );
-    if (!ok) return;
+    setConfirmPublish(false);
 
     setPublishing(true);
     setPublished(null);
@@ -622,7 +621,7 @@ export function EditorShell({
           size="md"
           icon="upload"
           loading={publishing}
-          onClick={() => void publish()}
+          onClick={askPublish}
           // `editing !== null`: đang sửa component thì `savedSeq` bị ép về `null` (xem
           // guard của `lastSeq` phía trên), nên `publishLook` không còn seq nào để so —
           // nó trả `disabled: false` bất kể trang có gì mới hay không. Không chặn ở đây
@@ -643,6 +642,29 @@ export function EditorShell({
         >
           {publishing ? 'Đang publish…' : pub.text}
         </Button>
+        <ConfirmDialog
+          open={confirmPublish}
+          onClose={() => setConfirmPublish(false)}
+          onConfirm={() => void publish()}
+          title={`Publish trang /${slug} lên site thật?`}
+          description={
+            <>
+              {!pageChanged && (
+                <p className="mb-2">
+                  Cây node của TRANG này không đổi so với bản đang chạy — nhưng thay đổi ở component
+                  hoặc bản dịch không được tính ở đây và vẫn sẽ lên site.
+                </p>
+              )}
+              <p className="mb-2">Các trang khác giữ nguyên bản đang chạy; bản nháp của chúng vẫn là nháp.</p>
+              <p className="mb-2">
+                Component, token và dữ liệu chung dùng chung cho cả site, nên sửa ở đó sẽ lên sóng cho mọi trang.
+              </p>
+              <p>Khách sẽ thấy ngay lập tức. Lùi lại được ở Lịch sử publish.</p>
+            </>
+          }
+          confirmLabel="Publish"
+          busy={publishing}
+        />
       </EditorTopbar>
 
       {editing && (

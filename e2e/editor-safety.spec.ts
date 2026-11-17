@@ -29,17 +29,16 @@ test.describe('publish — thao tác duy nhất khách thấy ngay', () => {
       await route.abort();
     });
 
-    let asked = '';
-    page.once('dialog', (dialog) => {
-      asked = dialog.message();
-      void dialog.dismiss();
-    });
-
     await page.getByRole('button', { name: 'Publish' }).click();
 
+    // Hộp xác nhận TRONG trang, không phải `window.confirm()`: trình duyệt nhúng chặn
+    // hộp native và trả `false` ngay — nút Publish khi đó bấm không có phản ứng gì.
     // Hai nhánh thông điệp tuỳ có trang nào đổi hay không; điều phải đúng là
     // CÓ hỏi lại, và hộp thoại nói rõ đang làm gì.
-    expect(asked, 'Publish phải hỏi lại trước khi đẩy lên site thật').toMatch(/publish/i);
+    const dialog = page.getByRole('dialog', { name: /publish/i });
+    await expect(dialog, 'Publish phải hỏi lại trước khi đẩy lên site thật').toBeVisible();
+    await dialog.getByRole('button', { name: 'Huỷ' }).click();
+    await expect(dialog).toBeHidden();
     // Đợi đủ lâu để một request lỡ bị bắn ra kịp lộ diện.
     await page.waitForTimeout(500);
     expect(called, 'huỷ ở hộp xác nhận mà vẫn gọi /api/publish').toBe(false);
@@ -62,8 +61,8 @@ test.describe('publish — thao tác duy nhất khách thấy ngay', () => {
       });
     });
 
-    page.once('dialog', (dialog) => void dialog.accept());
     await page.getByRole('button', { name: 'Publish' }).click();
+    await page.getByRole('dialog', { name: /publish/i }).getByRole('button', { name: 'Publish', exact: true }).click();
 
     await expect.poll(() => sent).not.toBeNull();
     expect(sent, 'body publish phải nêu đích danh trang đang mở').toMatchObject({
@@ -85,8 +84,8 @@ test.describe('publish — thao tác duy nhất khách thấy ngay', () => {
       }),
     );
 
-    page.once('dialog', (dialog) => void dialog.accept());
     await page.getByRole('button', { name: 'Publish' }).click();
+    await page.getByRole('dialog', { name: /publish/i }).getByRole('button', { name: 'Publish', exact: true }).click();
 
     const message = page.getByRole('status').filter({ hasText: 'Máy chủ từ chối' });
     await expect(message).toBeVisible();
@@ -104,18 +103,10 @@ test.describe('bàn phím', () => {
     // một trong hai phím kích hoạt chuẩn.
     await page.route('**/api/publish', (route) => route.abort());
 
-    let asked = false;
-    page.once('dialog', (dialog) => {
-      asked = true;
-      void dialog.dismiss();
-    });
-
     await page.getByRole('button', { name: 'Publish' }).focus();
     await page.keyboard.press('Space');
 
-    await expect
-      .poll(() => asked, { timeout: 5_000 })
-      .toBe(true);
+    await expect(page.getByRole('dialog', { name: /publish/i })).toBeVisible({ timeout: 5_000 });
   });
 
   test('Ctrl+Z trong ô CSS hoàn tác chữ, không hoàn tác op trên server', async ({
