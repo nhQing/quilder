@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { headers } from 'next/headers';
 
+import { Analytics } from '@/components/site/Analytics';
 import { splitLocale } from '@/lib/i18n/locale';
 import { getLocales } from '@/lib/i18n/queries';
 import { siteIcons } from '@/lib/render/site-icons';
@@ -119,6 +120,8 @@ export default async function SiteLayout({ children }: { children: React.ReactNo
         */}
         <link rel="stylesheet" href={`/mm-css/${hash}.css`} precedence="base" />
         {children}
+        {/* Không ở bản nháp: lượt xem của nhân viên không lẫn vào số liệu khách. */}
+        {draftView ? null : <Analytics />}
       </body>
     </html>
   );

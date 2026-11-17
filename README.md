@@ -35,7 +35,7 @@ tài khoản bằng `pnpm user:create <email> <mật-khẩu> admin`.
 |---|---|---|
 | 1. Bắt buộc lúc build | `ASSET_HOSTS`, `QUILDER_PROJECT` | Đóng vào bản build; đổi là build lại |
 | 2. Bắt buộc lúc chạy | `DATABASE_URL`, `AUTH_SECRET`, `S3_*` | Thiếu là server không lên |
-| 3. Tuỳ chọn | `SITE_URL`, `COOKIE_SECURE` | Có mặc định hợp lý |
+| 3. Tuỳ chọn | `SITE_URL`, `COOKIE_SECURE`, `GA_MEASUREMENT_ID` | Có mặc định hợp lý |
 | 4. Chỉ cho dev/script | `BUILDER_EMAIL`, `COMPOSE_PROJECT_NAME` | Server không đọc |
 
 Tên site, logo, favicon, giao diện sáng/tối, SEO, robots.txt, sitemap, ngôn ngữ và tài khoản

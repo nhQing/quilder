@@ -147,6 +147,24 @@ function inputMode(kind: FormFieldDef['kind']): 'email' | 'tel' | 'numeric' | un
   return undefined;
 }
 
+/**
+ * Báo GA một lượt gửi form thành công (event chuẩn `generate_lead` của GA4).
+ *
+ * Chỉ gửi KHOÁ nơi nhận, không bao giờ gửi giá trị khách nhập: điều khoản GA cấm
+ * dữ liệu nhận diện cá nhân, và đây là dữ liệu đăng ký của khách. Không có GA
+ * (env thiếu, bản nháp, trình chặn quảng cáo) thì `gtag` vắng và không làm gì.
+ * Lượt bị honeypot/quá nhanh chặn không đi qua đây — chúng không phải lượt thật.
+ */
+function trackLead(endpointKey: string | undefined) {
+  const gtag = (window as { gtag?: (...args: unknown[]) => void }).gtag;
+  if (typeof gtag !== 'function') return;
+  try {
+    gtag('event', 'generate_lead', { form_key: endpointKey || 'unknown' });
+  } catch {
+    // Số liệu không được làm hỏng lượt gửi đã thành công.
+  }
+}
+
 export function Form({
   action,
   endpointKey,
@@ -289,6 +307,7 @@ export function Form({
       }
       setNotice(message ?? null);
       setStatus('ok');
+      trackLead(endpointKey);
       if (mode === 'dialog') setShown('success');
       // Báo cho modal bao ngoài (nếu có) chuyển sang panel cảm ơn — xem `successPanel`.
       if (mode === 'panel' && successPanel) {
