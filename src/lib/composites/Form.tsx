@@ -38,7 +38,8 @@
  *  - `aria-describedby` nối ô nhập với dòng `help` của nó.
  */
 
-import { useEffect, useId, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 import { resolveAfterSubmit } from './form-mode';
 import type { FormFieldDef, FormParams } from './registry';
@@ -185,6 +186,7 @@ export function Form({
   a11yLabel,
   successPanel,
   afterSubmit,
+  submitWhenValid,
   heading,
   note,
   success,
@@ -218,6 +220,47 @@ export function Form({
   const [invalidField, setInvalidField] = useState<string | null>(null);
 
   /*
+   * `submitWhenValid`: nút tắt cho tới khi `checkValidity()` của form đúng. Khởi đầu
+   * `false` ở cả server lẫn client (form trống chưa đủ) nên không lệch hydrate; mỗi lần
+   * gõ đo lại. Chỉ là gợi ý — nơi nhận tự kiểm như cũ.
+   */
+  const formRef = useRef<HTMLFormElement>(null);
+  const [complete, setComplete] = useState(false);
+  const recheck = useCallback(() => {
+    if (submitWhenValid) setComplete(formRef.current?.checkValidity() ?? false);
+  }, [submitWhenValid]);
+
+  /*
+   * Toast (`afterSubmit = 'toast'`): dải báo cố định ở đáy màn hình, render qua portal vào
+   * `body` — node tổ tiên có `transform` (hiệu ứng hiện dần khi cuộn) sẽ bắt `position:
+   * fixed` lại trong nó. Tự ẩn sau 4 giây; bấm vào hoặc Esc cũng đóng. Vùng đọc cho trình
+   * đọc màn hình vẫn là `.mm-form__status` (ẩn khỏi mắt ở chế độ này).
+   */
+  const [toast, setToast] = useState<{ kind: 'success' | 'error'; text: string; key: number } | null>(null);
+  const [toastOpen, setToastOpen] = useState(false);
+  useEffect(() => {
+    if (!toast) return;
+    setToastOpen(true);
+    const hide = window.setTimeout(() => setToastOpen(false), 4000);
+    const esc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setToastOpen(false);
+    };
+    document.addEventListener('keydown', esc);
+    return () => {
+      window.clearTimeout(hide);
+      document.removeEventListener('keydown', esc);
+    };
+  }, [toast]);
+  const [portalReady, setPortalReady] = useState(false);
+  useEffect(() => setPortalReady(true), []);
+
+  /**
+   * Captcha chỉ CHIẾM CHỖ khi Cloudflare cần người điền tương tác (`interaction-only`).
+   * Lúc thường widget chạy ngầm và ô chứa ra khỏi luồng — bản vẽ không có ô captcha nào.
+   */
+  const [captchaShown, setCaptchaShown] = useState(false);
+
+  /*
    * Captcha. Widget dựng bằng JS (render=explicit) SAU hydrate — HTML server chỉ có ô
    * chứa trống, nên không lệch hydrate. Widget tự chèn `<input name="cf-turnstile-response">`
    * vào ô chứa nằm TRONG form, nên `FormData` mang token đi mà không cần state.
@@ -232,7 +275,13 @@ export function Form({
     loadTurnstile()
       .then((ts) => {
         if (cancelled || !captchaRef.current || widgetId.current) return;
-        widgetId.current = ts.render(captchaRef.current, { sitekey: captchaSiteKey, language: 'vi' });
+        widgetId.current = ts.render(captchaRef.current, {
+          sitekey: captchaSiteKey,
+          language: locale && locale !== 'vi' ? locale : 'vi',
+          appearance: 'interaction-only',
+          'before-interactive-callback': () => setCaptchaShown(true),
+          'after-interactive-callback': () => setCaptchaShown(false),
+        });
       })
       .catch(() => {
         /* Không tải được script: nơi nhận sẽ từ chối vì thiếu token, form báo lỗi chung. */
@@ -243,7 +292,7 @@ export function Form({
       if (ts && widgetId.current) ts.remove(widgetId.current);
       widgetId.current = null;
     };
-  }, [needsCaptcha, captchaSiteKey, canvasPreview]);
+  }, [needsCaptcha, captchaSiteKey, canvasPreview, locale]);
 
   /** Token Turnstile chỉ dùng được MỘT lần — xin token mới sau mỗi lượt gửi. */
   const resetCaptcha = () => {
@@ -271,7 +320,13 @@ export function Form({
   };
 
   const captchaMissing = needsCaptcha && !captchaSiteKey;
-  const disabled = !action || captchaMissing || status === 'sending';
+  // Khung builder: nút không tắt vì chưa điền — người dựng cần thấy nút ở trạng thái thường.
+  const waitingInput = Boolean(submitWhenValid) && !complete && !canvasPreview;
+  const disabled = !action || captchaMissing || status === 'sending' || waitingInput;
+
+  const showToast = (kind: 'success' | 'error', text: string) => {
+    if (mode === 'toast') setToast({ kind, text, key: Date.now() });
+  };
 
   const onSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -299,11 +354,15 @@ export function Form({
       // cái giá đó nhỏ hơn việc dạy bot cách lách.
       setStatus('ok');
       if (mode === 'dialog') setShown('success');
+      showToast('success', successMessage);
       form.reset();
+      setComplete(false);
       return;
     }
 
     setStatus('sending');
+    /** Câu riêng của nơi nhận khi từ chối (vd "đã đăng ký") — toast hiện nó thay câu chung. */
+    let rejectNotice: string | null = null;
     try {
       const res = await fetch(action, {
         method: 'POST',
@@ -312,6 +371,7 @@ export function Form({
       });
       const { message, field } = await serverNotice(res);
       if (!res.ok) {
+        rejectNotice = message ?? null;
         setNotice(message ?? null);
         setInvalidField(field ?? null);
         throw new Error(String(res.status));
@@ -320,17 +380,20 @@ export function Form({
       setStatus('ok');
       trackLead(endpointKey);
       if (mode === 'dialog') setShown('success');
+      showToast('success', message ?? successMessage);
       // Báo cho modal bao ngoài (nếu có) chuyển sang panel cảm ơn — xem `successPanel`.
       if (mode === 'panel' && successPanel) {
         form.dispatchEvent(new CustomEvent('modal:show', { bubbles: true, detail: { panel: successPanel } }));
       }
       form.reset();
+      setComplete(false);
     } catch {
       // KHÔNG hiện thông báo của server: nó có thể mang chi tiết nội bộ, và người
       // dùng cuối không làm gì được với chúng. `errorMessage` là chuỗi người dựng
       // trang đã duyệt.
       setStatus('error');
       if (mode === 'dialog') setShown('error');
+      showToast('error', rejectNotice ?? errorMessage);
     } finally {
       if (needsCaptcha) resetCaptcha();
     }
@@ -341,8 +404,11 @@ export function Form({
       {heading}
 
       <form
+        ref={formRef}
         className="mm-form"
         onSubmit={onSubmit}
+        onInput={recheck}
+        onChange={recheck}
         noValidate={false}
         {...(a11yLabel ? { 'aria-label': a11yLabel } : {})}
         data-part="form"
@@ -439,7 +505,12 @@ export function Form({
         </div>
 
         {needsCaptcha && !canvasPreview && (
-          <div ref={captchaRef} className="mm-form__captcha" data-part="captcha" />
+          <div
+            ref={captchaRef}
+            className="mm-form__captcha"
+            data-part="captcha"
+            data-shown={captchaShown ? 'true' : 'false'}
+          />
         )}
 
         <button
@@ -457,7 +528,12 @@ export function Form({
           Mount nó cùng lúc với thông báo thì screen reader thường không đọc —
           `aria-live` chỉ phát khi NỘI DUNG của một vùng đã tồn tại thay đổi.
         */}
-        <p className="mm-form__status" data-part="status" role="status" aria-live="polite">
+        <p
+          className={mode === 'toast' ? 'mm-form__status mm-form__status--sr' : 'mm-form__status'}
+          data-part="status"
+          role="status"
+          aria-live="polite"
+        >
           {/* Chế độ dialog: kết quả nằm trong hộp thoại, đọc hai lần là ồn. */}
           {mode === 'dialog'
             ? ''
@@ -486,6 +562,41 @@ export function Form({
           </p>
         )}
       </form>
+
+      {mode === 'toast' &&
+        portalReady &&
+        toast &&
+        createPortal(
+          <div
+            key={toast.key}
+            className="mm-form__toast"
+            data-part="toast"
+            data-variant={toast.kind}
+            data-open={toastOpen ? 'true' : 'false'}
+            aria-hidden="true"
+            onClick={() => setToastOpen(false)}
+          >
+            <span className="mm-form__toast-icon">
+              {toast.kind === 'error' ? (
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                  <path d="M12 2 2 12M2 2l10 10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                </svg>
+              ) : (
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                  <path
+                    d="M13.5 4 6.25 11.25 2.5 7.5"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              )}
+            </span>
+            <p className="mm-form__toast-text">{toast.text}</p>
+          </div>,
+          document.body,
+        )}
 
       {canvasPreview && mode === 'dialog' && (
         <>

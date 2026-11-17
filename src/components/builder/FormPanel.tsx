@@ -45,6 +45,7 @@ import {
   removeField,
   translationRemapSteps,
   setAfterSubmitOps,
+  setFormFlag,
   setFormParam,
   updateField,
   type FieldKind,
@@ -79,6 +80,7 @@ const AFTER_SUBMIT: { value: AfterSubmit; label: string }[] = [
   { value: 'inline', label: 'Dòng chữ dưới nút' },
   { value: 'dialog', label: 'Hộp thoại' },
   { value: 'panel', label: 'Chuyển panel của popup' },
+  { value: 'toast', label: 'Toast ở đáy màn hình' },
 ];
 
 const PREVIEW: { value: FormPreview; label: string }[] = [
@@ -500,7 +502,16 @@ export function FormPanel({
         <p className={ui.error} data-form-mode-error="">{errors.afterSubmit.map((i) => `${i.path}: ${i.message}`).join(' ')}</p>
       )}
 
-      {mode === 'inline' && (
+      <Checkbox
+        label="Nút chỉ bật khi điền đủ ô bắt buộc"
+        checked={(node.params as { submitWhenValid?: boolean } | undefined)?.submitWhenValid === true}
+        disabled={locked}
+        onChange={(e) =>
+          commit('submitWhenValid', setFormFlag(node.params, 'submitWhenValid', e.target.checked), 'nút gửi chỉ bật khi đủ')
+        }
+      />
+
+      {(mode === 'inline' || mode === 'toast') && (
         <>
           <CommitText
             label="Lời báo thành công"

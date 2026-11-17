@@ -28,6 +28,24 @@ const html = (over: Partial<Parameters<typeof Form>[0]> = {}) =>
   );
 
 describe('Form — HTML ở server', () => {
+  it('submitWhenValid: nút gửi tắt ngay từ HTML đầu (form trống chưa đủ)', () => {
+    const out = html({ submitWhenValid: true } as Partial<Parameters<typeof Form>[0]>);
+    expect(out).toMatch(/<button[^>]*mm-form__submit[^>]*disabled/);
+    expect(html()).not.toMatch(/<button[^>]*mm-form__submit[^>]*disabled/);
+  });
+
+  it('toast: dòng trạng thái chỉ cho trình đọc màn hình, vẫn là vùng live', () => {
+    const out = html({ afterSubmit: 'toast' } as Partial<Parameters<typeof Form>[0]>);
+    expect(out).toContain('mm-form__status mm-form__status--sr');
+    expect(out).toContain('aria-live="polite"');
+  });
+
+  it('toast và submitWhenValid là tham số hợp lệ', () => {
+    const p = params({ afterSubmit: 'toast', submitWhenValid: true });
+    expect(p.afterSubmit).toBe('toast');
+    expect(p.submitWhenValid).toBe(true);
+  });
+
   it('ô width "half" mang lớp mm-form__row--half; ô thường thì không', () => {
     const fields = params({
       fields: [

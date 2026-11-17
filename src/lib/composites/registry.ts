@@ -172,7 +172,13 @@ const formObject = z
      * bao ngoài qua `successPanel`). KHÔNG có default: vắng thì suy từ `successPanel`
      * (xem `resolveAfterSubmit`) để form cũ chạy y như cũ mà không cần migrate dữ liệu.
      */
-    afterSubmit: z.enum(['inline', 'dialog', 'panel']).optional(),
+    afterSubmit: z.enum(['inline', 'dialog', 'panel', 'toast']).optional(),
+    /**
+     * Nút gửi TẮT cho tới khi mọi ô bắt buộc đã điền và đúng kiểu (`checkValidity()` của
+     * trình duyệt: required, email…). Bản vẽ form đăng ký sự kiện vẽ đúng trạng thái tắt
+     * này. Chỉ là gợi ý cho người điền — nơi nhận vẫn tự kiểm như cũ.
+     */
+    submitWhenValid: z.boolean().optional(),
     /**
      * Captcha trước nút gửi. `turnstile` = Cloudflare Turnstile; site key đọc từ biến môi
      * trường `TURNSTILE_SITE_KEY` của server lúc render (không nằm trong doc: đổi key là
@@ -338,7 +344,7 @@ export const COMPOSITE_DESCRIPTIONS: Record<CompositeKey, string> = {
   Carousel:
     'Dải thẻ cuộn ngang. CHƯA CÓ runtime dạng composite — dựng nó bằng node Composite thì được một khối trống. Dùng effect "slider" trên một cây node có part viewport/track/slide (+ prev/next/pagination nếu cần). Effect "carousel" cũng còn chạy nhưng đã cũ, xem list_effects.',
   Form:
-    'Form nhập liệu. Ô nhập nằm trong params.fields (name, kind text|email|tel|number|textarea|select|checkbox, label, required, options cho select, help, autocomplete) — KHÔNG phải node con, nên không setStyle được từng ô; style qua data-part. Nội dung đi qua slots: "heading" cho tiêu đề, "note" cho dòng ghi chú/điều khoản (node Text thật, dịch được). Slot "success" và "error" chỉ hiện khi afterSubmit = "dialog": chúng nằm trong hộp thoại của form (không có trong luồng trang), mở sau khi gửi xong. Tham số: endpointKey (KHOÁ trong Site.globals.endpoint, không phải URL; chuỗi rỗng = chưa chọn nơi nhận, form hiện tắt), submitLabel, successMessage, errorMessage, a11yLabel, afterSubmit ("inline" dòng chữ dưới nút | "dialog" hộp thoại | "panel" chuyển panel modal qua successPanel; vắng thì suy: có successPanel là panel, không là inline). Submit bằng fetch tới URL resolve từ globals; builder KHÔNG lưu gì, BE sở hữu dữ liệu.',
+    'Form nhập liệu. Ô nhập nằm trong params.fields (name, kind text|email|tel|number|textarea|select|checkbox, label, required, options cho select, help, autocomplete) — KHÔNG phải node con, nên không setStyle được từng ô; style qua data-part. Nội dung đi qua slots: "heading" cho tiêu đề, "note" cho dòng ghi chú/điều khoản (node Text thật, dịch được). Slot "success" và "error" chỉ hiện khi afterSubmit = "dialog": chúng nằm trong hộp thoại của form (không có trong luồng trang), mở sau khi gửi xong. Tham số: endpointKey (KHOÁ trong Site.globals.endpoint, không phải URL; chuỗi rỗng = chưa chọn nơi nhận, form hiện tắt), submitLabel, successMessage, errorMessage, a11yLabel, afterSubmit ("inline" dòng chữ dưới nút | "dialog" hộp thoại | "panel" chuyển panel modal qua successPanel | "toast" dải báo ở đáy màn hình, tự ẩn sau 4 giây; vắng thì suy: có successPanel là panel, không là inline), submitWhenValid (nút tắt cho tới khi các ô bắt buộc điền đủ và đúng kiểu). Ô có width "half" đứng hai ô một hàng từ 768px. Submit bằng fetch tới URL resolve từ globals; builder KHÔNG lưu gì, BE sở hữu dữ liệu.',
   Accordion:
     'FAQ mở/đóng, KHÔNG cần JavaScript — phát ra <details>/<summary> thật, nên mục đang đóng vẫn được Ctrl+F và crawler tìm thấy. Nội dung đi qua slots: "q-1".."q-N" cho câu hỏi, "a-1".."a-N" cho câu trả lời của mục N. Tham số: single (một mục mở tại một thời điểm, dùng thuộc tính name của HTML), openFirst. KHÔNG có effect nào đi kèm và không có hoạt ảnh chiều cao.',
   NavChart:
@@ -406,6 +412,10 @@ export const STYLE_PARTS: Record<string, Record<string, { label: string; selecto
     submit: { label: 'Nút gửi', selector: '.mm-form__submit' },
     status: { label: 'Thông báo', selector: '.mm-form__status' },
     dialog: { label: 'Hộp thoại', selector: '.mm-form__dialog' },
+    req: { label: 'Dấu bắt buộc (*)', selector: '.mm-form__req' },
+    placeholder: { label: 'Chữ gợi ý', selector: '.mm-form__input::placeholder' },
+    'submit-disabled': { label: 'Nút gửi (đang tắt)', selector: '.mm-form__submit:disabled' },
+    toast: { label: 'Toast', selector: '.mm-form__toast' },
   },
 };
 

@@ -166,6 +166,14 @@ export function setFormParam(params: unknown, key: FormTextParam, value: string)
   return finish(next);
 }
 
+/** Cờ bật/tắt của form (vd `submitWhenValid`). Tắt = gỡ khoá, để form cũ giữ nguyên dữ liệu. */
+export function setFormFlag(params: unknown, key: 'submitWhenValid', value: boolean): FormEdit {
+  const next = { ...rawOf(params) };
+  if (value) next[key] = true;
+  else delete next[key];
+  return finish(next);
+}
+
 /** `autocomplete` mặc định của một loại ô (đổi loại thì đổi theo, không giữ `email` cho ô số). */
 export function defaultAutocomplete(kind: FieldKind): string | undefined {
   return AUTOCOMPLETE[kind];

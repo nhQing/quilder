@@ -9,11 +9,16 @@
  * giá trị thì lấy ở đây. `registry.ts` re-export cho các chỗ đã import từ đó.
  */
 
-export type AfterSubmit = 'inline' | 'dialog' | 'panel';
+export type AfterSubmit = 'inline' | 'dialog' | 'panel' | 'toast';
 
 /** Cách báo kết quả thật của một form — `afterSubmit` nếu có, không thì suy từ `successPanel`. */
 export function resolveAfterSubmit(p: { afterSubmit?: string; successPanel?: string }): AfterSubmit {
-  if (p.afterSubmit === 'inline' || p.afterSubmit === 'dialog' || p.afterSubmit === 'panel') {
+  if (
+    p.afterSubmit === 'inline' ||
+    p.afterSubmit === 'dialog' ||
+    p.afterSubmit === 'panel' ||
+    p.afterSubmit === 'toast'
+  ) {
     return p.afterSubmit;
   }
   return p.successPanel ? 'panel' : 'inline';
