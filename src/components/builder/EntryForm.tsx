@@ -843,7 +843,17 @@ export function EntryForm(props: {
               })()
             ) : (
               <FieldInput
-                key={f.key}
+                /*
+                 * Khoá theo TAB NGÔN NGỮ, không chỉ theo field (17/11/2026).
+                 *
+                 * Ô soạn HTML (CKEditor) không nhận giá trị mới qua render: nó tự
+                 * `setData` bất đồng bộ sau khi nhận prop. Dùng lại cùng một ô giữa tab
+                 * Bản gốc và tab Tiếng Anh nên có lúc ô vẫn đang chứa bản dịch trong khi
+                 * `onChange` đã trỏ về bản gốc — và lần gõ/lưu sau ghi chữ tiếng Anh vào
+                 * `data.body`, `data.map` của bài tiếng Việt ("The Art of Wealth"). Khoá
+                 * mới cho mỗi tab = ô soạn mới, nạp đúng nội dung của tab đó từ đầu.
+                 */
+                key={`${active ?? ''}:${f.key}`}
                 field={f}
                 path={[f.key]}
                 value={values[f.key]}
