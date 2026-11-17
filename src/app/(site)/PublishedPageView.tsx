@@ -8,6 +8,7 @@ import { fontSealOf } from '@/lib/fonts/seal';
 import { componentsFromSnapshot } from '@/lib/render/components';
 import { collectEffects, NodeRenderer, type RenderContext } from '@/lib/render/NodeRenderer';
 import { ViewCounter } from '@/components/site/ViewCounter';
+import { HtmlLang } from '@/components/site/HtmlLang';
 import { ARTICLE_CSS } from '@/lib/render/article-css';
 import { jsonForScript } from '@/lib/render/json-for-script';
 import { pickJsonLd } from '@/lib/render/entry-meta';
@@ -273,6 +274,8 @@ export async function PublishedPageView({
           dangerouslySetInnerHTML={{ __html: jsonForScript(jsonLd) }}
         />
       ) : null}
+      {/* `<html lang>` theo trang khi chuyển trang phía client — layout không render lại. */}
+      <HtmlLang code={locale.code} />
       <NodeRenderer nodeId={doc.rootId} ctx={ctx} />
       {/* Manifest phẳng, serialize từ server. EffectRuntime là ranh giới client
           DUY NHẤT cho motion — xem ghi chú trong file đó. */}
