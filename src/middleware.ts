@@ -38,7 +38,7 @@ const PUBLIC_API = ['/api/auth/login', '/api/auth/logout', '/api/e2e/ping'];
 const PUBLIC_API_PREFIX = '/api/public/';
 
 /**
- * Đường GHI công khai duy nhất: một lượt xem bài, từ chính site này.
+ * Đường GHI công khai: một lượt xem bài, từ chính site này.
  *
  * Docblock của `/api/views/[entryId]` vẫn nói "không đòi đăng nhập" từ ngày nó ra
  * đời, nhưng cổng này chưa bao giờ mở cho nó: khách nhận 401, `ViewCounter` nuốt
@@ -49,8 +49,20 @@ const PUBLIC_API_PREFIX = '/api/public/';
  */
 const VIEW_ROUTE = /^\/api\/views\/[a-z0-9]{20,32}$/;
 
+/**
+ * Form khách gửi trên site (`POST /api/forms/<khoá>`, xem route đó).
+ *
+ * Route nói "công khai" từ ngày ra đời nhưng cổng này chưa mở cho nó: khách nhận
+ * 401 và form báo "Chưa gửi được đăng ký" — chỉ ai đang đăng nhập builder mới gửi
+ * được. Cùng cách với `VIEW_ROUTE`: khớp chính xác method và dạng khoá (đúng
+ * `KEY_RE` của route), không mở theo tiền tố. Captcha, giới hạn tần suất, validate
+ * và chặn origin lạ là việc của route và handler của gói dự án.
+ */
+const FORM_ROUTE = /^\/api\/forms\/[a-z][a-z0-9-]{0,39}$/;
+
 function isPublicWrite(pathname: string, method: string): boolean {
-  return method === 'POST' && VIEW_ROUTE.test(pathname);
+  if (method !== 'POST') return false;
+  return VIEW_ROUTE.test(pathname) || FORM_ROUTE.test(pathname);
 }
 
 function isProtected(pathname: string): boolean {
