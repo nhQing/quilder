@@ -68,6 +68,7 @@
  * `ASSET_TRANSLATION_FIELDS`.
  */
 
+import { snapshotLocaleOf } from '@/lib/render/translations';
 import type { AssetRef, AssetRefKind, OldReleaseRef } from '@/lib/assets/trash-types';
 import type { TranslatableField } from '@/lib/builder/text-units';
 import { collectAssetIds } from '@/lib/collections/public-shape';
@@ -457,7 +458,8 @@ function releaseHits(
     for (const [k, v] of Object.entries(rel.translations as Record<string, unknown>)) {
       const found = idsInJson(v, ctx);
       if (!found.size) continue;
-      const locale = k.split(':')[0] ?? '';
+      const locale = snapshotLocaleOf(k);
+      if (!locale) continue;
       const set = byLocale.get(locale) ?? new Set<string>();
       for (const id of found) set.add(id);
       byLocale.set(locale, set);

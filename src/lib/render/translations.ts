@@ -30,30 +30,66 @@ export interface TranslationEntry {
   value: unknown;
 }
 
-/** Khoá phẳng dùng trong ảnh chụp của Release: `locale:nodeId:field`. */
-export function snapshotKey(locale: string, nodeId: string, field: string): string {
-  return `${locale}:${nodeId}:${field}`;
+/**
+ * Khoá phẳng dùng trong ảnh chụp của Release.
+ *
+ * ## Hai dạng khoá, và vì sao có dạng thứ hai (17/11/2026)
+ *
+ * - `locale:nodeId:field` — dạng CŨ, không mang trang. Một khoá áp cho MỌI trang có
+ *   node trùng id. Đủ khi id là cuid, nhưng các trang dựng bằng clone mang id dạng
+ *   `n0000130` lặp lại giữa các trang: publish bản tiếng Anh của /maicash và /maigreen
+ *   cùng lúc làm `/en/maigreen` hiện 5 đoạn chữ của MaiCash+, và `$meta` (tiêu đề
+ *   trang) của trang ghi sau cùng thành tiêu đề của mọi trang.
+ * - `locale@pageId:nodeId:field` — dạng MỚI, của đúng một trang. Đi kèm cờ
+ *   `@pageId` (xem `pageMarkerKey`): trang có cờ CHỈ đọc khoá của chính nó.
+ *
+ * Trang chưa có cờ (mọi trang trong release tạo trước bản sửa này) đọc dạng cũ y như
+ * trước, nên lùi bản về một release cũ vẫn hiện đúng thứ nó đã từng hiện.
+ *
+ * `locale` không chứa `@` hay `:` (mã ngôn ngữ), `pageId` là cuid, `nodeId` không chứa
+ * `:` (xem `zNodeId`). `field` CÓ THỂ chứa `:` (`param:index.0.label`).
+ */
+export function snapshotKey(locale: string, nodeId: string, field: string, pageId?: string): string {
+  return pageId ? `${locale}@${pageId}:${nodeId}:${field}` : `${locale}:${nodeId}:${field}`;
 }
 
-/** Ảnh chụp của Release → danh sách bản dịch của một ngôn ngữ. */
+/** Cờ "trang này được chụp theo dạng khoá mới" — giá trị `true`, không phải bản dịch. */
+export function pageMarkerKey(pageId: string): string {
+  return `@${pageId}`;
+}
+
+/** Mã ngôn ngữ của một khoá ảnh chụp, cả hai dạng. Cờ trang trả chuỗi rỗng. */
+export function snapshotLocaleOf(key: string): string {
+  return /^[^:@]*/.exec(key)?.[0] ?? '';
+}
+
+/**
+ * Ảnh chụp của Release → danh sách bản dịch của một ngôn ngữ, cho MỘT trang.
+ *
+ * Có `pageId` và trang mang cờ → chỉ khoá `locale@pageId:`. Còn lại → khoá dạng cũ
+ * `locale:` (release cũ, hoặc chỗ gọi chưa biết trang).
+ */
 export function entriesFromSnapshot(
   snapshot: unknown,
   locale: string,
+  pageId?: string,
 ): TranslationEntry[] {
   if (!snapshot || typeof snapshot !== 'object' || Array.isArray(snapshot)) return [];
+  const snap = snapshot as Record<string, unknown>;
+
+  const scoped = pageId !== undefined && Object.hasOwn(snap, pageMarkerKey(pageId));
+  const prefix = scoped ? `${locale}@${pageId}:` : `${locale}:`;
 
   const out: TranslationEntry[] = [];
-  const prefix = `${locale}:`;
-  for (const [key, value] of Object.entries(snapshot as Record<string, unknown>)) {
+  for (const [key, value] of Object.entries(snap)) {
     if (!key.startsWith(prefix)) continue;
-    // `locale` và `nodeId` không chứa ':' (validate là slug/cuid), nhưng `field` CÓ THỂ:
-    // `param:index.0.label`. Nên cắt ở hai dấu ':' đầu và giữ nguyên phần còn lại —
-    // `split(':')` cắt cụt field thành `param` và bản dịch rơi im lặng.
-    const first = key.indexOf(':');
-    const second = key.indexOf(':', first + 1);
-    if (second < 0) continue;
-    const nodeId = key.slice(first + 1, second);
-    const field = key.slice(second + 1);
+    // Phần sau tiền tố là `nodeId:field`; cắt ở dấu ':' ĐẦU TIÊN và giữ nguyên phần còn
+    // lại — `field` có thể là `param:index.0.label`, và `split(':')` sẽ cắt cụt nó.
+    const rest = key.slice(prefix.length);
+    const cut = rest.indexOf(':');
+    if (cut < 0) continue;
+    const nodeId = rest.slice(0, cut);
+    const field = rest.slice(cut + 1);
     if (!nodeId || !field) continue;
     out.push({ nodeId, field: field as TranslatableField, value });
   }

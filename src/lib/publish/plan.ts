@@ -8,6 +8,8 @@
  * — hoặc lặng lẽ gỡ một trang khỏi site vì quên mang nó sang release mới.
  */
 
+import { pageMarkerKey, snapshotKey } from '@/lib/render/translations';
+
 /** Một dòng trong `ReleaseEntry` sắp tạo. */
 export interface PlannedEntry {
   id: string;
@@ -83,25 +85,45 @@ export function planReleaseEntries({ sitePages, liveEntries, selection }: PlanIn
  * Ảnh chụp bản dịch cho một lần publish từng trang.
  *
  * Nền là ảnh chụp của release đang chạy — bản dịch của trang không publish phải
- * đứng yên. Nhưng phải XOÁ mọi khoá thuộc trang được publish TRƯỚC khi trộn bản
- * mới vào: nếu chỉ trộn đè, một bản dịch VỪA BỊ XOÁ sẽ sống sót từ ảnh chụp cũ và
- * trang tiếng Anh hiện lại đúng chuỗi mà người dùng tưởng đã bỏ.
+ * đứng yên. Nhưng phải XOÁ mọi khoá của trang được publish TRƯỚC khi trộn bản mới
+ * vào: nếu chỉ trộn đè, một bản dịch VỪA BỊ XOÁ sẽ sống sót từ ảnh chụp cũ và trang
+ * tiếng Anh hiện lại đúng chuỗi mà người dùng tưởng đã bỏ.
  *
- * Khoá có dạng `locale:nodeId:field` và không mang `pageId`, nên "thuộc trang
- * được publish" được xác định bằng tập nodeId của trang đó — lấy thẳng từ
- * `Doc.nodes`, vốn đã là map theo id.
+ * Từ 17/11/2026 khoá mang `pageId` (`locale@pageId:nodeId:field`, xem `snapshotKey`),
+ * nên "khoá của trang được publish" là đúng khoá có `@pageId` — không còn đoán qua
+ * tập nodeId, vốn gom nhầm node trùng id của trang KHÁC. Khoá dạng cũ (không mang
+ * trang) được GIỮ: trang chưa publish lại vẫn đọc chúng, còn trang vừa publish mang
+ * cờ `@pageId` nên không bao giờ đọc chúng nữa.
  */
 export function mergeTranslationSnapshot(
   previous: Record<string, unknown> | null | undefined,
   fresh: Record<string, unknown>,
-  touchedNodeIds: ReadonlySet<string>,
+  touchedPageIds: ReadonlySet<string>,
 ): Record<string, unknown> {
   const base: Record<string, unknown> = { ...(previous ?? {}) };
   for (const key of Object.keys(base)) {
-    const nodeId = key.split(':')[1];
-    if (nodeId && touchedNodeIds.has(nodeId)) delete base[key];
+    const at = key.indexOf('@');
+    if (at < 0) continue;
+    const colon = key.indexOf(':', at);
+    const pageId = colon < 0 ? key.slice(at + 1) : key.slice(at + 1, colon);
+    if (touchedPageIds.has(pageId)) delete base[key];
   }
   return { ...base, ...fresh };
+}
+
+/**
+ * Ảnh chụp bản dịch MỚI của các trang được publish: khoá theo trang, cộng cờ
+ * `@pageId` cho MỌI trang được publish — kể cả trang không có bản dịch nào, để nó
+ * không rơi về khoá dạng cũ của trang khác.
+ */
+export function freshTranslationSnapshot(
+  rows: readonly { pageId: string; locale: string; nodeId: string; field: string; value: unknown }[],
+  publishedPageIds: readonly string[],
+): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const id of publishedPageIds) out[pageMarkerKey(id)] = true;
+  for (const r of rows) out[snapshotKey(r.locale, r.nodeId, r.field, r.pageId)] = r.value;
+  return out;
 }
 
 /** Tập nodeId của một loạt doc. `Doc.nodes` là map theo id nên không phải duyệt cây. */

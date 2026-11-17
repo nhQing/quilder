@@ -18,10 +18,9 @@ import { prisma } from '@/lib/db';
 import { requireAuth } from '@/lib/auth/guard';
 import { sweepAssetHolds } from '@/lib/builder/asset-trash';
 import { readFontSeal } from '@/lib/fonts/seal';
-import { snapshotKey } from '@/lib/render/translations';
 import { assetSnapshot, tokenSnapshot } from '@/lib/render/release-snapshot';
 import { upsertStyleBundle } from '@/lib/render/style-bundle';
-import { mergeTranslationSnapshot, nodeIdsOf, planReleaseEntries } from '@/lib/publish/plan';
+import { freshTranslationSnapshot, mergeTranslationSnapshot, planReleaseEntries } from '@/lib/publish/plan';
 
 export const dynamic = 'force-dynamic';
 
@@ -154,11 +153,12 @@ export async function POST(request: Request) {
   // nên phình ảnh chụp của mọi release.
   const rows = await prisma.translation.findMany({
     where: { pageId: { in: publishedIds }, loc: { enabled: true } },
-    select: { locale: true, nodeId: true, field: true, value: true },
+    select: { pageId: true, locale: true, nodeId: true, field: true, value: true },
   });
-  const fresh: Record<string, unknown> = Object.fromEntries(
-    rows.map((r) => [snapshotKey(r.locale, r.nodeId, r.field), r.value]),
-  );
+  // Khoá THEO TRANG (`locale@pageId:nodeId:field`) + cờ `@pageId` cho mọi trang được
+  // publish — xem `snapshotKey`. Khoá không mang trang từng để bản dịch của /maicash đè
+  // lên node trùng id của /maigreen (17/11/2026).
+  const fresh = freshTranslationSnapshot(rows, publishedIds);
 
   /*
    * Publish cả site: `publishedIds` là mọi trang, nên `fresh` CHÍNH LÀ ảnh chụp.
@@ -169,9 +169,8 @@ export async function POST(request: Request) {
    * sẽ sống sót từ ảnh chụp cũ, và trang tiếng Anh hiện lại đúng chuỗi mà người
    * dùng tưởng đã bỏ.
    *
-   * Khoá là `locale:nodeId:field`, không mang pageId — nên tập nodeId của trang
-   * được publish lấy thẳng từ `doc.nodes` của bản nháp; `Doc.nodes` vốn đã là map
-   * theo id nên không phải duyệt cây.
+   * Khoá mang pageId nên "khoá của trang được publish" là đúng các khoá `@pageId` —
+   * xem `mergeTranslationSnapshot`.
    */
   let translations = fresh;
   if (selection) {
@@ -182,18 +181,10 @@ export async function POST(request: Request) {
         })
       : null;
 
-    const publishedVersionIds = pages
-      .filter((p) => publishedIds.includes(p.id))
-      .map((p) => p.versionId);
-    const versions = await prisma.pageVersion.findMany({
-      where: { id: { in: publishedVersionIds } },
-      select: { doc: true },
-    });
-
     translations = mergeTranslationSnapshot(
       previous?.translations as Record<string, unknown> | null,
       fresh,
-      nodeIdsOf(versions.map((v) => v.doc)),
+      new Set(publishedIds),
     );
   }
 

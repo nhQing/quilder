@@ -14,7 +14,7 @@ import { describe, expect, it } from 'vitest';
  */
 
 import type { Doc, Node } from '@/lib/doc/types';
-import { applyTranslations, entriesFromSnapshot, snapshotKey } from './translations';
+import { applyTranslations, entriesFromSnapshot, pageMarkerKey, snapshotKey, snapshotLocaleOf } from './translations';
 
 const base = { parentId: null, children: [] as string[], style: {}, effects: [] };
 
@@ -213,6 +213,37 @@ describe('entriesFromSnapshot', () => {
 
   it('khoá hỏng bị bỏ, không ném', () => {
     expect(entriesFromSnapshot({ 'en:': 'x', en: 'y' }, 'en')).toEqual([]);
+  });
+
+  it('trang có cờ chỉ đọc khoá của CHÍNH nó, không đọc khoá cũ hay của trang khác', () => {
+    const s = {
+      [snapshotKey('en', 'n0000130', 'content')]: 'legacy',
+      [pageMarkerKey('maigreen')]: true,
+      [snapshotKey('en', 'n0000130', 'content', 'maigreen')]: '8.5% per year',
+      [snapshotKey('en', 'n0000130', 'content', 'maicash')]: 'Questions?',
+      [snapshotKey('en', 'n1', 'param:index.0.label', 'maigreen')]: 'Step',
+    };
+    const green = entriesFromSnapshot(s, 'en', 'maigreen');
+    expect(green).toEqual([
+      { nodeId: 'n0000130', field: 'content', value: '8.5% per year' },
+      { nodeId: 'n1', field: 'param:index.0.label', value: 'Step' },
+    ]);
+  });
+
+  it('trang chưa có cờ (release cũ) đọc khoá dạng cũ như trước', () => {
+    const s = {
+      [snapshotKey('en', 't', 'content')]: 'legacy',
+      [pageMarkerKey('khac')]: true,
+      [snapshotKey('en', 't', 'content', 'khac')]: 'scoped',
+    };
+    expect(entriesFromSnapshot(s, 'en', 'chua-co-co')).toEqual([{ nodeId: 't', field: 'content', value: 'legacy' }]);
+    expect(entriesFromSnapshot(s, 'en')).toEqual([{ nodeId: 't', field: 'content', value: 'legacy' }]);
+  });
+
+  it('mã ngôn ngữ đọc được từ cả hai dạng khoá', () => {
+    expect(snapshotLocaleOf('en:t:content')).toBe('en');
+    expect(snapshotLocaleOf('en@p1:t:content')).toBe('en');
+    expect(snapshotLocaleOf('@p1')).toBe('');
   });
 
   it('vòng tròn: ảnh chụp → entries → phủ được', () => {

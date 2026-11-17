@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { mergeTranslationSnapshot, nodeIdsOf, planReleaseEntries } from './plan';
+import { freshTranslationSnapshot, mergeTranslationSnapshot, nodeIdsOf, planReleaseEntries } from './plan';
 
 /**
  * Mọi phép kiểm ở đây là về một lỗi IM LẶNG.
@@ -140,39 +140,62 @@ describe('planReleaseEntries — publish từng trang', () => {
 });
 
 describe('mergeTranslationSnapshot', () => {
-  it('giữ bản dịch của trang không publish', () => {
+  it('giữ bản dịch của trang không publish, cả khoá dạng cũ lẫn dạng mới', () => {
     const merged = mergeTranslationSnapshot(
-      { 'en:n-khac:text': 'Other page' },
+      { 'en:hn1:content': 'Legacy', '@p-khac': true, 'en@p-khac:n1:content': 'Other page' },
       {},
-      new Set(['n-cua-toi']),
+      new Set(['p-cua-toi']),
     );
-    expect(merged).toEqual({ 'en:n-khac:text': 'Other page' });
+    expect(merged).toEqual({
+      'en:hn1:content': 'Legacy', '@p-khac': true, 'en@p-khac:n1:content': 'Other page',
+    });
   });
 
   it('bản dịch VỪA BỊ XOÁ không sống lại từ ảnh chụp cũ', () => {
     // Chỉ trộn đè (`{...cũ, ...mới}`) sẽ để nguyên khoá này, và trang tiếng Anh
     // hiện lại đúng chuỗi người dùng vừa bỏ — không có lỗi nào báo ra.
     const merged = mergeTranslationSnapshot(
-      { 'en:n1:text': 'Cũ', 'en:n-khac:text': 'Giữ' },
-      {},
-      new Set(['n1']),
+      { '@p1': true, 'en@p1:n1:content': 'Cũ', 'en@p2:n1:content': 'Giữ' },
+      freshTranslationSnapshot([], ['p1']),
+      new Set(['p1']),
     );
-    expect(merged).toEqual({ 'en:n-khac:text': 'Giữ' });
+    expect(merged).toEqual({ '@p1': true, 'en@p2:n1:content': 'Giữ' });
   });
 
   it('bản dịch mới của trang được publish ghi đè bản cũ', () => {
     const merged = mergeTranslationSnapshot(
-      { 'en:n1:text': 'Cũ' },
-      { 'en:n1:text': 'Mới' },
-      new Set(['n1']),
+      { '@p1': true, 'en@p1:n1:content': 'Cũ' },
+      freshTranslationSnapshot([{ pageId: 'p1', locale: 'en', nodeId: 'n1', field: 'content', value: 'Mới' }], ['p1']),
+      new Set(['p1']),
     );
-    expect(merged).toEqual({ 'en:n1:text': 'Mới' });
+    expect(merged).toEqual({ '@p1': true, 'en@p1:n1:content': 'Mới' });
+  });
+
+  it('hai trang trùng id node KHÔNG đè nhau (17/11/2026: /maicash vs /maigreen)', () => {
+    const fresh = freshTranslationSnapshot(
+      [
+        { pageId: 'maicash', locale: 'en', nodeId: 'n0000130', field: 'content', value: 'Questions?' },
+        { pageId: 'maigreen', locale: 'en', nodeId: 'n0000130', field: 'content', value: '8.5% per year' },
+        { pageId: 'maicash', locale: 'en', nodeId: '$meta', field: 'title', value: 'MaiCash+' },
+        { pageId: 'maigreen', locale: 'en', nodeId: '$meta', field: 'title', value: 'MaiGreen' },
+      ],
+      ['maicash', 'maigreen'],
+    );
+    expect(fresh['en@maicash:n0000130:content']).toBe('Questions?');
+    expect(fresh['en@maigreen:n0000130:content']).toBe('8.5% per year');
+    expect(fresh['en@maicash:$meta:title']).toBe('MaiCash+');
+    expect(fresh['en@maigreen:$meta:title']).toBe('MaiGreen');
   });
 
   it('ảnh chụp cũ vắng mặt thì kết quả đúng bằng bản mới', () => {
-    expect(mergeTranslationSnapshot(null, { 'en:n1:text': 'Mới' }, new Set())).toEqual({
-      'en:n1:text': 'Mới',
-    });
+    const fresh = freshTranslationSnapshot([{ pageId: 'p1', locale: 'en', nodeId: 'n1', field: 'content', value: 'Mới' }], ['p1']);
+    expect(mergeTranslationSnapshot(null, fresh, new Set(['p1']))).toEqual(fresh);
+  });
+});
+
+describe('freshTranslationSnapshot', () => {
+  it('đặt cờ cho MỌI trang được publish, kể cả trang không có bản dịch', () => {
+    expect(freshTranslationSnapshot([], ['a', 'b'])).toEqual({ '@a': true, '@b': true });
   });
 });
 
