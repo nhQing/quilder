@@ -47,6 +47,7 @@ import {
 } from './query-build';
 import { localeSlug, type EntryLocaleRow } from './entry-locale';
 import { taxonomyName } from './taxonomy-locale';
+import { poolWhere, roleOf, taxonomyRole } from './taxonomy-fields';
 import type { TaxonomyFilter, TaxonomySort } from '@/lib/doc/types';
 import { loadGroupTable } from './group-table';
 
@@ -66,7 +67,11 @@ export interface EntryRow {
    * thẻ tin, thứ mà `map: { taxonomy: … }` đọc tới. Đọc tên qua một lượt truy vấn
    * thứ hai từ id là N+1 với N là số bài trên trang.
    */
-  taxonomies: { id: string; key: string; name: string }[];
+  /**
+   * `tag: true` = mục thuộc một field phân loại vai trò Tag (17/11/2026). Vắng/false =
+   * Danh mục. Khoá ảo `taxonomy` chỉ đọc danh mục, `tag` chỉ đọc tag — xem `repeat.ts`.
+   */
+  taxonomies: { id: string; key: string; name: string; tag?: boolean }[];
   /**
    * TÁC GIẢ — `Entry.createdBy`, không phải `updatedBy`.
    *
@@ -90,7 +95,7 @@ const SELECT = {
    * cột nữa của một bảng vài chục hàng không thêm một lượt đọc nào. Không lấy thì
    * huy hiệu danh mục phải đọc lần hai, mỗi bài một lần.
    */
-  taxonomies: { select: { taxonomyId: true, taxonomy: { select: { key: true, name: true, order: true, i18n: true } } } },
+  taxonomies: { select: { taxonomyId: true, taxonomy: { select: { key: true, name: true, order: true, i18n: true, fieldKey: true } } } },
   /*
    * Tác giả, join qua khoá ngoại `createdBy → User.email`.
    *
@@ -114,7 +119,7 @@ type RawEntry = {
   data: unknown; i18n: unknown;
   status: string; publishedAt: Date | null; updatedAt: Date;
   /** `i18n` tuỳ chọn: màn quản trị (`admin-queries.ts`) không chọn nó và luôn hiện tên gốc. */
-  taxonomies: { taxonomyId: string; taxonomy: { key: string; name: string; order: number; i18n?: unknown } }[];
+  taxonomies: { taxonomyId: string; taxonomy: { key: string; name: string; order: number; i18n?: unknown; fieldKey?: string | null } }[];
   author: { email: string; name: string | null; avatarAssetId: string | null; lockedAt: Date | null };
   locales: EntryLocaleRow[];
 };
@@ -137,14 +142,33 @@ export function sortedTaxonomies(rows: RawEntry['taxonomies'], locale?: string) 
   return rows
     .map((t) => ({
       id: t.taxonomyId, key: t.taxonomy.key, name: taxonomyName(t.taxonomy, locale), order: t.taxonomy.order,
+      fieldKey: t.taxonomy.fieldKey ?? null,
     }))
     .sort((a, b) => a.order - b.order || a.name.localeCompare(b.name, 'vi'))
-    .map(({ id, key, name }) => ({ id, key, name }));
+    .map(({ id, key, name, fieldKey }) => ({ id, key, name, fieldKey }));
 }
 
 /** Loại → khoá field `seo` của nó. Rỗng khi không phủ ngôn ngữ — xem `seoKeysFor`. */
 type SeoKeys = ReadonlyMap<string, string>;
 const NO_SEO_KEYS: SeoKeys = new Map();
+
+/**
+ * Thứ `toRow` cần ngoài hàng DB: khoá SEO (phủ ngôn ngữ) và field của từng loại (vai
+ * trò của từng mục phân loại — Danh mục hay Tag, xem `taxonomy-fields.ts`). Cả hai đọc
+ * từ `getCollectionTypes`, đã cache dưới `TYPES_TAG`.
+ */
+interface RowCtx {
+  seoKeys: SeoKeys;
+  fieldsByType: ReadonlyMap<string, readonly FieldDef[]>;
+}
+
+async function rowCtx(locale: string | undefined): Promise<RowCtx> {
+  const types = await getCollectionTypes();
+  return {
+    seoKeys: await seoKeysFor(locale),
+    fieldsByType: new Map(types.map((t) => [t.key, t.schema])),
+  };
+}
 
 /**
  * Khoá field `seo` của mọi loại, cho `applyEntryLocale`.
@@ -163,9 +187,13 @@ async function seoKeysFor(locale: string | undefined): Promise<SeoKeys> {
   return out;
 }
 
-function toRow(e: RawEntry, locale: string | undefined, seoKeys: SeoKeys): EntryRow {
+function toRow(e: RawEntry, locale: string | undefined, ctx: RowCtx): EntryRow {
   const data = (e.data ?? {}) as Record<string, unknown>;
-  const taxonomies = sortedTaxonomies(e.taxonomies, locale);
+  const fields = ctx.fieldsByType.get(e.typeKey) ?? [];
+  const taxonomies = sortedTaxonomies(e.taxonomies, locale).map(({ fieldKey, ...t }) => ({
+    ...t,
+    tag: taxonomyRole(fields, fieldKey) === 'tag',
+  }));
   return {
     id: e.id,
     /*
@@ -177,7 +205,7 @@ function toRow(e: RawEntry, locale: string | undefined, seoKeys: SeoKeys): Entry
      */
     slug: localeSlug({ slug: e.slug, status: e.status, publishedAt: e.publishedAt }, e.locales, locale),
     typeKey: e.typeKey,
-    data: locale ? applyEntryLocale(data, e.i18n, locale, seoKeys.get(e.typeKey) ?? null) : data,
+    data: locale ? applyEntryLocale(data, e.i18n, locale, ctx.seoKeys.get(e.typeKey) ?? null) : data,
     publishedAt: e.publishedAt,
     updatedAt: e.updatedAt,
     // Cùng MỘT thứ tự với `taxonomies` — hai danh sách của cùng một quan hệ mà
@@ -250,7 +278,7 @@ export async function listEntries(
     skip: args.skip,
     select: SELECT,
   });
-  const seoKeys = await seoKeysFor(locale);
+  const seoKeys = await rowCtx(locale);
   return rows.map((r) => toRow(r as RawEntry, locale, seoKeys));
 }
 
@@ -359,7 +387,7 @@ export const getEntryBySlug = async (typeKey: string, slug: string, locale?: str
             where: { typeKey, slug, archivedAt: null, ...publishWhere({ now }) },
             select: SELECT,
           });
-      return row ? toRow(row as RawEntry, locale, await seoKeysFor(locale)) : null;
+      return row ? toRow(row as RawEntry, locale, await rowCtx(locale)) : null;
     },
     ['collection-entry', typeKey, slug, locale ?? 'default'],
     { tags: [collectionTag(typeKey), entryTag(typeKey, slug)], revalidate },
@@ -391,7 +419,7 @@ export async function getEntryForPreview(
     orderBy: [{ publishedAt: 'desc' }, { updatedAt: 'desc' }],
     select: SELECT,
   });
-  return row ? toRow(row as RawEntry, locale, await seoKeysFor(locale)) : null;
+  return row ? toRow(row as RawEntry, locale, await rowCtx(locale)) : null;
 }
 
 /**
@@ -449,7 +477,7 @@ export async function relatedEntries(args: {
       select: SELECT,
     });
 
-    const seoKeys = await seoKeysFor(args.locale);
+    const seoKeys = await rowCtx(args.locale);
     const scored = rows.map((r) => ({
       id: r.id,
       shared: (r as RawEntry).taxonomies.filter((t) => myTax.includes(t.taxonomyId)).length,
@@ -466,7 +494,7 @@ export async function relatedEntries(args: {
   // TRƠN — không phải lỗi, nhưng trông y như lỗi, và không có gì để lần.
   if (picked.length < limit) {
     const have = new Set([args.entryId, ...picked.map((p) => p.id)]);
-    const seoKeys = await seoKeysFor(args.locale);
+    const seoKeys = await rowCtx(args.locale);
     const fill = await prisma.entry.findMany({
       where: {
         typeKey: args.typeKey, archivedAt: null,
@@ -520,14 +548,23 @@ export async function taxonomyGroups(
   typeKey: string,
   limit: number,
   locale?: string,
-  opts: { filter?: TaxonomyFilter; sort?: TaxonomySort } = {},
+  opts: { filter?: TaxonomyFilter; sort?: TaxonomySort; fieldKey?: string } = {},
 ): Promise<TaxonomyGroup[]> {
   const perGroup = Math.min(limit, MAX_QUERY_LIMIT);
   const now = new Date();
 
+  /*
+   * Field nào (17/11/2026). Vắng `fieldKey` = mọi field vai trò DANH MỤC — dải danh mục
+   * không được liệt kê tag. Loại không khai field phân loại nào thì không lọc (hành vi cũ).
+   */
+  const fields = (await getCollectionTypes()).find((t) => t.key === typeKey)?.schema ?? [];
+  const pool = poolWhere(fields, opts.fieldKey ? (f) => f.key === opts.fieldKey : (f) => roleOf(f) === 'category');
+  if (!pool && fields.some((f) => f.t === 'taxonomy')) return [];
+
   const taxonomies = await prisma.taxonomy.findMany({
     where: {
       typeKey,
+      ...(pool ?? {}),
       // Vắng `published` = không lọc, tức hành vi của mọi khối đang chạy. Chỉ khi
       // người dựng bật ô ấy thì danh mục nháp mới biến mất khỏi dải.
       ...(opts.filter?.published ? { status: 'published' } : {}),
@@ -580,7 +617,7 @@ export async function taxonomyGroups(
     select: SELECT,
   });
 
-  const seoKeys = await seoKeysFor(locale);
+  const seoKeys = await rowCtx(locale);
   const byTax = new Map<string, EntryRow[]>();
   for (const r of rows) {
     const row = toRow(r as RawEntry, locale, seoKeys);
@@ -659,7 +696,7 @@ export async function entriesByIds(ids: string[], locale?: string): Promise<Entr
     select: SELECT,
   });
 
-  const seoKeys = await seoKeysFor(locale);
+  const seoKeys = await rowCtx(locale);
   const byId = new Map(rows.map((r) => [r.id, toRow(r as RawEntry, locale, seoKeys)]));
   return ids.map((id) => byId.get(id)).filter((r): r is EntryRow => r !== undefined);
 }
@@ -692,7 +729,7 @@ export async function relationTargets(
     select: { id: true, slug: true, typeKey: true, data: true, i18n: true },
   });
 
-  const seoKeys = await seoKeysFor(locale);
+  const seoKeys = await rowCtx(locale);
   return rows.map((r) => ({
     id: r.id,
     slug: r.slug,
@@ -700,7 +737,7 @@ export async function relationTargets(
     // Phủ bản dịch y như `toRow`: không phủ thì huy hiệu chuyên đề trên trang
     // tiếng Anh hiện tên tiếng Việt, và chỉ chỗ ấy sai.
     data: locale
-      ? applyEntryLocale((r.data ?? {}) as Record<string, unknown>, r.i18n, locale, seoKeys.get(r.typeKey) ?? null)
+      ? applyEntryLocale((r.data ?? {}) as Record<string, unknown>, r.i18n, locale, seoKeys.seoKeys.get(r.typeKey) ?? null)
       : ((r.data ?? {}) as Record<string, unknown>),
   }));
 }

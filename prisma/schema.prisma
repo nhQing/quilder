@@ -1257,6 +1257,15 @@ model Taxonomy {
    */
   i18n    Json   @default("{}")
   /**
+   * Field `taxonomy` mà mục này thuộc về. `null` = field `taxonomy` ĐẦU TIÊN của loại
+   * (mọi hàng có trước 17/11/2026). Mỗi field có danh sách riêng và một vai trò — Danh
+   * mục hay Tag. Xem `lib/collections/taxonomy-fields.ts`.
+   *
+   * KHÔNG vào `@@unique([typeKey, key])`: khoá là đoạn URL `/blogs/<key>`, duy nhất
+   * trong cả loại dù mục thuộc field nào.
+   */
+  fieldKey String?
+  /**
    * `SetNull` chứ không `Cascade`: xoá một danh mục cha không được xoá theo cả
    * nhánh con cùng mọi liên kết của chúng. Con thành gốc là thứ sửa được bằng một
    * lần kéo; dữ liệu đã mất thì không.

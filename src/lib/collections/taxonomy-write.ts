@@ -15,6 +15,9 @@ import { toSlug } from '@/lib/builder/create-page';
 import { revalidateCollection } from './cache';
 import { isUniqueCollision } from './unique-retry';
 import { setTaxonomyName, translatedName, type TaxonomyI18n } from './taxonomy-locale';
+import { validateCollectionSchema } from './field-def';
+import { loadGroupTable } from './group-table';
+import { fieldOfTaxonomy, taxonomyFieldsOf } from './taxonomy-fields';
 
 export async function createTaxonomy(args: {
   typeKey: string;
@@ -29,6 +32,11 @@ export async function createTaxonomy(args: {
   key?: string;
   /** Thứ tự; nhỏ đứng trước — và nhãn trên thẻ tin là danh mục ĐẦU TIÊN theo thứ tự này. */
   order?: number;
+  /**
+   * Field `taxonomy` mà mục thuộc về (vd `tags`). Vắng = field đầu tiên của loại. Có
+   * `parentId` thì mục con LUÔN theo field của cha — một cây không nằm vắt qua hai ô.
+   */
+  fieldKey?: string;
   actorSub: string;
 }): Promise<{ ok: true; taxonomy: { id: string; key: string } } | { ok: false; status: number; error: string }> {
   const name = args.name.trim();
@@ -37,19 +45,43 @@ export async function createTaxonomy(args: {
     return { ok: false, status: 400, error: `Khoá "${args.key}" không phải dạng đường dẫn (chữ thường, số, gạch nối)` };
   }
 
-  const type = await prisma.collectionType.findUnique({ where: { key: args.typeKey }, select: { id: true } });
+  const type = await prisma.collectionType.findUnique({
+    where: { key: args.typeKey },
+    select: { id: true, schema: true },
+  });
   if (!type) return { ok: false, status: 404, error: `Không có loại nội dung "${args.typeKey}"` };
+
+  /*
+   * Field đích. Lưu `null` cho field ĐẦU TIÊN (cùng quy ước với mọi hàng cũ), khoá thật
+   * cho các field sau — để hai cách gọi cùng một ô không sinh ra hai giá trị khác nhau.
+   */
+  let fieldKey: string | null = null;
+  if (args.fieldKey) {
+    // Chỉ đọc cấu trúc khi có `fieldKey` — đường thường (field đầu tiên) không tốn thêm lượt nào.
+    const checked = validateCollectionSchema(type.schema, await loadGroupTable());
+    const fields = checked.ok ? checked.fields : [];
+    const f = fieldOfTaxonomy(fields, args.fieldKey);
+    if (!f) {
+      const keys = taxonomyFieldsOf(fields).map((x) => x.key).join(', ') || '(không có)';
+      return { ok: false, status: 400, error: `"${args.fieldKey}" không phải field phân loại của loại này (đang có: ${keys})` };
+    }
+    fieldKey = f.key === taxonomyFieldsOf(fields)[0]?.key ? null : f.key;
+  }
 
   if (args.parentId) {
     const parent = await prisma.taxonomy.findUnique({
       where: { id: args.parentId },
-      select: { typeKey: true },
+      select: { typeKey: true, fieldKey: true },
     });
     // Danh mục cha thuộc loại khác nghĩa là cây danh mục của tin tức mọc một nhánh
     // của FAQ — và form nhập liệu sẽ hiện nhánh đó.
     if (!parent || parent.typeKey !== args.typeKey) {
       return { ok: false, status: 400, error: 'Danh mục cha không thuộc loại nội dung này' };
     }
+    if (args.fieldKey && parent.fieldKey !== fieldKey) {
+      return { ok: false, status: 400, error: 'Mục cha thuộc field phân loại khác' };
+    }
+    fieldKey = parent.fieldKey;
   }
 
   const base = toSlug(name) || 'muc';
@@ -62,6 +94,7 @@ export async function createTaxonomy(args: {
           key,
           name,
           parentId: args.parentId ?? null,
+          fieldKey,
           ...(args.order !== undefined ? { order: args.order } : {}),
         },
         select: { id: true, key: true },
@@ -72,7 +105,7 @@ export async function createTaxonomy(args: {
           action: 'taxonomy.create',
           targetType: 'Taxonomy',
           targetId: created.id,
-          meta: { typeKey: args.typeKey, key, name },
+          meta: { typeKey: args.typeKey, key, name, fieldKey },
         },
       });
       return created;

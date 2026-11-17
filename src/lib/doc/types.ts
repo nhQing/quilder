@@ -840,7 +840,14 @@ export type RepeatSource =
   /** "tin liên quan nhất" — xếp theo số danh mục trùng với bài đang mở */
   | { kind: 'related'; typeKey: string; limit: number }
   /** Một lần mỗi danh mục — cấp NGOÀI của "FAQ theo danh mục" */
-  | { kind: 'taxonomy'; typeKey: string; filter?: TaxonomyFilter; sort?: TaxonomySort }
+  | {
+      kind: 'taxonomy'; typeKey: string; filter?: TaxonomyFilter; sort?: TaxonomySort;
+      /**
+       * Field phân loại nào (17/11/2026). Vắng = mọi field vai trò DANH MỤC — dải danh
+       * mục không liệt kê tag. Xem `lib/collections/taxonomy-fields.ts`.
+       */
+      fieldKey?: string;
+    }
   /** Entry của danh mục do khối cha đang lặp — cấp TRONG. Chỉ hợp lệ dưới `taxonomy`. */
   | { kind: 'group-entries'; limit: number }
   /**

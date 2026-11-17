@@ -330,7 +330,7 @@ export async function getTypeShape(typeKey: string) {
   const taxonomies = await prisma.taxonomy.findMany({
     where: { typeKey },
     orderBy: [{ order: 'asc' }, { name: 'asc' }],
-    select: { id: true, key: true, name: true, parentId: true, status: true, i18n: true },
+    select: { id: true, key: true, name: true, parentId: true, status: true, i18n: true, fieldKey: true },
   });
 
   return {

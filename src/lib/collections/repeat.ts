@@ -33,7 +33,8 @@ export interface RepeatItem {
    * ảo `taxonomy` lấy phần tử ĐẦU làm huy hiệu, nên một thứ tự không xác định là
    * một huy hiệu đổi chữ giữa hai lần tải trang.
    */
-  taxonomies?: { key: string; name: string }[];
+  /** `tag: true` = mục của field vai trò Tag — xem `taxonomy-fields.ts`. */
+  taxonomies?: { key: string; name: string; tag?: boolean }[];
   /**
    * Tác giả — `Entry.createdBy`, KHÔNG phải `updatedBy`. Xem `VIRTUAL_KEYS`.
    *
@@ -120,20 +121,45 @@ export const VIRTUAL_KEYS: Record<string, VirtualKey> = {
     label: 'Ngày sửa gần nhất',
     note: 'ngày sửa gần nhất (cột `Entry.updatedAt`)',
   },
+  /*
+   * Danh mục và Tag (17/11/2026): `taxonomy`/`taxonomies` chỉ đọc mục của field vai trò
+   * DANH MỤC; `tag`/`tags` chỉ đọc mục của field vai trò TAG. Loại chỉ có một field phân
+   * loại (vai trò mặc định là Danh mục) thì `taxonomy` y như trước.
+   */
   taxonomy: {
-    read: (i) => i.taxonomies?.[0]?.name,
+    read: (i) => i.taxonomies?.find((t) => !t.tag)?.name,
     overrideData: true,
     label: 'Danh mục (cái đầu tiên)',
-    note: 'tên danh mục ĐẦU TIÊN của bài — dùng cho huy hiệu một chữ trên thẻ',
+    note: 'tên danh mục ĐẦU TIÊN của bài (không tính tag) — dùng cho huy hiệu một chữ trên thẻ',
   },
   taxonomies: {
     read: (i) => {
-      const names = i.taxonomies?.map((t) => t.name).filter(Boolean) ?? [];
+      const names = i.taxonomies?.filter((t) => !t.tag).map((t) => t.name).filter(Boolean) ?? [];
       return names.length ? names.join(', ') : undefined;
     },
     overrideData: true,
     label: 'Danh mục (tất cả)',
-    note: 'TẤT CẢ danh mục của bài, nối bằng dấu phẩy',
+    note: 'TẤT CẢ danh mục của bài (không tính tag), nối bằng dấu phẩy',
+  },
+  tag: {
+    /*
+     * Tag đầu tiên; bài chưa gắn tag nào thì rơi về danh mục đầu tiên. Không rơi thì ô
+     * nhãn nhận `undefined`, `itemOverrides` bỏ qua, và thẻ hiện CHỮ MẪU của component
+     * ("Danh mục") — sai hơn là hiện tên danh mục.
+     */
+    read: (i) => (i.taxonomies?.find((t) => t.tag) ?? i.taxonomies?.find((t) => !t.tag))?.name,
+    overrideData: true,
+    label: 'Tag (cái đầu tiên)',
+    note: 'tên TAG đầu tiên của bài; chưa có tag thì là danh mục đầu tiên — nhãn trên thẻ tin',
+  },
+  tags: {
+    read: (i) => {
+      const names = i.taxonomies?.filter((t) => t.tag).map((t) => t.name).filter(Boolean) ?? [];
+      return names.length ? names.join(', ') : undefined;
+    },
+    overrideData: true,
+    label: 'Tag (tất cả)',
+    note: 'TẤT CẢ tag của bài, nối bằng dấu phẩy',
   },
   author: {
     /*

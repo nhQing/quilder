@@ -44,6 +44,7 @@ import type { FormPath } from '@/lib/collections/form-state';
 import { SideCard } from './EntryActions';
 import { FieldInput } from './FieldInput';
 import { TaxonomyPicker } from './TaxonomyPicker';
+import { inPool, taxonomyFieldsOf } from '@/lib/collections/taxonomy-fields';
 import { Avatar, Badge } from './ui/Badge';
 import { EntryWriter, PersonLine } from './EntryWriter';
 import { personLabel, type EntryActivity, type WriterOption } from '@/lib/collections/entry-activity';
@@ -61,10 +62,12 @@ export function EntrySidebar(props: {
   status: string;
   publishedAt: string;
   onPublishedAt: (v: string) => void;
-  taxonomies: { id: string; key: string; name: string; parentId: string | null }[];
+  taxonomies: { id: string; key: string; name: string; parentId: string | null; fieldKey?: string | null }[];
   taxonomyIds: string[];
   onTaxonomyIds: (ids: string[]) => void;
   hasTaxonomyField: boolean;
+  /** Toàn bộ field của loại — để tách ô chọn theo từng field phân loại. */
+  taxonomyFields?: FieldDef[];
   relationFields: FieldDef[];
   /** Field `relation` trỏ tới một loại KHÁC loại đang sửa — xem docblock đầu file. */
   crossRelationFields: FieldDef[];
@@ -148,17 +151,44 @@ export function EntrySidebar(props: {
         />
       </SideCard>
 
-      {/* 2 ── Danh mục */}
-      {props.hasTaxonomyField && (
-        <SideCard title="Danh mục">
-          <TaxonomyPicker
-            typeKey={props.typeKey}
-            taxonomies={props.taxonomies}
-            value={props.taxonomyIds}
-            onChange={props.onTaxonomyIds}
-          />
-        </SideCard>
-      )}
+      {/*
+        2 ── Danh mục / Tag: MỖI field phân loại một khối, mỗi khối chỉ thấy danh sách
+        của field đó (17/11/2026 — xem `lib/collections/taxonomy-fields.ts`). Giá trị vẫn
+        là MỘT danh sách `taxonomyIds`; mỗi khối chỉ thay phần thuộc về nó.
+      */}
+      {props.hasTaxonomyField &&
+        (() => {
+          const all = props.taxonomyFields ?? [];
+          const taxFields = taxonomyFieldsOf(all);
+          if (taxFields.length <= 1) {
+            return (
+              <SideCard title={taxFields[0]?.label || 'Danh mục'}>
+                <TaxonomyPicker
+                  typeKey={props.typeKey}
+                  taxonomies={props.taxonomies}
+                  value={props.taxonomyIds}
+                  onChange={props.onTaxonomyIds}
+                />
+              </SideCard>
+            );
+          }
+          return taxFields.map((f) => {
+            const pool = props.taxonomies.filter((t) => inPool(all, f, t.fieldKey));
+            const poolIds = new Set(pool.map((t) => t.id));
+            return (
+              <SideCard key={f.key} title={f.label}>
+                <TaxonomyPicker
+                  typeKey={props.typeKey}
+                  taxonomies={pool}
+                  value={props.taxonomyIds.filter((id) => poolIds.has(id))}
+                  onChange={(ids) =>
+                    props.onTaxonomyIds([...props.taxonomyIds.filter((id) => !poolIds.has(id)), ...ids])
+                  }
+                />
+              </SideCard>
+            );
+          });
+        })()}
 
       {/* 3 ── Tin liên quan */}
       {props.relationFields.length > 0 && (

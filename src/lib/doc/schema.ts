@@ -616,6 +616,8 @@ export const zRepeatSpec = z
       z.object({
         kind: z.literal('taxonomy'),
         typeKey: z.string().min(1).max(40),
+        // Field phân loại; vắng = mọi field vai trò Danh mục (không liệt kê tag).
+        fieldKey: z.string().regex(/^[a-z][a-z0-9_]*$/).max(40).optional(),
         // Cả hai `optional` và không `.default()`: vắng = hiện mọi danh mục, đúng
         // hành vi của mọi khối đang chạy. Một default ở đây đổi hình dạng những
         // trang đã publish vào lần lưu tiếp theo của chúng.

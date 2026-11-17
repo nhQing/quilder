@@ -75,6 +75,7 @@ import { canPublishLocale } from '@/lib/auth/service-token';
 import { loadGroupTable } from '@/lib/collections/group-table';
 import { getCollectionTypes } from '@/lib/collections/queries';
 import { createTaxonomy, setTaxonomyLocaleName } from '@/lib/collections/taxonomy-write';
+import { fieldOfTaxonomy, roleOf } from '@/lib/collections/taxonomy-fields';
 import { prisma } from '@/lib/db';
 import { resolveRepeat } from '@/lib/collections/resolve-repeat';
 import { zRepeatSpec } from '@/lib/doc/schema';
@@ -312,16 +313,19 @@ const listTaxonomiesTool: ToolDef = {
   input: z.object({ typeKey: z.string().min(1) }).strict(),
   readOnly: true,
   async run(input: { typeKey: string }) {
-    const type = await prisma.collectionType.findUnique({
-      where: { key: input.typeKey },
-      select: { id: true },
-    });
+    const type = (await getCollectionTypes()).find((t) => t.key === input.typeKey);
     if (!type) return { ok: false, error: `Không có loại nội dung "${input.typeKey}"` };
 
-    const rows = await prisma.taxonomy.findMany({
+    const raw = await prisma.taxonomy.findMany({
       where: { typeKey: input.typeKey },
       orderBy: [{ order: 'asc' }, { name: 'asc' }],
-      select: { id: true, key: true, name: true, parentId: true, i18n: true },
+      select: { id: true, key: true, name: true, parentId: true, i18n: true, fieldKey: true },
+    });
+    // `field` + `role`: mục thuộc field phân loại nào, và field đó là Danh mục hay Tag
+    // (17/11/2026). `field` null = mục mồ côi (field đã bị xoá khỏi cấu trúc).
+    const rows = raw.map(({ fieldKey, ...r }) => {
+      const f = fieldOfTaxonomy(type.schema, fieldKey);
+      return { ...r, field: f?.key ?? null, role: roleOf(f) };
     });
 
     // Một `groupBy` chứ không `_count` trên quan hệ: `_count` đếm cả entry đã lưu
@@ -352,7 +356,9 @@ const createTaxonomyTool: ToolDef = {
     'nhập của mọi bài, nên đừng tạo mục rác để thử.\n\n' +
     '`key` là đoạn URL của trang danh mục và KHÔNG đổi được sau khi tạo. Bỏ trống = suy ' +
     'từ tên (trùng thì thêm hậu tố). Chỉ đặt khi phải giữ URL của một site đang chạy; ' +
-    'khoá đặt tay mà trùng thì bị từ chối.',
+    'khoá đặt tay mà trùng thì bị từ chối.\n\n' +
+    '`fieldKey`: loại có NHIỀU field phân loại (vd `cats` = Danh mục, `tags` = Tag) thì ' +
+    'chọn field mà mục thuộc về; mỗi field có danh sách riêng. Bỏ trống = field đầu tiên.',
   input: z
     .object({
       typeKey: z.string().min(1),
@@ -369,11 +375,17 @@ const createTaxonomyTool: ToolDef = {
         .int()
         .optional()
         .describe('Thứ tự, nhỏ đứng trước. Nhãn trên thẻ tin là danh mục ĐẦU TIÊN theo thứ tự này.'),
+      fieldKey: z
+        .string()
+        .min(1)
+        .max(40)
+        .optional()
+        .describe('Khoá field phân loại (vd "tags"). Bỏ trống = field phân loại đầu tiên.'),
     })
     .strict(),
   readOnly: false,
   async run(
-    input: { typeKey: string; name: string; parentId?: string; key?: string; order?: number },
+    input: { typeKey: string; name: string; parentId?: string; key?: string; order?: number; fieldKey?: string },
     ctx: ToolContext,
   ) {
     const r = await createTaxonomy({
@@ -382,6 +394,7 @@ const createTaxonomyTool: ToolDef = {
       parentId: input.parentId,
       key: input.key,
       order: input.order,
+      fieldKey: input.fieldKey,
       actorSub: ctx.session.sub,
     });
     if (!r.ok) return { ok: false, error: r.error };

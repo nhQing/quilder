@@ -33,7 +33,7 @@ export async function GET(request: Request) {
   const rows = await prisma.taxonomy.findMany({
     where: { typeKey },
     orderBy: [{ order: 'asc' }, { name: 'asc' }],
-    select: { id: true, key: true, name: true, parentId: true, order: true },
+    select: { id: true, key: true, name: true, parentId: true, order: true, fieldKey: true },
   });
 
   /*
@@ -57,6 +57,7 @@ export async function GET(request: Request) {
       name: r.name,
       parentId: r.parentId,
       order: r.order,
+      fieldKey: r.fieldKey,
       entryCount: byId.get(r.id) ?? 0,
     })),
   });
@@ -66,7 +67,7 @@ export async function POST(request: Request) {
   const auth = await requireAuth('write');
   if (auth instanceof NextResponse) return auth;
 
-  let body: { typeKey?: string; name?: string; parentId?: string };
+  let body: { typeKey?: string; name?: string; parentId?: string; fieldKey?: string };
   try {
     body = (await request.json()) as typeof body;
   } catch {
@@ -77,6 +78,7 @@ export async function POST(request: Request) {
     typeKey: body.typeKey ?? '',
     name: body.name ?? '',
     parentId: body.parentId,
+    fieldKey: body.fieldKey || undefined,
     actorSub: auth.sub,
   });
   if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status });

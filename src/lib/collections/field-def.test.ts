@@ -190,18 +190,24 @@ describe('validateCollectionSchema', () => {
     expect(r.ok === false && r.error).toContain('cats');
   });
 
-  it('một loại nội dung chỉ được có MỘT field danh mục', () => {
-    // `taxonomyIds` là một danh sách phẳng không mang khoá field, nên hai ô chọn
-    // danh mục sẽ ghi vào cùng một chỗ và một danh mục làm cả hai ô "đã điền".
+  it('một loại có thể có NHIỀU field phân loại (Danh mục + Tag), mỗi field một danh sách', () => {
+    // 17/11/2026: mỗi mục phân loại mang `fieldKey`, nên hai ô không còn ghi chung một chỗ.
     const r = validateCollectionSchema(
       [
         { t: 'taxonomy', key: 'cats', label: 'Danh mục' },
-        { t: 'taxonomy', key: 'regions', label: 'Vùng' },
+        { t: 'taxonomy', key: 'tags', label: 'Tag', role: 'tag', multiple: true },
       ],
       groups,
     );
+    expect(r.ok).toBe(true);
+  });
+
+  it('vai trò lạ bị từ chối', () => {
+    const r = validateCollectionSchema(
+      [{ t: 'taxonomy', key: 'cats', label: 'Danh mục', role: 'chuyen-muc' }],
+      groups,
+    );
     expect(r.ok).toBe(false);
-    expect(r.ok === false && r.error).toContain('regions');
   });
 
   it('một field danh mục ở tầng ngoài thì vẫn nhận', () => {

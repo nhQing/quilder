@@ -72,7 +72,7 @@ export function entryToItem(e: EntryRow): RepeatItem {
     typeKey: e.typeKey,
     publishedAt: e.publishedAt?.toISOString(),
     updatedAt: e.updatedAt.toISOString(),
-    taxonomies: e.taxonomies.map((t) => ({ key: t.key, name: t.name })),
+    taxonomies: e.taxonomies.map((t) => ({ key: t.key, name: t.name, ...(t.tag ? { tag: true } : {}) })),
     author: e.author,
   };
 }
@@ -116,6 +116,7 @@ export async function resolveRepeat(spec: RepeatSpec, ctx: RepeatContext): Promi
       const tree = await resolveTaxonomyTree(spec.source.typeKey, 1, ctx.locale, {
         filter: spec.source.filter,
         sort: spec.source.sort,
+        fieldKey: spec.source.fieldKey,
       });
       return tree.groups.map((g) => g.item);
     }
@@ -174,7 +175,7 @@ export async function resolveTaxonomyTree(
   typeKey: string,
   innerLimit: number,
   locale?: string,
-  opts: { filter?: TaxonomyFilter; sort?: TaxonomySort } = {},
+  opts: { filter?: TaxonomyFilter; sort?: TaxonomySort; fieldKey?: string } = {},
 ): Promise<TaxonomyTree> {
   const groups = await taxonomyGroups(typeKey, innerLimit, locale, opts);
   const entriesByTaxonomy = new Map<string, RepeatItem[]>();

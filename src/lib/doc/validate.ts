@@ -380,11 +380,15 @@ function repeatTypeKey(doc: Doc, parentId: string | null, source: RepeatSpec['so
 function mapKeyIssue(key: string, fields: FieldShape[], typeKey: string): string | null {
   const field = fields.find((f) => f.key === key);
 
+  // Khoá ảo thắng field trùng tên: field phân loại tên `tags` thì `tags` vẫn đọc được
+  // (khoá ảo đọc đúng các tag của bài) — 17/11/2026.
+  if (VIRTUAL_KEYS[key]) return null;
+
   if (field?.t === 'taxonomy') {
     return (
       `Khoá \`${key}\` là field danh mục, mà danh mục nằm ở bảng nối \`EntryTaxonomy\` ` +
       'chứ không nằm trong `data` — ánh xạ nó không bao giờ có tác dụng. ' +
-      'Dùng `taxonomy` (danh mục đầu tiên) hoặc `taxonomies` (tất cả).'
+      'Dùng `taxonomy` / `taxonomies` (danh mục) hoặc `tag` / `tags` (tag).'
     );
   }
 

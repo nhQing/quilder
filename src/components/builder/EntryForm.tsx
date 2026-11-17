@@ -92,7 +92,7 @@ export function EntryForm(props: {
   typeName: string;
   fields: FieldDef[];
   groups: GroupTable;
-  taxonomies: { id: string; key: string; name: string; parentId: string | null }[];
+  taxonomies: { id: string; key: string; name: string; parentId: string | null; fieldKey?: string | null }[];
   locales: { code: string; label: string; isDefault: boolean; enabled: boolean }[];
   entry: {
     id: string; slug: string; data: Record<string, unknown>; i18n: Record<string, unknown>;
@@ -978,6 +978,7 @@ export function EntryForm(props: {
             setTaxonomyIds(ids);
           }}
           hasTaxonomyField={hasTaxonomyField}
+          taxonomyFields={props.fields}
           relationFields={selfRelationFields}
           crossRelationFields={crossRelationFields}
           groups={props.groups}

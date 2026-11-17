@@ -37,7 +37,15 @@ export type FieldDef =
   | { t: 'file'; key: string; label: string; required?: boolean; accept?: string[]; help?: string }
   | { t: 'slug'; key: string; label: string; from: string; help?: string }
   | { t: 'relation'; key: string; label: string; typeKey: string; cardinality: 'one' | 'many'; help?: string }
-  | { t: 'taxonomy'; key: string; label: string; required?: boolean; multiple?: boolean; help?: string }
+  | {
+      t: 'taxonomy'; key: string; label: string; required?: boolean; multiple?: boolean; help?: string;
+      /**
+       * Danh mục (mặc định) hay Tag. Danh mục là thứ dải danh mục và trang
+       * `/blogs/<key>` liệt kê; tag là nhãn trên thẻ tin. Mỗi field có danh sách mục
+       * riêng — xem `lib/collections/taxonomy-fields.ts`.
+       */
+      role?: 'category' | 'tag';
+    }
   | { t: 'link'; key: string; label: string; required?: boolean; help?: string }
   | { t: 'group'; key: string; label: string; groupKey: string; repeatable?: boolean; max?: number; help?: string }
   | { t: 'blocks'; key: string; label: string; allowed: string[]; max?: number; help?: string }
@@ -109,7 +117,7 @@ export const zFieldDef: z.ZodType<FieldDef> = z.discriminatedUnion('t', [
   z.object({ t: z.literal('file'), key: zKey, label: zLabel, required: z.boolean().optional(), accept: z.array(z.string().max(40)).max(20).optional(), help: zHelp }).strict(),
   z.object({ t: z.literal('slug'), key: zKey, label: zLabel, from: zKey, help: zHelp }).strict(),
   z.object({ t: z.literal('relation'), key: zKey, label: zLabel, typeKey: z.string().min(1).max(40), cardinality: z.enum(['one', 'many']), help: zHelp }).strict(),
-  z.object({ t: z.literal('taxonomy'), key: zKey, label: zLabel, required: z.boolean().optional(), multiple: z.boolean().optional(), help: zHelp }).strict(),
+  z.object({ t: z.literal('taxonomy'), key: zKey, label: zLabel, required: z.boolean().optional(), multiple: z.boolean().optional(), role: z.enum(['category', 'tag']).optional(), help: zHelp }).strict(),
   z.object({ t: z.literal('link'), key: zKey, label: zLabel, required: z.boolean().optional(), help: zHelp }).strict(),
   z.object({ t: z.literal('group'), key: zKey, label: zLabel, groupKey: z.string().min(1).max(40), repeatable: z.boolean().optional(), max: z.number().int().positive().max(50).optional(), help: zHelp }).strict(),
   z.object({ t: z.literal('blocks'), key: zKey, label: zLabel, allowed: z.array(z.string().min(1).max(40)).min(1), max: z.number().int().positive().max(100).optional(), help: zHelp }).strict(),
@@ -209,16 +217,11 @@ export function validateCollectionSchema(
     };
   }
 
-  if (kind === 'type' && taxonomyFields.length > 1) {
-    // `taxonomyIds` là một danh sách phẳng không mang khoá field, nên hai ô chọn
-    // danh mục sẽ ghi vào CÙNG một chỗ — một danh mục duy nhất sẽ làm cả hai ô
-    // "đã điền", một lời nói dối trong giao diện.
-    const keys = taxonomyFields.map((f) => f.key).join(', ');
-    return {
-      ok: false,
-      error: `Một loại nội dung chỉ có một field danh mục (đang có: ${keys})`,
-    };
-  }
+  /*
+   * NHIỀU field `taxonomy` ở tầng ngoài được phép từ 17/11/2026: mỗi field có danh sách
+   * mục riêng (`Taxonomy.fieldKey`), nên hai ô không còn ghi vào cùng một chỗ — xem
+   * `lib/collections/taxonomy-fields.ts`.
+   */
 
   /*
    * Field `seo`: tối đa MỘT, và chỉ ở tầng ngoài của loại.

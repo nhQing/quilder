@@ -22,6 +22,7 @@ import { validateEntryData, validateEntryDataPartial, type EntryDataCtx } from '
 import { validateCollectionSchema, type FieldDef, type GroupTable } from './field-def';
 import { loadGroupTable } from './group-table';
 import { isUniqueCollision } from './unique-retry';
+import { checkTaxonomyPicks } from './taxonomy-fields';
 
 /** Slug trống tạo ra `/tin-tuc/`, trùng trang danh sách. Nên nó không bao giờ trống. */
 const SLUG_FALLBACK = 'muc';
@@ -70,20 +71,12 @@ export function deriveSlug(fields: FieldDef[], data: Record<string, unknown>): s
  */
 export function checkRequiredTaxonomy(
   fields: FieldDef[],
-  taxonomyIds: string[] | undefined,
+  /** Id trần (coi như thuộc field đầu tiên), hoặc mục kèm `fieldKey` — xem `checkTaxonomyPicks`. */
+  taxonomyIds: readonly (string | { id: string; fieldKey: string | null })[] | undefined,
 ): { ok: true } | { ok: false; error: string } {
-  const required = fields.filter((f) => f.t === 'taxonomy' && f.required === true);
-  if (!required.length) return { ok: true };
-  if (taxonomyIds && taxonomyIds.length > 0) return { ok: true };
-
-  const labels = required.map((f) => `"${f.label}"`).join(', ');
-  return {
-    ok: false,
-    error:
-      required.length > 1
-        ? `Phải chọn ít nhất một danh mục cho ${labels}`
-        : 'Phải chọn ít nhất một danh mục',
-  };
+  // Từ 17/11/2026 kiểm THEO TỪNG FIELD: mỗi mục tự biết nó thuộc ô nào qua
+  // `Taxonomy.fieldKey`, nên hạn chế "hai ô bắt buộc chung một danh sách" ở trên đã hết.
+  return checkTaxonomyPicks(fields, taxonomyIds);
 }
 
 /**
@@ -214,10 +207,12 @@ async function siteHost(): Promise<string | null> {
 async function checkTaxonomyIds(
   ids: readonly string[],
   typeKey: string,
-): Promise<{ ok: true } | { ok: false; status: number; error: string }> {
+): Promise<
+  { ok: true; rows: { id: string; fieldKey: string | null }[] } | { ok: false; status: number; error: string }
+> {
   const found = await prisma.taxonomy.findMany({
     where: { id: { in: [...ids] }, typeKey },
-    select: { id: true },
+    select: { id: true, fieldKey: true },
   });
   // `new Set(...)` vì body có thể gửi id trùng — `createMany` bỏ trùng, phép đếm thì
   // không, nên so với `ids.length` sẽ từ chối một yêu cầu hợp lệ.
@@ -228,7 +223,7 @@ async function checkTaxonomyIds(
       error: 'Có danh mục không tồn tại, hoặc không thuộc loại nội dung này',
     };
   }
-  return { ok: true };
+  return { ok: true, rows: found };
 }
 
 export async function createEntry(args: {
@@ -250,13 +245,15 @@ export async function createEntry(args: {
 
   // LUÔN kiểm: entry mới phải đủ điều kiện, và "không truyền `taxonomyIds`" với một
   // entry mới đúng là ca thiếu danh mục.
-  const req = checkRequiredTaxonomy(shape.fields, args.taxonomyIds);
-  if (!req.ok) return { ok: false, status: 400, error: req.error };
-
+  // Mục kèm `fieldKey` để kiểm theo TỪNG field (bắt buộc / chỉ một mục).
+  let picks: { id: string; fieldKey: string | null }[] = [];
   if (args.taxonomyIds?.length) {
     const tax = await checkTaxonomyIds(args.taxonomyIds, args.typeKey);
     if (!tax.ok) return tax;
+    picks = tax.rows;
   }
+  const req = checkRequiredTaxonomy(shape.fields, picks);
+  if (!req.ok) return { ok: false, status: 400, error: req.error };
 
   const writeEntry = (slug: string) =>
     prisma.$transaction(async (tx) => {
@@ -491,13 +488,14 @@ export async function updateEntry(args: {
    * `if (args.taxonomyIds)` mới xoá-rồi-ghi-lại.
    */
   if (args.taxonomyIds) {
-    const req = checkRequiredTaxonomy(shape.fields, args.taxonomyIds);
+    let picks: { id: string; fieldKey: string | null }[] = [];
+    if (args.taxonomyIds.length) {
+      const tax = await checkTaxonomyIds(args.taxonomyIds, current.typeKey);
+      if (!tax.ok) return tax;
+      picks = tax.rows;
+    }
+    const req = checkRequiredTaxonomy(shape.fields, picks);
     if (!req.ok) return { ok: false, status: 400, error: req.error };
-  }
-
-  if (args.taxonomyIds?.length) {
-    const tax = await checkTaxonomyIds(args.taxonomyIds, current.typeKey);
-    if (!tax.ok) return tax;
   }
 
   const run = () =>

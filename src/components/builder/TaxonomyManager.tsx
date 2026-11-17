@@ -46,6 +46,8 @@ export interface TaxonomyRow {
   status: string;
   /** `{ en: { name } }` — xem `Taxonomy.i18n`. */
   i18n?: unknown;
+  /** Field phân loại mà mục thuộc về; `null` = field đầu tiên. */
+  fieldKey?: string | null;
 }
 
 /** Ngôn ngữ KHÔNG mặc định — mỗi cái một ô tên dưới mỗi hàng. */
@@ -57,6 +59,8 @@ export interface TaxonomyLocale {
 export function TaxonomyManager(props: {
   typeKey: string;
   typeName: string;
+  /** Field phân loại của khối này — mục tạo mới thuộc field đó. Vắng = field đầu tiên. */
+  fieldKey?: string;
   taxonomies: TaxonomyRow[];
   counts: Record<string, number>;
   locales: TaxonomyLocale[];
@@ -81,7 +85,12 @@ export function TaxonomyManager(props: {
       headers: { 'content-type': 'application/json' },
       // `key` do server suy từ tên — client không tự đặt khoá, vì khoá là BẤT BIẾN
       // và hai chỗ sinh nó sẽ lệch nhau.
-      body: JSON.stringify({ typeKey: props.typeKey, name: name.trim(), parentId: parentId ?? undefined }),
+      body: JSON.stringify({
+        typeKey: props.typeKey,
+        name: name.trim(),
+        parentId: parentId ?? undefined,
+        fieldKey: props.fieldKey,
+      }),
     });
     const json = (await res.json()) as { ok?: boolean; error?: string };
     setBusy(false);

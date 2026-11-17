@@ -490,6 +490,7 @@ async function resolveEach(
         const tree = await resolveTaxonomyTree(spec.source.typeKey, limit, ctx.locale, {
           filter: spec.source.filter,
           sort: spec.source.sort,
+          fieldKey: spec.source.fieldKey,
         });
         out.groups.set(n.id, tree.groups);
         if (inner) out.groupEntries.set(inner.id, tree.entriesByTaxonomy);

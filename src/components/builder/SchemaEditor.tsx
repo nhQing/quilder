@@ -50,10 +50,11 @@ import { Checkbox, SelectField, TextField } from './ui/Field';
 import { Icon } from './ui/Icon';
 import { Note } from './ui/Note';
 import { EmptyState, PageHeader } from './ui/Page';
+import { inPool } from '@/lib/collections/taxonomy-fields';
 
 export type GroupOption = { key: string; name: string; fieldCount: number };
 export type TypeOption = { key: string; name: string };
-export type TaxonomyOption = { id: string; key: string; name: string; parentId: string | null };
+export type TaxonomyOption = { id: string; key: string; name: string; parentId: string | null; fieldKey?: string | null };
 
 export type SchemaTarget =
   | {
@@ -296,7 +297,7 @@ function KeyField({
  * riêng (cấu trúc / lối thoát), và kiểu bị khoá phải nói được lý do bằng chữ.
  */
 function TypePicker({
-  open, onToggle, onClose, kind, hasTaxonomy, hasSeo, onPick,
+  open, onToggle, onClose, kind, hasSeo, onPick,
 }: {
   open: boolean;
   onToggle: () => void;
@@ -365,7 +366,8 @@ function TypePicker({
                 <div key={g.label} className="flex min-w-0 flex-col gap-0.5">
                   <p className={cn(ui.eyebrow, 'px-2.5 pt-1 pb-1')}>{g.label}</p>
                   {visible.map((t) => {
-                    const disabled = (t === 'taxonomy' && hasTaxonomy) || (t === 'seo' && hasSeo);
+                    // Nhiều field `taxonomy` được phép từ 17/11/2026 (mỗi field một danh sách).
+                    const disabled = t === 'seo' && hasSeo;
                     return (
                       <button
                         key={t}
@@ -400,12 +402,6 @@ function TypePicker({
               );
             })}
           </div>
-          {hasTaxonomy && kind === 'type' && (
-            <p className={cn(ui.hint, 'px-2.5')}>
-              <code className="font-shell-mono">taxonomy</code> đã có trong loại này — mỗi loại chỉ một field
-              danh mục.
-            </p>
-          )}
           <p className={cn(ui.hint, 'border-t border-shell-line px-2.5 pt-2.5 leading-relaxed')}>
             16 kiểu, và danh sách này đóng — cùng lý do 9 primitive node bị đóng băng. Năng lực mới đến qua
             nhóm field, không qua kiểu mới.
@@ -821,7 +817,11 @@ export function SchemaEditor({
             onRemove={removeField}
             groupOptions={groupOptionsForPicker}
             typeOptions={typeOptions}
-            taxonomies={target.kind === 'type' ? taxonomies ?? [] : []}
+            taxonomies={
+              target.kind === 'type' && field
+                ? (taxonomies ?? []).filter((t) => field.t !== 'taxonomy' || inPool(fields, field, t.fieldKey))
+                : []
+            }
             otherFields={fields.filter((_, i) => i !== selected)}
             groups={groups ?? {}}
             seoOnSite={target.kind === 'type' ? target.seoOnSite : true}
@@ -1103,6 +1103,15 @@ function FieldEditor({
           <Checks>
             <Check checked={!!field.required} onChange={(v) => set({ required: v })} label="Bắt buộc" />
             <Check checked={!!field.multiple} onChange={(v) => set({ multiple: v })} label="Cho chọn nhiều danh mục" />
+            {/*
+              Vai trò (17/11/2026). Tag là nhãn trên thẻ tin (khoá ảo `tag`), KHÔNG vào dải
+              danh mục và không là "danh mục" của bài. Mỗi field có danh sách mục riêng.
+            */}
+            <Check
+              checked={field.role === 'tag'}
+              onChange={(v) => set({ role: v ? 'tag' : undefined })}
+              label="Dùng làm Tag (nhãn trên thẻ, không vào dải danh mục)"
+            />
           </Checks>
           <Group
             label={`Danh mục của loại này (${taxonomies.length})`}

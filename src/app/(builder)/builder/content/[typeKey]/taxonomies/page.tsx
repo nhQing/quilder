@@ -12,6 +12,7 @@ import { prisma } from '@/lib/db';
 import { getTypeShape } from '@/lib/collections/admin-queries';
 import { listAllLocales } from '@/lib/i18n/queries';
 import { TaxonomyManager } from '@/components/builder/TaxonomyManager';
+import { inPool, roleOf, taxonomyFieldsOf } from '@/lib/collections/taxonomy-fields';
 import { PageHeader, PageShell } from '@/components/builder/ui/Page';
 
 export const dynamic = 'force-dynamic';
@@ -35,6 +36,7 @@ export default async function TaxonomyPage({
     _count: { entryId: true },
   });
   const counts = Object.fromEntries(grouped.map((g) => [g.taxonomyId, g._count.entryId]));
+  const taxFields = taxonomyFieldsOf(shape.fields);
 
   return (
     <PageShell width="narrow">
@@ -48,13 +50,40 @@ export default async function TaxonomyPage({
         description="Hai cấp: danh mục gốc và danh mục con. Số bài chỉ đếm bài chưa lưu trữ."
       />
 
-      <TaxonomyManager
-        typeKey={typeKey}
-        typeName={shape.type.namePlural}
-        taxonomies={shape.taxonomies}
-        counts={counts}
-        locales={locales.map((l) => ({ code: l.code, label: l.label }))}
-      />
+      {/*
+        Một loại có NHIỀU field phân loại (vd Danh mục + Tag) thì mỗi field một khối,
+        mỗi khối một danh sách riêng — xem `lib/collections/taxonomy-fields.ts`.
+      */}
+      {taxFields.length > 1 ? (
+        <div className="flex flex-col gap-10">
+          {taxFields.map((f) => (
+            <section key={f.key} className="flex flex-col gap-3">
+              <h2 className="text-section font-semibold">
+                {f.label}{' '}
+                <span className="text-small font-normal text-shell-muted">
+                  · {roleOf(f) === 'tag' ? 'Tag' : 'Danh mục'} · <span className="font-shell-mono">{f.key}</span>
+                </span>
+              </h2>
+              <TaxonomyManager
+                typeKey={typeKey}
+                typeName={shape.type.namePlural}
+                fieldKey={f.key}
+                taxonomies={shape.taxonomies.filter((t) => inPool(shape.fields, f, t.fieldKey))}
+                counts={counts}
+                locales={locales.map((l) => ({ code: l.code, label: l.label }))}
+              />
+            </section>
+          ))}
+        </div>
+      ) : (
+        <TaxonomyManager
+          typeKey={typeKey}
+          typeName={shape.type.namePlural}
+          taxonomies={shape.taxonomies}
+          counts={counts}
+          locales={locales.map((l) => ({ code: l.code, label: l.label }))}
+        />
+      )}
     </PageShell>
   );
 }
