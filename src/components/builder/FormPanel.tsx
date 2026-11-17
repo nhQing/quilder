@@ -654,6 +654,14 @@ function FieldEditor({
         disabled={locked}
         onChange={(e) => onPatch({ required: e.target.checked }, 'required')}
       />
+      {field.kind !== 'hidden' && (
+        <Checkbox
+          label="Nửa hàng (từ tablet)"
+          checked={field.width === 'half'}
+          disabled={locked}
+          onChange={(e) => onPatch({ width: e.target.checked ? 'half' : undefined }, 'width')}
+        />
+      )}
       <CommitText
         label="Trợ giúp"
         value={str(field.help)}

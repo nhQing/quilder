@@ -73,6 +73,11 @@ const formField = z.object({
    * bài đang mở thì chỗ giữ chỗ thành chuỗi rỗng.
    */
   value: z.string().max(200).optional(),
+  /**
+   * `half`: từ 768px trở lên ô chiếm nửa hàng, hai ô `half` liền nhau đứng cạnh nhau
+   * (Số điện thoại | Email). Dưới 768px vẫn mỗi ô một hàng. Vắng = cả hàng.
+   */
+  width: z.enum(['full', 'half']).optional(),
 });
 
 /** Trần số ô của một form — schema dùng, và sidebar dùng để tắt nút "Thêm ô". */

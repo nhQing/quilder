@@ -35,6 +35,22 @@
   gap: calc(var(--space-xs) / 2);
 }
 
+/* Ô `width: 'half'`: từ 768px form thành lưới hai cột; mọi thứ khác (ô cả hàng, captcha,
+   nút, thông báo, slot note) vẫn trải hết hai cột. Chỉ bật khi form CÓ ô nửa hàng, nên
+   form cũ không đổi gì. `gap` của form dùng cho cả hàng lẫn cột. */
+@media (min-width: 768px) {
+  .mm-form:has(> .mm-form__row--half) {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .mm-form:has(> .mm-form__row--half) > * {
+    grid-column: 1 / -1;
+  }
+  .mm-form:has(> .mm-form__row--half) > .mm-form__row--half {
+    grid-column: auto;
+  }
+}
+
 /* Checkbox nằm NGANG với nhãn của nó: một ô vuông trên một dòng riêng rồi nhãn ở
    dòng dưới đọc như hai thứ không liên quan. */
 .mm-form__row--checkbox {

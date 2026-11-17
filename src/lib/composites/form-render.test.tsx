@@ -28,6 +28,19 @@ const html = (over: Partial<Parameters<typeof Form>[0]> = {}) =>
   );
 
 describe('Form — HTML ở server', () => {
+  it('ô width "half" mang lớp mm-form__row--half; ô thường thì không', () => {
+    const fields = params({
+      fields: [
+        { name: 'phone', kind: 'tel', label: 'SĐT', width: 'half' },
+        { name: 'email', kind: 'email', label: 'Email', width: 'half' },
+        { name: 'company', kind: 'text', label: 'Công ty' },
+      ],
+    }).fields;
+    const out = html({ fields });
+    expect(out.match(/mm-form__row--half/g)).toHaveLength(2);
+    expect(out).toMatch(/class="mm-form__row mm-form__row--text" data-part="field"/);
+  });
+
   it('ô nhập có trong HTML đầu tiên, không chờ JS', () => {
     const out = html();
     expect(out).toContain('<form');

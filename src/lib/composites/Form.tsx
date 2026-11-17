@@ -368,7 +368,7 @@ export function Form({
           return (
             <div
               key={f.name}
-              className={`mm-form__row mm-form__row--${f.kind}`}
+              className={`mm-form__row mm-form__row--${f.kind}${f.width === 'half' ? ' mm-form__row--half' : ''}`}
               data-part="field"
             >
               <label className="mm-form__label" htmlFor={id}>
