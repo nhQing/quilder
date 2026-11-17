@@ -11,6 +11,7 @@
  */
 
 import type { BindingRef } from '@/lib/doc/types';
+import { dateLocaleOf, type LinkLocale } from '@/lib/i18n/locale-href';
 
 export interface BindingScope {
   site: Record<string, unknown>;
@@ -23,6 +24,11 @@ export interface BindingScope {
    * chuyện khác nhau, và chỉ chuyện thứ hai mới đáng trả về chữ tác giả đã gõ.
    */
   collection?: Record<string, unknown>;
+  /**
+   * Ngôn ngữ đang phục vụ — cho link nội bộ (tiền tố `/en`) và định dạng ngày. Vắng =
+   * ngôn ngữ mặc định, hành vi y như trước. Xem `lib/i18n/locale-href.ts`.
+   */
+  locale?: LinkLocale;
 }
 
 /**
@@ -80,7 +86,7 @@ export function formatBinding(
     case 'date': {
       const d = new Date(String(raw));
       if (Number.isNaN(d.getTime())) return fallback;
-      return new Intl.DateTimeFormat('vi-VN', { dateStyle: 'long' }).format(d);
+      return new Intl.DateTimeFormat(dateLocaleOf(scope.locale), { dateStyle: 'long' }).format(d);
     }
     default:
       return String(raw);

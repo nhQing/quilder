@@ -45,7 +45,6 @@ export interface RepeatItem {
 }
 
 const viNumber = new Intl.NumberFormat('vi-VN');
-const viDate = new Intl.DateTimeFormat('vi-VN', { dateStyle: 'long' });
 
 /* ── Khoá ảo ──────────────────────────────────────────────────────────── */
 
@@ -239,10 +238,12 @@ export function toRichText(v: unknown): RichText | undefined {
  */
 const ISO_DATETIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:\d{2})?$/;
 
-export function toDateText(v: unknown): RichText | undefined {
+export function toDateText(v: unknown, locale = 'vi-VN'): RichText | undefined {
   if (typeof v !== 'string' || !ISO_DATETIME.test(v.trim())) return undefined;
   const d = new Date(v.trim());
-  return Number.isNaN(d.getTime()) ? undefined : [{ t: 'text', v: viDate.format(d) }];
+  if (Number.isNaN(d.getTime())) return undefined;
+  // Theo ngôn ngữ của trang (17/11/2026): `/en/blogs` từng in "3 tháng 9, 2025".
+  return [{ t: 'text', v: new Intl.DateTimeFormat(locale, { dateStyle: 'long' }).format(d) }];
 }
 
 /**
@@ -306,6 +307,8 @@ export interface HrefBases {
   detailBase?: string;
   /** Gốc trang danh mục, ví dụ '/blogs'. */
   taxonomyBase?: string;
+  /** Locale BCP-47 cho ngày (`vi-VN`, `en`). Vắng = `vi-VN`. */
+  dateLocale?: string;
 }
 
 export function itemOverrides(
@@ -346,7 +349,7 @@ export function itemOverrides(
       case 'label': {
         // Ngày TRƯỚC chữ: `toRichText` nhận mọi chuỗi, nên thử nó trước sẽ làm mọi
         // mốc thời gian hiện nguyên dạng ISO. Xem `toDateText`.
-        const rt = toDateText(raw) ?? toRichText(raw);
+        const rt = toDateText(raw, opts.dateLocale) ?? toRichText(raw);
         if (rt) at[target.as] = rt;
         break;
       }

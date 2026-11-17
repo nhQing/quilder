@@ -49,6 +49,8 @@ const HONEYPOT = 'website_url';
 type Status = 'idle' | 'sending' | 'ok' | 'error';
 
 export interface FormProps extends FormParams {
+  /** Mã ngôn ngữ đang phục vụ (`en`…); vắng = tiếng Việt. Chỉ cho chữ do code sinh. */
+  locale?: string;
   /**
    * URL đích, đã resolve từ `Site.globals.endpoint[endpointKey]`.
    *
@@ -165,6 +167,14 @@ function trackLead(endpointKey: string | undefined) {
   }
 }
 
+/**
+ * Nhãn của ô bẫy bot. Không ai thấy nó (ẩn + `aria-hidden`), nhưng nó nằm trong HTML —
+ * trang `/en` từng mang câu tiếng Việt này giữa bản tiếng Anh (17/11/2026).
+ */
+function trapLabel(locale: string | undefined): string {
+  return locale && locale !== 'vi' ? 'Leave this field empty' : 'Đừng điền ô này';
+}
+
 export function Form({
   action,
   endpointKey,
@@ -182,6 +192,7 @@ export function Form({
   canvasPreview = false,
   captcha,
   captchaSiteKey = null,
+  locale,
 }: FormProps) {
   const uid = useId();
   const [status, setStatus] = useState<Status>('idle');
@@ -417,7 +428,7 @@ export function Form({
             `tabIndex={-1}` và `aria-hidden` để người dùng bàn phím và screen
             reader không bao giờ gặp nó. */}
         <div className="mm-form__trap" aria-hidden="true">
-          <label htmlFor={`${uid}-${HONEYPOT}`}>Đừng điền ô này</label>
+          <label htmlFor={`${uid}-${HONEYPOT}`}>{trapLabel(locale)}</label>
           <input
             id={`${uid}-${HONEYPOT}`}
             name={HONEYPOT}

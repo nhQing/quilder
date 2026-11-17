@@ -11,6 +11,7 @@
  * cải thiện SEO thật, không phải lời hứa suông.
  */
 
+import { localizeHref } from '@/lib/i18n/locale-href';
 import type { InlineNode, RichText } from '@/lib/doc/types';
 import { formatBinding, type BindingScope } from './bindings';
 
@@ -60,7 +61,8 @@ function renderInline(
         return (
           <a
             key={key}
-            href={n.href}
+            // Link nội bộ trên trang `/en` mang tiền tố `/en` — xem `localizeHref`.
+            href={localizeHref(n.href, scope.locale)}
             {...(external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
           >
             {renderInline(n.children, scope, key)}

@@ -145,6 +145,40 @@ async function resolveTarget(slug: string, locale: string | undefined): Promise<
   return { page: tpl.page, entry, ...bases, typeKey };
 }
 
+/**
+ * Đường dẫn của trang đang xem theo TỪNG ngôn ngữ đang bật — nguồn chung cho hreflang
+ * (metadata) và cho nút đổi ngôn ngữ (part `locale-<mã>`, xem `lib/i18n/locale-href.ts`).
+ * Một bảng cho cả hai, để nút VI/EN không bao giờ trỏ tới một URL mà hreflang nói là
+ * không tồn tại. Lý do trang chi tiết phải dựng lại theo từng ngôn ngữ: xem chỗ gọi
+ * trong `generateMetadata`.
+ */
+async function alternatePaths(
+  target: Target,
+  slug: string,
+  locales: Awaited<ReturnType<typeof getLocales>>,
+): Promise<Record<string, string>> {
+  const { entry } = target;
+  if (entry && target.detailBase) {
+    const state = await entryLocaleState(entry.id);
+    const base = target.detailBase.replace(/^\//, '');
+    const now = new Date();
+    return Object.fromEntries(
+      locales
+        .filter((l) =>
+          state ? isLocalePublished(state.base, state.rows, l.isDefault ? undefined : l.code, now) : l.isDefault,
+        )
+        .map((l) => {
+          const own = state
+            ? localeSlug(state.base, state.rows, l.isDefault ? undefined : l.code)
+            : entry.slug;
+          return [l.code, localePath(l, `${base}/${own}`)];
+        }),
+    );
+  } else {
+    return Object.fromEntries(locales.map((l) => [l.code, localePath(l, slug)]));
+  }
+}
+
 export async function generateMetadata({ params }: { params: Promise<Params> }) {
   const { locale, slug } = await resolve(await params);
   const target = await resolveTarget(slug, locale.isDefault ? undefined : locale.code);
@@ -173,26 +207,7 @@ export async function generateMetadata({ params }: { params: Promise<Params> }) 
    * Trang danh sách và trang thường giữ nguyên đường cũ: slug của chúng thuộc bảng
    * `Page`, không thuộc `EntryLocale`, nên không có gì để dựng lại.
    */
-  let languages: Record<string, string>;
-  if (entry && target.detailBase) {
-    const state = await entryLocaleState(entry.id);
-    const base = target.detailBase.replace(/^\//, '');
-    const now = new Date();
-    languages = Object.fromEntries(
-      locales
-        .filter((l) =>
-          state ? isLocalePublished(state.base, state.rows, l.isDefault ? undefined : l.code, now) : l.isDefault,
-        )
-        .map((l) => {
-          const own = state
-            ? localeSlug(state.base, state.rows, l.isDefault ? undefined : l.code)
-            : entry.slug;
-          return [l.code, localePath(l, `${base}/${own}`)];
-        }),
-    );
-  } else {
-    languages = Object.fromEntries(locales.map((l) => [l.code, localePath(l, slug)]));
-  }
+  const languages = await alternatePaths(target, slug, locales);
 
   // Trang thường: đọc thẳng từ cột Page, KHÔNG duyệt cây node — metadata không được
   // phụ thuộc vào việc doc lớn cỡ nào.
@@ -214,7 +229,7 @@ export async function generateMetadata({ params }: { params: Promise<Params> }) 
    * hiển thị, và nó tệ hơn một tiêu đề sai ngôn ngữ.
    */
   if (!locale.isDefault) {
-    const meta = pageMetaFrom(entriesFromSnapshot(page.translations, locale.code));
+    const meta = pageMetaFrom(entriesFromSnapshot(page.translations, locale.code, page.pageId));
     if (meta.title) title = meta.title;
     if (meta.description) description = meta.description;
   }
@@ -360,5 +375,6 @@ export default async function SitePage({ params }: { params: Promise<Params> }) 
    */
   if (target.page.system) notFound();
 
-  return <PublishedPageView target={target} locale={locale} />;
+  const alternates = await alternatePaths(target, slug, await getLocales());
+  return <PublishedPageView target={target} locale={locale} alternates={alternates} />;
 }

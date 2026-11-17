@@ -69,3 +69,51 @@ describe('Button link', () => {
     expect(tagOf('blank')).toContain('rel="noopener noreferrer"');
   });
 });
+
+describe('Button link theo ngôn ngữ (17/11/2026)', () => {
+  const sw = (id: string, href: string, part: string) =>
+    ({ ...(button(id, href) as object), part }) as unknown as Node;
+  const ids = ['route', 'routeHash', 'abs', 'swVi', 'swEn'];
+  const localeDoc = {
+    schemaVersion: 1,
+    rootId: 'page',
+    nodes: {
+      page: { ...base, id: 'page', parentId: null, type: 'Section', tag: 'main', children: ids },
+      route: button('route', '/blogs'),
+      routeHash: button('routeHash', '/#chapters'),
+      abs: button('abs', 'https://example.com/x'),
+      swVi: sw('swVi', '/', 'locale-vi'),
+      swEn: sw('swEn', '/en', 'locale-en'),
+    },
+  } as unknown as Doc;
+
+  const render = (locale: NonNullable<RenderContext['scope']['locale']>) =>
+    renderToStaticMarkup(
+      <NodeRenderer nodeId="page" ctx={{ doc: localeDoc, scope: { site: {}, page: {}, locale }, assets: {} }} />,
+    );
+  const hrefOf = (html: string, id: string) =>
+    html.match(new RegExp(`<a [^>]*data-n="${id}"[^>]*>`))?.[0].match(/href="([^"]*)"/)?.[1];
+
+  const codes = ['vi', 'en'];
+  const alternates = { vi: '/blogs/post/lai-suat', en: '/en/blogs/post/interest-rates' };
+
+  it('trang /en: link nội bộ mang tiền tố /en, link ngoài giữ nguyên', () => {
+    const html = render({ code: 'en', isDefault: false, codes, defaultCode: 'vi', alternates });
+    expect(hrefOf(html, 'route')).toBe('/en/blogs');
+    expect(hrefOf(html, 'routeHash')).toBe('/en#chapters');
+    expect(hrefOf(html, 'abs')).toBe('https://example.com/x');
+  });
+
+  it('nút locale-<mã> trỏ tới bản của chính trang này, không bị gắn tiền tố', () => {
+    const html = render({ code: 'en', isDefault: false, codes, defaultCode: 'vi', alternates });
+    expect(hrefOf(html, 'swVi')).toBe('/blogs/post/lai-suat');
+    expect(hrefOf(html, 'swEn')).toBe('/en/blogs/post/interest-rates');
+  });
+
+  it('trang tiếng Việt: link giữ nguyên như trước', () => {
+    const html = render({ code: 'vi', isDefault: true, codes, defaultCode: 'vi' });
+    expect(hrefOf(html, 'route')).toBe('/blogs');
+    expect(hrefOf(html, 'swVi')).toBe('/');
+    expect(hrefOf(html, 'swEn')).toBe('/en');
+  });
+});

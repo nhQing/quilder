@@ -1,4 +1,6 @@
 import { EffectRuntime } from '@/lib/motion/EffectRuntime';
+import { getLocales } from '@/lib/i18n/queries';
+import type { LinkLocale } from '@/lib/i18n/locale-href';
 import { compileDoc } from '@/lib/render/css';
 import { foundationOverrideCss, tokenCssFromSeal } from '@/lib/render/custom-tokens';
 import { fontFaceCss } from '@/lib/fonts/css';
@@ -63,9 +65,12 @@ export interface Target {
 export async function PublishedPageView({
   target,
   locale,
+  alternates,
 }: {
   target: Target;
   locale: { isDefault: boolean; code: string };
+  /** Đường dẫn của trang này theo từng mã ngôn ngữ (hreflang) — cho nút đổi ngôn ngữ. */
+  alternates?: Record<string, string>;
 }) {
   const localeCode = locale.isDefault ? undefined : locale.code;
   const { page, entry, detailBase, taxonomyBase, urlTaxonomyId, urlRelationId } = target;
@@ -74,7 +79,7 @@ export async function PublishedPageView({
   // là bản nháp, và đọc nó ở đây sẽ đưa mọi ký tự vừa gõ lên site thật.
   const doc = locale.isDefault
     ? page.doc
-    : applyTranslations(page.doc, entriesFromSnapshot(page.translations, locale.code));
+    : applyTranslations(page.doc, entriesFromSnapshot(page.translations, locale.code, page.pageId));
 
   // Ảnh chụp của release, KHÔNG phải bảng Preset hiện tại. Đọc bảng live ở đây
   // nghĩa là sửa một component đổi ngay site đang chạy, bỏ qua publish.
@@ -183,10 +188,22 @@ export async function PublishedPageView({
    */
   const overrideCss = await foundationOverrideCss();
 
+  // Ngôn ngữ đang phục vụ: link nội bộ mang tiền tố `/en`, nút `locale-<mã>` trỏ tới
+  // bản của chính trang này, ngày định dạng theo ngôn ngữ. Xem `lib/i18n/locale-href.ts`.
+  const enabledLocales = await getLocales();
+  const linkLocale: LinkLocale = {
+    code: locale.code,
+    isDefault: locale.isDefault,
+    codes: enabledLocales.map((l) => l.code),
+    defaultCode: enabledLocales.find((l) => l.isDefault)?.code ?? locale.code,
+    alternates,
+  };
+
   const ctx: RenderContext = {
     doc,
     components,
     scope: {
+      locale: linkLocale,
       site: page.siteGlobals,
       page: { title: page.title, slug: page.slug },
       // Trang chi tiết: binding `collection` đọc entry đang mở, kể cả NGOÀI khối lặp

@@ -10,6 +10,7 @@
  * animation" không bị phá bởi việc React mount rải rác nhiều island.
  */
 
+import { dateLocaleOf, localizeHref, switchLocaleHref, switchLocaleOf } from '@/lib/i18n/locale-href';
 import type { CSSProperties, ReactElement } from 'react';
 
 import Image from 'next/image';
@@ -572,6 +573,7 @@ function renderComposite(
           success={<Slot ids={node.slots.success} renderChild={renderChild} />}
           error={<Slot ids={node.slots.error} renderChild={renderChild} />}
           canvasPreview={ctx.canvas === true}
+          locale={ctx.scope.locale?.code}
         />
       </div>
     );
@@ -672,7 +674,18 @@ function renderButton(
 
   switch (node.action.kind) {
     case 'link': {
-      const { href, target, rel } = node.action;
+      const { target, rel } = node.action;
+      /*
+       * Theo ngôn ngữ đang phục vụ (17/11/2026). Nút mang part `locale-<mã>` là nút ĐỔI
+       * ngôn ngữ: trỏ tới bản của chính trang này ở ngôn ngữ đó. Mọi link nội bộ khác
+       * trên trang `/en` mang tiền tố `/en`. Xem `lib/i18n/locale-href.ts`.
+       */
+      const locale = ctx.scope.locale;
+      const switchTo = switchLocaleOf(node.part, locale);
+      const href =
+        switchTo && locale
+          ? switchLocaleHref(switchTo, locale)
+          : localizeHref(node.action.href, locale);
 
       // Hash thuần dùng <a> thường chứ không next/link: `scroll.bindAnchors` bắt mọi
       // `a[href^="#"]` để cuộn mượt qua Lenis, và Link sẽ tự xử lý hash trước nó.
@@ -979,6 +992,7 @@ export function NodeRenderer({ nodeId, ctx }: { nodeId: NodeId; ctx: RenderConte
                 // Gốc theo loại của KHỐI trước, gốc của trang sau — xem `ResolvedRepeats.bases`.
                 detailBase: ctx.repeatBases?.get(node.id)?.detailBase ?? ctx.detailBase,
                 taxonomyBase: ctx.repeatBases?.get(node.id)?.taxonomyBase ?? ctx.taxonomyBase,
+                dateLocale: dateLocaleOf(ctx.scope.locale),
               }),
             };
             const childCtx: RenderContext = {
