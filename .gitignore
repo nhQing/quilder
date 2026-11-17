@@ -10,7 +10,7 @@ next-env.d.ts
 .env
 .env.local
 .env.*.local
-
+.env.production
 .DS_Store
 *.log
 npm-debug.log*
@@ -67,6 +67,7 @@ projects/*
 
 # Bộ nhớ của agent Claude Code — ghi chú cục bộ, có thể nhắc dự án riêng; không bao giờ lên repo.
 .claude/agent-memory/
+.claude/settings.local.json
 
 # .ai/ — dữ liệu chỉ của máy này (qf-ai)
 .ai/trash/
