@@ -30,7 +30,11 @@
  * dùng chọn 8 ảnh, kéo một cái, rồi phát hiện chỉ có một ảnh được dời.
  */
 
+import { useEffect, useState } from 'react';
+
 import { assetKind, extOf } from '@/lib/assets/kind';
+import { buildAssetClipboardLine } from '@/lib/builder/asset-ref';
+import { copyText } from '@/lib/builder/clipboard';
 import { cn } from '@/lib/builder/cn';
 import { focusRing, ui } from '@/lib/builder/ui';
 
@@ -154,7 +158,29 @@ export function AssetCard({
   /** Có ảnh/khung hình thật thì nhãn đuôi file nằm ở góc dưới; không thì tờ giấy đã in nó. */
   const hasPicture = info.previewable || info.kind === 'video';
 
+  /*
+   * "Copy cho Claude": dòng `[Quilder] Thư viện › <thư mục> › <tên> — assetId: <id>` để dán vào
+   * chat — model cần `assetId` để thay/đổi tên/gắn ảnh. Không có toast ở Thư viện nên thẻ tự báo
+   * bằng nhãn "Đã copy" vài giây; chép hỏng thì đưa dòng ra để chép tay.
+   */
+  const [copied, setCopied] = useState(false);
+  useEffect(() => {
+    if (!copied) return;
+    const t = setTimeout(() => setCopied(false), 2500);
+    return () => clearTimeout(t);
+  }, [copied]);
+  const copyRef = () => {
+    const line = buildAssetClipboardLine({ id: asset.id, folder: asset.folder, name });
+    copyText(line).then(
+      () => setCopied(true),
+      () => window.prompt('Không copy tự động được — chép dòng này:', line),
+    );
+  };
+
   const menu: MenuEntry[] = [];
+  if (!trashed) {
+    menu.push({ label: 'Copy cho Claude', icon: 'copy', onSelect: copyRef });
+  }
   if (trashed) {
     if (onRestore) {
       menu.push({ label: 'Khôi phục về thư mục cũ', icon: 'undo', disabled: busy, onSelect: () => onRestore(asset.id) });
@@ -164,6 +190,7 @@ export function AssetCard({
       menu.push({ label: 'Xoá hoàn toàn', icon: 'trash', danger: true, disabled: busy, onSelect: () => onPurge(asset.id) });
     }
   } else if (onTrash) {
+    menu.push({ separator: true });
     /*
      * Ảnh đang dùng: mục vẫn bấm được nhưng không gọi API — nó mở danh sách nơi dùng
      * qua `onTrashBlocked`. Một mục `disabled` không nói được VÌ SAO, còn câu trả lời
@@ -378,6 +405,11 @@ export function AssetCard({
               </span>
             )}
           </>
+        )}
+        {copied && (
+          <span role="status" aria-live="polite">
+            <Badge tone="ok" size="sm">Đã copy — dán vào chat với Claude</Badge>
+          </span>
         )}
       </div>
     </li>
