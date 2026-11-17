@@ -22,13 +22,20 @@ import { useRouter, useSearchParams } from 'next/navigation';
 
 import type { AdminEntryRow } from '@/lib/collections/admin-queries';
 import { bulkTargets } from '@/lib/collections/bulk-status';
+import {
+  columnsCookie,
+  defaultColumnIds,
+  formatCell,
+  serializeColumnIds,
+  type EntryColumn,
+} from '@/lib/collections/entry-columns';
 import { cn } from '@/lib/builder/cn';
 import { focusRing, ui, type Tone } from '@/lib/builder/ui';
 
 import { Badge } from './ui/Badge';
 import { Button } from './ui/Button';
 import { Checkbox, SearchField, SelectField } from './ui/Field';
-import { ConfirmDialog } from './ui/Overlay';
+import { ConfirmDialog, Popover } from './ui/Overlay';
 import { EmptyState } from './ui/Page';
 import { Tabs, type TabItem } from './ui/Tabs';
 
@@ -62,6 +69,72 @@ const DATE = new Intl.DateTimeFormat('vi-VN', {
   day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit',
 });
 
+/** Bề rộng / căn lề của tiêu đề cột theo loại cột. */
+const HEAD_CLASS: Record<EntryColumn['kind'], string> = {
+  taxonomy: 'w-40',
+  field: 'w-36',
+  status: 'w-32',
+  locale: 'w-14 text-center',
+  updated: 'w-40 text-right',
+};
+
+/** Một ô của bảng theo loại cột. */
+function Cell({
+  col,
+  row,
+  now,
+  firstTaxonomyField,
+}: {
+  col: EntryColumn;
+  row: AdminEntryRow;
+  now: number;
+  firstTaxonomyField: string | null;
+}) {
+  switch (col.kind) {
+    case 'taxonomy': {
+      const names = row.taxonomies
+        .filter((t) => (t.fieldKey ?? firstTaxonomyField) === col.fieldKey)
+        .map((t) => t.name);
+      return <td className={cn(ui.td, 'text-shell-muted')}>{names.length ? names.join(', ') : '—'}</td>;
+    }
+    case 'field':
+      return (
+        <td className={cn(ui.td, 'text-shell-muted', col.field.t === 'number' && 'tabular-nums')}>
+          <span className="line-clamp-2 break-words">{formatCell(col.field, row.fields[col.field.key])}</span>
+        </td>
+      );
+    case 'status': {
+      const st = rowStatus(row, now);
+      return (
+        <td className={ui.td}>
+          <Badge tone={st.tone} dot={st.tone === 'ok'}>
+            {st.label}
+          </Badge>
+          {st.label === 'hẹn giờ' && row.publishedAt && (
+            <div className="mt-1 text-mini text-shell-muted tabular-nums">{DATE.format(row.publishedAt)}</div>
+          )}
+        </td>
+      );
+    }
+    case 'locale': {
+      const look = LOCALE_LOOK[localeState(row.locales[col.code] ?? { translated: 0, total: 0 })];
+      return (
+        <td className={cn(ui.td, 'text-center', look.cls)} title={look.title}>
+          <span aria-hidden>{look.mark}</span>
+          <span className="sr-only">{look.title}</span>
+        </td>
+      );
+    }
+    case 'updated':
+      return (
+        <td className={cn(ui.td, 'text-right text-shell-muted tabular-nums')}>
+          {DATE.format(row.updatedAt)}
+          <div className="font-shell-mono text-mini">{row.updatedBy}</div>
+        </td>
+      );
+  }
+}
+
 export function EntryTable(props: {
   typeKey: string;
   typeName: string;
@@ -69,6 +142,11 @@ export function EntryTable(props: {
   total: number;
   counts: { all: number; published: number; draft: number; scheduled: number; archived: number };
   taxonomies: { id: string; key: string; name: string; parentId: string | null }[];
+  /** Mọi cột chọn được và cột đang hiện — xem `entry-columns.ts`. */
+  columns: EntryColumn[];
+  visibleColumns: string[];
+  /** Field taxonomy đầu tiên: mục có `fieldKey` null thuộc về nó. */
+  firstTaxonomyField: string | null;
   page: number;
   pageSize: number;
   filter: { status: string; taxonomy: string; q: string };
@@ -82,8 +160,21 @@ export function EntryTable(props: {
   /** Bài đang chờ xác nhận xoá hẳn. */
   const [purging, setPurging] = useState<{ id: string; title: string } | null>(null);
 
+  const [shown, setShown] = useState<string[]>(props.visibleColumns);
+
   const now = Date.now();
-  const locales = Object.keys(props.rows[0]?.locales ?? {});
+  const cols = props.columns.filter((c) => shown.includes(c.id));
+
+  /**
+   * Bật/tắt một cột. Ghi cookie để lần sau server render đúng ngay; không tải lại
+   * trang — dữ liệu của mọi cột chọn được đã có sẵn trong hàng.
+   */
+  function setColumns(ids: string[]) {
+    const ordered = props.columns.filter((c) => ids.includes(c.id)).map((c) => c.id);
+    setShown(ordered);
+    document.cookie =
+      `${columnsCookie(props.typeKey)}=${serializeColumnIds(ordered)}; path=/builder; max-age=31536000; samesite=lax`;
+  }
   const pageCount = Math.max(1, Math.ceil(props.total / props.pageSize));
   const archivedView = props.filter.status === 'archived';
 
@@ -222,6 +313,39 @@ export function EntryTable(props: {
               ))}
             </SelectField>
           )}
+
+          <Popover
+            label="Chọn cột hiển thị"
+            panelClassName="w-64 p-3"
+            trigger={(p) => (
+              <Button {...p} icon="sliders" title="Chọn cột hiển thị">
+                Cột
+              </Button>
+            )}
+          >
+            <div className="flex flex-col gap-0.5">
+              <span className={cn(ui.eyebrow, 'pb-1')}>Cột hiển thị</span>
+              <span className="text-mini text-shell-muted">Tiêu đề luôn hiện.</span>
+              {props.columns.map((c) => (
+                <Checkbox
+                  key={c.id}
+                  label={c.label}
+                  checked={shown.includes(c.id)}
+                  onChange={(e) =>
+                    setColumns(e.target.checked ? [...shown, c.id] : shown.filter((x) => x !== c.id))
+                  }
+                />
+              ))}
+              <Button
+                variant="ghost"
+                size="sm"
+                className="mt-1.5 self-start"
+                onClick={() => setColumns(defaultColumnIds(props.columns))}
+              >
+                Về mặc định
+              </Button>
+            </div>
+          </Popover>
         </div>
       </div>
 
@@ -284,14 +408,11 @@ export function EntryTable(props: {
                   />
                 </th>
                 <th scope="col" className={ui.th}>Tiêu đề</th>
-                <th scope="col" className={cn(ui.th, 'w-40')}>Danh mục</th>
-                <th scope="col" className={cn(ui.th, 'w-32')}>Trạng thái</th>
-                {locales.map((code) => (
-                  <th key={code} scope="col" className={cn(ui.th, 'w-14 text-center')}>
-                    {code}
+                {cols.map((c) => (
+                  <th key={c.id} scope="col" className={cn(ui.th, HEAD_CLASS[c.kind])}>
+                    {c.label}
                   </th>
                 ))}
-                <th scope="col" className={cn(ui.th, 'w-40 text-right')}>Cập nhật</th>
                 {archivedView && (
                   <th scope="col" className={cn(ui.th, 'text-right')}>
                     Lưu trữ
@@ -301,7 +422,6 @@ export function EntryTable(props: {
             </thead>
             <tbody>
               {props.rows.map((r) => {
-                const st = rowStatus(r, now);
                 const on = picked.has(r.id);
                 return (
                   <tr key={r.id} className={cn(ui.tr, on && 'bg-shell-accent-soft hover:bg-shell-accent-soft')}>
@@ -322,30 +442,9 @@ export function EntryTable(props: {
                         <span className="font-shell-mono text-mini break-all text-shell-muted">/{r.slug}</span>
                       </div>
                     </td>
-                    <td className={cn(ui.td, 'text-shell-muted')}>
-                      {r.taxonomies.length === 0 ? '—' : r.taxonomies.map((t) => t.name).join(', ')}
-                    </td>
-                    <td className={ui.td}>
-                      <Badge tone={st.tone} dot={st.tone === 'ok'}>
-                        {st.label}
-                      </Badge>
-                      {st.label === 'hẹn giờ' && r.publishedAt && (
-                        <div className="mt-1 text-mini text-shell-muted tabular-nums">{DATE.format(r.publishedAt)}</div>
-                      )}
-                    </td>
-                    {locales.map((code) => {
-                      const look = LOCALE_LOOK[localeState(r.locales[code] ?? { translated: 0, total: 0 })];
-                      return (
-                        <td key={code} className={cn(ui.td, 'text-center', look.cls)} title={look.title}>
-                          <span aria-hidden>{look.mark}</span>
-                          <span className="sr-only">{look.title}</span>
-                        </td>
-                      );
-                    })}
-                    <td className={cn(ui.td, 'text-right text-shell-muted tabular-nums')}>
-                      {DATE.format(r.updatedAt)}
-                      <div className="font-shell-mono text-mini">{r.updatedBy}</div>
-                    </td>
+                    {cols.map((c) => (
+                      <Cell key={c.id} col={c} row={r} now={now} firstTaxonomyField={props.firstTaxonomyField} />
+                    ))}
                     {archivedView && (
                       <td className={cn(ui.td, 'text-right whitespace-nowrap')}>
                         <span className="inline-flex gap-2">

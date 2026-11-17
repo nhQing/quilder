@@ -28,8 +28,11 @@ export interface AdminEntryRow {
   publishedAt: Date | null;
   updatedAt: Date;
   updatedBy: string;
-  taxonomies: { id: string; name: string }[];
+  /** `fieldKey` null = field taxonomy đầu tiên (xem `taxonomy-fields.ts`). */
+  taxonomies: { id: string; name: string; fieldKey: string | null }[];
   locales: Record<string, { translated: number; total: number }>;
+  /** Giá trị của các field xin qua `EntryFilter.fieldKeys` — cột field của bảng. */
+  fields: Record<string, unknown>;
 }
 
 export interface EntryFilter {
@@ -39,6 +42,8 @@ export interface EntryFilter {
   q?: string;
   /** Chỉ những entry này — bộ chọn `relation` tra tên của bài đã chọn. */
   ids?: string[];
+  /** Field kéo kèm mỗi hàng cho cột field (xem `entry-columns.ts`). Vắng = không kéo. */
+  fieldKeys?: string[];
   page: number;
   pageSize: number;
 }
@@ -125,7 +130,7 @@ export async function listAdminEntries(f: EntryFilter) {
       select: {
         id: true, slug: true, data: true, i18n: true, status: true,
         publishedAt: true, updatedAt: true, updatedBy: true,
-        taxonomies: { select: { taxonomy: { select: { id: true, name: true } } } },
+        taxonomies: { select: { taxonomy: { select: { id: true, name: true, fieldKey: true } } } },
       },
     }),
     prisma.entry.count({ where }),
@@ -155,6 +160,7 @@ export async function listAdminEntries(f: EntryFilter) {
         locales: Object.fromEntries(
           locales.map((l) => [l.code, localeCoverage(data, r.i18n, l.code, seoKey)]),
         ),
+        fields: Object.fromEntries((f.fieldKeys ?? []).map((k) => [k, data[k]])),
       };
     }),
     total,

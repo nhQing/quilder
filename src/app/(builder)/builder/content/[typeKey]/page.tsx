@@ -1,3 +1,4 @@
+import { cookies } from 'next/headers';
 import { notFound, redirect } from 'next/navigation';
 
 /**
@@ -13,6 +14,13 @@ import { notFound, redirect } from 'next/navigation';
 
 import { prisma } from '@/lib/db';
 import { getTypeShape, listAdminEntries } from '@/lib/collections/admin-queries';
+import {
+  availableColumns,
+  columnFieldKeys,
+  columnsCookie,
+  visibleColumnIds,
+} from '@/lib/collections/entry-columns';
+import { taxonomyFieldsOf } from '@/lib/collections/taxonomy-fields';
 import { publicApiUrls, siteOrigin } from '@/lib/collections/api-urls';
 import { listAllLocales } from '@/lib/i18n/queries';
 import { ApiPanel } from '@/components/builder/ApiPanel';
@@ -57,6 +65,19 @@ export default async function EntryListPage({
   const page = Math.max(1, Number(sp.page ?? 1) || 1);
   const pageSize = PAGE_SIZES.includes(Number(sp.size)) ? Number(sp.size) : 20;
 
+  /*
+   * Cột của bảng: suy từ cấu trúc field + ngôn ngữ, lựa chọn đọc từ cookie để lần
+   * render đầu đã đúng (xem `entry-columns.ts`). Ngôn ngữ nạp TRƯỚC bảng vì cột
+   * ngôn ngữ nằm trong danh sách cột.
+   */
+  const [locales, jar] = await Promise.all([listAllLocales(), cookies()]);
+  const columns = availableColumns(shape.fields, {
+    titleField: shape.type.titleField,
+    slugField: shape.type.slugField,
+    locales: locales.filter((l) => !l.isDefault).map((l) => l.code),
+  });
+  const visible = visibleColumnIds(columns, jar.get(columnsCookie(typeKey))?.value);
+
   const { rows, total, counts } = await listAdminEntries({
     typeKey,
     status,
@@ -64,19 +85,13 @@ export default async function EntryListPage({
     q: sp.q,
     page,
     pageSize,
+    // Mọi cột field CHỌN ĐƯỢC, không chỉ cột đang hiện: bật một cột là việc ở client,
+    // không phải một vòng tải lại trang.
+    fieldKeys: columnFieldKeys(columns),
   });
 
-  /*
-   * Dữ liệu cho khu API, nạp SONG SONG với nhau.
-   *
-   * Cả hai đều nhỏ và không phụ thuộc nhau; nối tiếp là cộng thêm một vòng đọc DB vào
-   * thời gian hiện bảng — thứ người dùng chờ mỗi lần mở màn này, để phục vụ một khu
-   * đang đóng.
-   */
-  const [site, locales] = await Promise.all([
-    prisma.site.findFirst({ select: { primaryDomain: true } }),
-    listAllLocales(),
-  ]);
+  // Dữ liệu cho khu API. Ngôn ngữ đã nạp ở trên cho cột của bảng.
+  const site = await prisma.site.findFirst({ select: { primaryDomain: true } });
 
   const origin = siteOrigin(site?.primaryDomain ?? '');
   const apiRows = publicApiUrls({
@@ -120,6 +135,9 @@ export default async function EntryListPage({
         total={total}
         counts={counts}
         taxonomies={shape.taxonomies}
+        columns={columns}
+        visibleColumns={visible}
+        firstTaxonomyField={taxonomyFieldsOf(shape.fields)[0]?.key ?? null}
         page={page}
         pageSize={pageSize}
         filter={{ status: status ?? 'all', taxonomy: sp.taxonomy ?? '', q: sp.q ?? '' }}
