@@ -322,7 +322,13 @@ export function Form({
   const captchaMissing = needsCaptcha && !captchaSiteKey;
   // Khung builder: nút không tắt vì chưa điền — người dựng cần thấy nút ở trạng thái thường.
   const waitingInput = Boolean(submitWhenValid) && !complete && !canvasPreview;
-  const disabled = !action || captchaMissing || status === 'sending' || waitingInput;
+  /*
+   * Ô nhập và nút gửi tắt vì những lý do KHÁC nhau: chưa có nơi nhận / thiếu captcha /
+   * đang gửi thì tắt cả hai; còn "chưa điền đủ" (`submitWhenValid`) chỉ tắt NÚT. Dùng chung
+   * một biến từng tắt luôn ô nhập — không ai điền được nên nút không bao giờ bật (18/11/2026).
+   */
+  const fieldsDisabled = !action || captchaMissing || status === 'sending';
+  const disabled = fieldsDisabled || waitingInput;
 
   const showToast = (kind: 'success' | 'error', text: string) => {
     if (mode === 'toast') setToast({ kind, text, key: Date.now() });
@@ -424,7 +430,7 @@ export function Form({
             id,
             name: f.name,
             required: f.required,
-            disabled,
+            disabled: fieldsDisabled,
             'data-part': `field-${f.name}`,
             ...(invalidField === f.name ? { 'aria-invalid': true as const } : {}),
             ...(helpId ? { 'aria-describedby': helpId } : {}),

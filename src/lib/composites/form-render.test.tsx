@@ -32,6 +32,8 @@ describe('Form — HTML ở server', () => {
     const out = html({ submitWhenValid: true } as Partial<Parameters<typeof Form>[0]>);
     expect(out).toMatch(/<button[^>]*mm-form__submit[^>]*disabled/);
     expect(html()).not.toMatch(/<button[^>]*mm-form__submit[^>]*disabled/);
+    // Chỉ NÚT tắt: ô nhập phải gõ được, không thì nút không bao giờ bật (lỗi 18/11/2026).
+    expect(out).not.toMatch(/<(input|textarea|select)(?![^>]*type="hidden")[^>]*\sdisabled/);
   });
 
   it('toast: dòng trạng thái chỉ cho trình đọc màn hình, vẫn là vùng live', () => {
