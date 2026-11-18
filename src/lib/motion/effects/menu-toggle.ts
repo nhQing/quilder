@@ -66,6 +66,17 @@ const paramsSchema = z.object({
    */
   subTogglePart: z.string().min(1).max(40).default('menu-sub-toggle'),
   /**
+   * Khối con MÀ MỘT nút `menu-sub-toggle` điều khiển (vd thẻ dưới "Sản phẩm" /
+   * "Tin tức"). Ghép nút ↔ khối bằng `aria-controls` của nút nếu nó trỏ tới một
+   * node trong trình đơn; không có thì lấy khối `menu-sub-panel` chưa ai nhận, gần
+   * nút nhất (cùng hàng, rồi lên dần các tổ tiên). Nút có khối riêng thì state
+   * `menu-sub-open` ghi lên CHÍNH nút và khối ấy, không lên node gắn effect — nên
+   * hai nhóm xổ độc lập được. Nút không có khối thì chạy như cũ (một state chung).
+   */
+  subPanelPart: z.string().min(1).max(40).default('menu-sub-panel'),
+  /** Mở một nhóm thì gập các nhóm khác (chỉ giữa các nút có khối riêng). */
+  subExclusive: z.boolean().default(true),
+  /**
    * Tự đóng khi khổ màn đạt breakpoint này (trình đơn đầy đủ đã vừa). Không đặt thì
    * không tự đóng. Trang chủ: `md` (1024px), đúng mốc thanh nav đổi dạng.
    */
@@ -89,7 +100,7 @@ export default defineEffect<Params>({
   name: 'Trình đơn mobile',
   paramsSchema,
   aiDescription:
-    'Nút burger mở/đóng trình đơn mobile. Đánh dấu nút bằng part "burger" (mọi node mang vai này đều bật/tắt) và khối trình đơn bằng part "menu-panel" (setProps part). Node mang part "menu-close" (nút X, lớp mờ phủ trang) chỉ đóng. Nút part "menu-sub-toggle" đảo state "menu-sub-open" để xổ một nhóm con. Param closeFrom (breakpoint) tự đóng khi màn đủ rộng. Ghi state "menu-open" để style panel và nút. Tự lo aria-expanded, bẫy focus, Escape và khoá cuộn.',
+    'Nút burger mở/đóng trình đơn mobile. Đánh dấu nút bằng part "burger" (mọi node mang vai này đều bật/tắt) và khối trình đơn bằng part "menu-panel" (setProps part). Node mang part "menu-close" (nút X, lớp mờ phủ trang) chỉ đóng. Nút part "menu-sub-toggle" đảo state "menu-sub-open" để xổ một nhóm con. Muốn NHIỀU nhóm con độc lập (vd Sản phẩm + Tin tức, mở nhóm này gập nhóm kia): gắn part "menu-sub-panel" lên khối con cùng hàng với nút (hoặc trỏ aria-controls) — state "menu-sub-open" khi đó ghi lên chính nút và khối của nó; param subExclusive=false để cho mở cùng lúc. Param closeFrom (breakpoint) tự đóng khi màn đủ rộng. Ghi state "menu-open" để style panel và nút. Tự lo aria-expanded, bẫy focus, Escape và khoá cuộn.',
   runtimeCost: 'light',
   statesWritten: ['menu-open', 'menu-sub-open'],
   appliesTo: ['Section'],
@@ -126,10 +137,58 @@ export default defineEffect<Params>({
     }
     for (const t of subToggles) t.setAttribute('aria-expanded', 'false');
 
-    const setSub = (next: boolean) => {
-      if (next) el.dataset.menuSubOpen = 'true';
+    /** Ghép nút ↔ khối con (xem `subPanelPart`). Nút không ghép được chạy chế độ chung. */
+    const subPanels = [
+      ...el.querySelectorAll<HTMLElement>(`[data-part~="${params.subPanelPart}"]`),
+    ];
+    const pairs = new Map<HTMLElement, HTMLElement>();
+    const claimed = new Set<HTMLElement>();
+    for (const t of subToggles) {
+      let hit: HTMLElement | null = null;
+      const byId = t.getAttribute('aria-controls');
+      const target = byId ? document.getElementById(byId) : null;
+      if (target && el.contains(target) && !claimed.has(target)) hit = target;
+      for (
+        let scope: HTMLElement | null = t.parentElement;
+        !hit && scope && el.contains(scope);
+        scope = scope.parentElement
+      ) {
+        hit = subPanels.find((n) => !claimed.has(n) && scope!.contains(n) && !t.contains(n)) ?? null;
+      }
+      if (hit) {
+        claimed.add(hit);
+        pairs.set(t, hit);
+        if (!hit.id) hit.id = `mm-menu-sub-${el.dataset.n ?? 'x'}-${pairs.size}`;
+        t.setAttribute('aria-controls', hit.id);
+        hit.toggleAttribute('inert', true);
+      }
+    }
+    const sharedToggles = subToggles.filter((t) => !pairs.has(t));
+
+    const syncSubState = () => {
+      const any = subToggles.some((t) => t.getAttribute('aria-expanded') === 'true');
+      if (any) el.dataset.menuSubOpen = 'true';
       else delete el.dataset.menuSubOpen;
-      for (const t of subToggles) t.setAttribute('aria-expanded', String(next));
+    };
+
+    /** Chế độ chung: mọi nút không có khối riêng đóng/mở cùng nhau. */
+    const setSub = (next: boolean) => {
+      for (const t of sharedToggles) t.setAttribute('aria-expanded', String(next));
+      syncSubState();
+    };
+
+    /** Chế độ nhóm: một nút ↔ một khối. */
+    const setGroup = (t: HTMLElement, next: boolean) => {
+      const group = pairs.get(t)!;
+      t.setAttribute('aria-expanded', String(next));
+      group.toggleAttribute('inert', !next);
+      for (const node of [t, group]) {
+        if (next) node.dataset.menuSubOpen = 'true';
+        else delete node.dataset.menuSubOpen;
+      }
+    };
+    const closeGroups = () => {
+      for (const t of pairs.keys()) setGroup(t, false);
     };
 
     const focusables = (): HTMLElement[] =>
@@ -152,6 +211,8 @@ export default defineEffect<Params>({
       } else {
         delete el.dataset.menuOpen;
         setSub(false);
+        closeGroups();
+        syncSubState();
         scroll.unlock();
       }
     };
@@ -215,7 +276,17 @@ export default defineEffect<Params>({
 
     const onSubToggle = (event: Event) => {
       event.preventDefault();
-      setSub(el.dataset.menuSubOpen !== 'true');
+      const t = event.currentTarget as HTMLElement;
+      if (!pairs.has(t)) {
+        setSub(el.dataset.menuSubOpen !== 'true');
+        return;
+      }
+      const next = t.getAttribute('aria-expanded') !== 'true';
+      if (next && params.subExclusive) {
+        for (const other of pairs.keys()) if (other !== t) setGroup(other, false);
+      }
+      setGroup(t, next);
+      syncSubState();
     };
 
     // Khổ màn rộng lên tới mức trình đơn đầy đủ hiện ra: đóng ngăn kéo, không thì
@@ -250,7 +321,15 @@ export default defineEffect<Params>({
         t.removeAttribute('aria-expanded');
         t.removeAttribute('aria-controls');
       }
-      for (const t of subToggles) t.removeAttribute('aria-expanded');
+      for (const t of subToggles) {
+        t.removeAttribute('aria-expanded');
+        delete t.dataset.menuSubOpen;
+      }
+      for (const [t, group] of pairs) {
+        t.removeAttribute('aria-controls');
+        group.removeAttribute('inert');
+        delete group.dataset.menuSubOpen;
+      }
     };
   },
 });

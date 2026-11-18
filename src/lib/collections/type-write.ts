@@ -391,3 +391,67 @@ export async function deleteCollectionType(args: {
   revalidateTypes();
   return { ok: true, deletedTaxonomies };
 }
+
+/** Schema (JSON thô, lồng được) có field `group`/`blocks` nào trỏ tới `key` không. */
+export function mentionsGroup(node: unknown, key: string): boolean {
+  if (Array.isArray(node)) return node.some((n) => mentionsGroup(n, key));
+  if (!node || typeof node !== 'object') return false;
+  const o = node as Record<string, unknown>;
+  if (o.groupKey === key) return true;
+  if (Array.isArray(o.allowed) && o.allowed.includes(key)) return true;
+  return Object.values(o).some((v) => mentionsGroup(v, key));
+}
+
+/**
+ * Xoá một nhóm field dùng lại.
+ *
+ * Từ chối khi còn loại nội dung hoặc nhóm khác trỏ tới nó (qua `group`/`blocks`): xoá
+ * lúc đó làm field trỏ tới nhóm không còn tồn tại, entry mất cấu trúc hiển thị và người
+ * xoá không biết vì sao. Báo TÊN những chỗ đang dùng để họ gỡ trước. Đọc schema thô chứ
+ * không qua `validateCollectionSchema`: một schema hỏng vẫn có thể còn trỏ tới nhóm này,
+ * và coi nó là "không dùng" thì xoá nhầm.
+ *
+ * Nhóm không ai dùng thì không entry nào mang dữ liệu theo nó, nên xoá không mất dữ liệu.
+ */
+export async function deleteFieldGroup(args: {
+  key: string;
+  actorSub: string;
+}): Promise<{ ok: true } | { ok: false; status: number; error: string }> {
+  const group = await prisma.fieldGroupDef.findUnique({
+    where: { key: args.key },
+    select: { id: true, key: true, name: true },
+  });
+  if (!group) return { ok: false, status: 404, error: 'Không có nhóm field này' };
+
+  const [types, others] = await Promise.all([
+    prisma.collectionType.findMany({ select: { key: true, name: true, schema: true } }),
+    prisma.fieldGroupDef.findMany({ where: { key: { not: group.key } }, select: { key: true, name: true, schema: true } }),
+  ]);
+  const usedBy = [
+    ...types.filter((t) => mentionsGroup(t.schema, group.key)).map((t) => `loại "${t.name}"`),
+    ...others.filter((g) => mentionsGroup(g.schema, group.key)).map((g) => `nhóm "${g.name}"`),
+  ];
+  if (usedBy.length) {
+    return {
+      ok: false,
+      status: 409,
+      error: `Nhóm này còn được dùng bởi ${usedBy.join(', ')}. Gỡ field trỏ tới nhóm khỏi các nơi đó trước, rồi xoá nhóm.`,
+    };
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.auditLog.create({
+      data: {
+        userId: args.actorSub,
+        action: 'fieldGroup.delete',
+        targetType: 'FieldGroupDef',
+        targetId: group.id,
+        meta: { key: group.key, name: group.name },
+      },
+    });
+    await tx.fieldGroupDef.delete({ where: { id: group.id } });
+  });
+
+  revalidateTypes();
+  return { ok: true };
+}

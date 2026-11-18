@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { createCollectionType } from './type-write';
+import { createCollectionType, mentionsGroup } from './type-write';
 
 /**
  * Chỉ test được nhánh chặn khoá dành riêng: nó trả về TRƯỚC lần gọi Prisma đầu
@@ -76,5 +76,24 @@ describe('createCollectionType — khoá dành riêng cho đường dẫn', () =
       actorSub: 'sub',
     });
     expect(r.ok).toBe(false);
+  });
+});
+
+describe('mentionsGroup — nhóm field còn được trỏ tới không (chặn xoá nhóm đang dùng)', () => {
+  it('thấy field group trỏ trực tiếp', () => {
+    expect(mentionsGroup([{ t: 'group', key: 'a', groupKey: 'file-dinh-kem' }], 'file-dinh-kem')).toBe(true);
+  });
+  it('thấy field blocks cho phép nhóm đó', () => {
+    expect(mentionsGroup([{ t: 'blocks', key: 'b', allowed: ['x', 'y'] }], 'y')).toBe(true);
+  });
+  it('thấy tham chiếu lồng sâu trong schema', () => {
+    const schema = [{ t: 'group', key: 'g', groupKey: 'outer', fields: [{ t: 'group', key: 'h', groupKey: 'inner' }] }];
+    expect(mentionsGroup(schema, 'inner')).toBe(true);
+  });
+  it('không báo khi không ai trỏ tới, hoặc schema rỗng/hỏng', () => {
+    expect(mentionsGroup([{ t: 'group', key: 'a', groupKey: 'khac' }], 'file-dinh-kem')).toBe(false);
+    expect(mentionsGroup([], 'x')).toBe(false);
+    expect(mentionsGroup(null, 'x')).toBe(false);
+    expect(mentionsGroup('rac', 'x')).toBe(false);
   });
 });

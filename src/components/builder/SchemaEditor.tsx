@@ -49,6 +49,7 @@ import { Button, ButtonLink, IconButton } from './ui/Button';
 import { Checkbox, SelectField, TextField } from './ui/Field';
 import { Icon } from './ui/Icon';
 import { Note } from './ui/Note';
+import { ConfirmDialog } from './ui/Overlay';
 import { EmptyState, PageHeader } from './ui/Page';
 import { inPool } from '@/lib/collections/taxonomy-fields';
 
@@ -462,6 +463,9 @@ export function SchemaEditor({
   const [fresh, setFresh] = useState<Set<string>>(new Set());
   const [msg, setMsg] = useState<{ kind: 'ok' | 'warn' | 'err'; lines: string[] } | null>(null);
   const [busy, setBusy] = useState(false);
+  // Xoá CẢ nhóm (chỉ màn nhóm field). Tách khỏi `busy` của nút Lưu: hai việc không chặn nhau.
+  const [deletingGroup, setDeletingGroup] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const groupOptionsForPicker =
     // Nhóm đang sửa không tự chọn chính nó ở bộ chọn — lồng một nhóm vào chính
@@ -553,7 +557,15 @@ export function SchemaEditor({
           : await fetch('/api/collections/groups', {
               method: 'PUT',
               headers: { 'content-type': 'application/json' },
-              body: JSON.stringify({ key: target.key, name: target.name, schema: fields }),
+              body: JSON.stringify({
+                key: target.key,
+                name: target.name,
+                schema: fields,
+                // Bỏ hết field của một nhóm CHƯA AI DÙNG là chủ đích (dọn nhóm tạo sai), không phải
+                // lỗi client — lưới `allowEmpty` của lib chặn đúng ca ngược lại. Nhóm đang được
+                // dùng thì giữ nguyên lưới: bỏ hết field sẽ ẩn dữ liệu của mọi loại dùng nó.
+                allowEmpty: fields.length === 0 && target.usedByCount === 0,
+              }),
             });
 
       const json = (await res.json()) as { ok?: boolean; error?: string; warnings?: string[] };
@@ -577,6 +589,30 @@ export function SchemaEditor({
           `Không gọi được server: ${e instanceof Error ? e.message : String(e)}. Thay đổi CHƯA mất — thử Lưu lại.`,
         ],
       });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /**
+   * Xoá cả nhóm field. Server từ chối (409) khi còn loại/nhóm khác trỏ tới nó và nói rõ chỗ
+   * nào — thông báo đó hiện nguyên văn trong hộp xác nhận.
+   */
+  async function removeGroup() {
+    if (target.kind !== 'group') return;
+    setBusy(true);
+    setDeleteError(null);
+    try {
+      const res = await fetch(`/api/collections/groups/${target.key}`, { method: 'DELETE' });
+      const json = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+      if (!res.ok || !json.ok) {
+        setDeleteError(json.error ?? `Lỗi ${res.status}`);
+        return;
+      }
+      router.push('/builder/content');
+      router.refresh();
+    } catch (e) {
+      setDeleteError(e instanceof Error ? e.message : String(e));
     } finally {
       setBusy(false);
     }
@@ -630,6 +666,19 @@ export function SchemaEditor({
                 Xem bảng entry
               </ButtonLink>
             )}
+            {target.kind === 'group' && (
+              <Button
+                variant="danger"
+                icon="trash"
+                disabled={busy}
+                onClick={() => {
+                  setDeleteError(null);
+                  setDeletingGroup(true);
+                }}
+              >
+                Xoá nhóm
+              </Button>
+            )}
             <Button
               variant="primary"
               icon="check"
@@ -647,6 +696,25 @@ export function SchemaEditor({
           </>
         }
       />
+
+      {target.kind === 'group' && (
+        <ConfirmDialog
+          open={deletingGroup}
+          onClose={() => setDeletingGroup(false)}
+          onConfirm={() => void removeGroup()}
+          title={`Xoá nhóm "${target.name}"?`}
+          consequence="Cấu trúc nhóm mất hẳn, không có đường lùi. Chỉ xoá được khi không loại nội dung hay nhóm nào còn dùng nó."
+          confirmLabel="Xoá vĩnh viễn"
+          typeToConfirm={target.key}
+          busy={busy}
+        >
+          {deleteError && (
+            <p role="alert" className={ui.error}>
+              {deleteError}
+            </p>
+          )}
+        </ConfirmDialog>
+      )}
 
       {parseWarning && (
         <Note tone="danger" role="alert">
