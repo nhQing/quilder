@@ -38,7 +38,6 @@
 - `htmlId` phải là slug (`a-z0-9-`, bắt đầu bằng chữ). Id camelCase ghi vào bằng đường khác
   (script, DB) vẫn render nhưng làm Xuất trang báo "Bản nháp không hợp lệ".
 - `get_node` ≤ 20 id, `apply_ops` ≤ 80 op; luôn `dryRun` trước batch lớn.
-- Font thân của site là SF Pro (`--font-body` bị đè), maimoney.com dùng Inter — chủ ý, giữ SF Pro.
 - Header/Footer dùng Instance của component dùng chung; header `fixed` cao 92px nên section
   đầu cần đủ padding-top.
 - Dải trượt: effect `slider` (part viewport/track/slide/prev/next). Mũi tên của maimoney.com

@@ -142,7 +142,6 @@ const srcRows = data.blogs.map((b) => {
 
 const taxRows: string[] = [];
 const noTax: number[] = [];
-const byId = new Map(data.blogs.map((b) => [b.id, b]));
 for (const b of data.blogs.filter((x) => x.locale === 'vi')) {
   const keys = new Set([...b.cats, ...b.groups].map((s) => {
     const k = TAX_MAP[s];

@@ -13,7 +13,7 @@
 | `image-sequence` | `Section` | heavy | `rail-pin` | `seq-ready` | `frames`, `framesNarrow?`, `narrowBelow?`, `framesSuper?`, `superMinPx?`, `folder?`, `span?`, `tail?`, `pinPart?`, `framePart?` |
 | `magnetic` | — | light | `tilt` | `magnetic-active` | `strength?`, `radius?` |
 | `marquee` | — | medium | `slider`, `carousel` | `marquee-ready` | `speed?`, `direction?`, `reverseOnScroll?`, `velocityBoost?` |
-| `menu-toggle` | `Section` | light | — | `menu-open`, `menu-sub-open` | `triggerPart?`, `panelPart?`, `closeOnNavigate?`, `closePart?`, `subTogglePart?`, `closeFrom?` |
+| `menu-toggle` | `Section` | light | — | `menu-open`, `menu-sub-open` | `triggerPart?`, `panelPart?`, `closeOnNavigate?`, `closePart?`, `subTogglePart?`, `subPanelPart?`, `subExclusive?`, `closeFrom?` |
 | `modal` | `Section` | light | — | `modal-open`, `modal-visible`, `modal-swapping`, `modal-panel` | `panelPart?`, `closePart?`, `scrimPart?`, `bodyPart?`, `headerSelector?`, `swapMs?`, `fadeMs?` |
 | `nav-collapse` | `Section` | light | — | `collapsed` | `collapseAt?`, `hysteresis?` |
 | `nav-invert` | `Section` | light | — | `inverted` | `markerSelector?` |
