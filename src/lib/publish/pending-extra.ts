@@ -69,6 +69,33 @@ export function countTranslationDrift(
   return drift;
 }
 
+/**
+ * Đơn vị bản dịch NHÁP mới hoặc đã sửa so với ảnh chụp đang chạy, cho MỘT ngôn ngữ — để
+ * màn xem trước tô chỗ đó. Cùng bộ lọc node với `countTranslationDrift`, nhưng KHÔNG tính
+ * đơn vị đã xoá (không còn chỗ nào trên trang để tô).
+ */
+export function changedTranslationUnits(
+  rows: readonly DraftTranslationRow[],
+  snapshot: unknown,
+  pageId: string,
+  locale: string,
+  docNodeIds: ReadonlySet<string>,
+): { nodeId: string; field: string }[] {
+  const live = new Map<string, string>();
+  for (const e of entriesFromSnapshot(snapshot, locale, pageId)) {
+    live.set(unitKey(e.nodeId, e.field), JSON.stringify(e.value));
+  }
+  const out: { nodeId: string; field: string }[] = [];
+  for (const r of rows) {
+    if (r.locale !== locale) continue;
+    if (!(r.nodeId.startsWith('$') || docNodeIds.has(r.nodeId.split('/')[0] ?? r.nodeId))) continue;
+    if (live.get(unitKey(r.nodeId, r.field)) !== JSON.stringify(r.value)) {
+      out.push({ nodeId: r.nodeId, field: r.field });
+    }
+  }
+  return out;
+}
+
 /** Component (theo id) có cây hiện tại khác cây trong ảnh chụp của release đang chạy. */
 export function countComponentDrift(
   current: readonly { id: string; tree: unknown }[],

@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
 import { pageMarkerKey, snapshotKey } from '@/lib/render/translations';
-import { countComponentDrift, countTranslationDrift } from './pending-extra';
+import { translationHighlightCss } from '@/lib/render/translation-highlight';
+import { changedTranslationUnits, countComponentDrift, countTranslationDrift } from './pending-extra';
 
 const nodes = new Set(['hero', 'i-header']);
 
@@ -67,5 +68,44 @@ describe('countComponentDrift', () => {
         sealed,
       ),
     ).toBe(2);
+  });
+});
+
+describe('changedTranslationUnits + translationHighlightCss', () => {
+  const snap = {
+    [pageMarkerKey('p1')]: true,
+    [snapshotKey('en', 'hero', 'content', 'p1')]: [{ t: 'text', v: 'Hello' }],
+  };
+  const rows = [
+    { locale: 'en', nodeId: 'hero', field: 'content', value: [{ t: 'text', v: 'Hello' }] }, // không đổi
+    { locale: 'en', nodeId: 'i-header/nw-lt', field: 'content', value: [{ t: 'text', v: 'News' }] }, // mới
+    { locale: 'en', nodeId: 'i-header/nw-ta', field: 'a11yLabel', value: 'News' }, // mới, không hiện ra mắt
+    { locale: 'en', nodeId: 'gone', field: 'content', value: 'x' }, // node đã xoá khỏi trang
+    { locale: 'fr', nodeId: 'hero', field: 'content', value: 'Salut' }, // ngôn ngữ khác
+  ];
+
+  it('chỉ lấy đơn vị mới/sửa của đúng ngôn ngữ và node còn trên trang', () => {
+    const units = changedTranslationUnits(rows, snap, 'p1', 'en', nodes);
+    expect(units.map((u) => `${u.nodeId}:${u.field}`)).toEqual([
+      'i-header/nw-lt:content',
+      'i-header/nw-ta:a11yLabel',
+    ]);
+  });
+
+  it('CSS: node trong instance nhắm data-n + data-cn, bỏ a11yLabel, bỏ id lạ', () => {
+    const css = translationHighlightCss([
+      { nodeId: 'i-header/nw-lt', field: 'content' },
+      { nodeId: 'i-header/nw-ta', field: 'a11yLabel' },
+      { nodeId: 'hero', field: 'content' },
+      { nodeId: 'x"]{}/y', field: 'content' },
+    ]);
+    expect(css).toContain('[data-n="i-header"] [data-cn="nw-lt"]');
+    expect(css).toContain('[data-n="hero"]');
+    expect(css).not.toContain('nw-ta');
+    expect(css).not.toContain('x"]');
+  });
+
+  it('không có gì để tô → chuỗi rỗng', () => {
+    expect(translationHighlightCss([])).toBe('');
   });
 });

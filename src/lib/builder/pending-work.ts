@@ -27,6 +27,13 @@ import 'server-only';
 import { prisma } from '@/lib/db';
 import { diffDocs } from './doc-diff';
 import { migrateDoc } from '@/lib/doc/migrate';
+import { getLocales } from '@/lib/i18n/queries';
+import { componentIdsIn } from '@/lib/render/components';
+import {
+  countComponentDrift,
+  countTranslationDrift,
+  type DraftTranslationRow,
+} from '@/lib/publish/pending-extra';
 
 export interface PendingPage {
   pageId: string;
@@ -41,6 +48,12 @@ export interface PendingPage {
   editCount: number | null;
   /** Chỗ đổi. KHÔNG tính style — xem docblock đầu file. */
   diff: { added: number; removed: number; textChanged: number };
+  /**
+   * Thay đổi NGOÀI cây node (bản dịch, component) — cùng phép đếm với nhãn nút Publish
+   * trong editor (`pendingExtras`). Thiếu nó thì trang chỉ mới dịch xong ở /builder là
+   * "không có việc gì" dù bấm Publish sẽ đổi site thật.
+   */
+  extra: { translations: number; components: number };
 }
 
 export async function pendingWork(): Promise<PendingPage[]> {
@@ -68,18 +81,65 @@ export async function pendingWork(): Promise<PendingPage[]> {
     }
   }
 
+  // Bản dịch + component: đọc MỘT lần cho mọi trang rồi chia theo trang, thay vì
+  // `pendingExtras` từng trang (N trang = 3N lượt đọc ở mỗi lần mở trang chủ builder).
+  // Chưa có release nào thì không có mốc để so — giống `pendingExtras`, trả 0.
+  const docs = new Map(pages.map((p) => [p.id, migrateDoc(p.draftVersion!.doc)]));
+  const extras = new Map<string, { translations: number; components: number }>();
+  if (site.activeReleaseId) {
+    const localeCodes = (await getLocales()).filter((l) => !l.isDefault).map((l) => l.code);
+    const compIds = [...new Set([...docs.values()].flatMap((d) => componentIdsIn(d)))];
+    const [release, rows, presets] = await Promise.all([
+      prisma.release.findUnique({
+        where: { id: site.activeReleaseId },
+        select: { translations: true, components: true },
+      }),
+      localeCodes.length
+        ? prisma.translation.findMany({
+            where: { pageId: { in: pages.map((p) => p.id) }, locale: { in: localeCodes } },
+            select: { pageId: true, locale: true, nodeId: true, field: true, value: true },
+          })
+        : Promise.resolve([]),
+      compIds.length
+        ? prisma.preset.findMany({ where: { id: { in: compIds } }, select: { id: true, tree: true } })
+        : Promise.resolve([]),
+    ]);
+    const byPage = new Map<string, DraftTranslationRow[]>();
+    for (const r of rows) {
+      const list = byPage.get(r.pageId) ?? [];
+      list.push(r);
+      byPage.set(r.pageId, list);
+    }
+    const presetById = new Map(presets.map((x) => [x.id, x]));
+    for (const p of pages) {
+      const doc = docs.get(p.id)!;
+      extras.set(p.id, {
+        translations: countTranslationDrift(
+          byPage.get(p.id) ?? [], release?.translations, p.id, localeCodes, new Set(Object.keys(doc.nodes)),
+        ),
+        components: countComponentDrift(
+          componentIdsIn(doc).flatMap((id) => presetById.get(id) ?? []),
+          release?.components,
+        ),
+      });
+    }
+  }
+
   const out: PendingPage[] = [];
 
   for (const p of pages) {
     const draft = p.draftVersion!;
     const onSite = live.get(p.id);
+    const extra = extras.get(p.id) ?? { translations: 0, components: 0 };
+    const hasExtra = extra.translations > 0 || extra.components > 0;
 
     // Bản nháp ĐANG LÀ bản trên site → không có gì treo. Kiểm bằng `versionId` chứ
     // không bằng diff: hai doc giống nhau vẫn có thể là hai version khác nhau (ai đó
     // sửa rồi hoàn tác), và lúc đó vẫn có một lần publish đang chờ.
-    if (onSite && onSite.versionId === p.draftVersionId) continue;
+    // ... trừ khi bản dịch / component còn lệch: lúc đó vẫn còn một lần publish chờ.
+    if (onSite && onSite.versionId === p.draftVersionId && !hasExtra) continue;
 
-    const d = diffDocs(onSite ? migrateDoc(onSite.doc) : null, migrateDoc(draft.doc));
+    const d = diffDocs(onSite ? migrateDoc(onSite.doc) : null, docs.get(p.id)!);
 
     out.push({
       pageId: p.id,
@@ -98,6 +158,7 @@ export async function pendingWork(): Promise<PendingPage[]> {
         removed: d.removed.length,
         textChanged: d.textChanged.length,
       },
+      extra,
     });
   }
 

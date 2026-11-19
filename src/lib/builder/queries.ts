@@ -263,6 +263,17 @@ export async function pendingExtras(
   };
 }
 
+/** Ảnh chụp bản dịch của release đang chạy (`null` = chưa publish lần nào). */
+export async function activeReleaseTranslations(): Promise<unknown | null> {
+  const site = await prisma.site.findFirst({ select: { activeReleaseId: true } });
+  if (!site?.activeReleaseId) return null;
+  const release = await prisma.release.findUnique({
+    where: { id: site.activeReleaseId },
+    select: { translations: true },
+  });
+  return release?.translations ?? null;
+}
+
 export interface ReleaseSummary {
   id: string;
   label: string;

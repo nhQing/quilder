@@ -54,6 +54,17 @@ interface Row {
   status: 'moi' | 'da-sua';
   editCount: number | null;
   diff: { added: number; removed: number; textChanged: number };
+  /** Bản dịch / component khác bản đang chạy — ngoài cây node. */
+  extra: { translations: number; components: number };
+}
+
+/** "3 lần sửa, 15 bản dịch, 1 component" — chỉ phần có số. Rỗng khi không có gì. */
+export function workPhrase(r: Pick<Row, 'status' | 'editCount' | 'extra'>): string {
+  const bits: string[] = [];
+  if (r.status === 'da-sua' && r.editCount) bits.push(`${r.editCount} lần sửa`);
+  if (r.extra.translations) bits.push(`${r.extra.translations} bản dịch`);
+  if (r.extra.components) bits.push(`${r.extra.components} component`);
+  return bits.join(', ');
 }
 
 /** Một câu tiếng Việt cho phần diff. Rỗng khi diff không thấy gì. */
@@ -133,6 +144,8 @@ export function PendingWork() {
   }
 
   const edits = rows.reduce((n, r) => n + (r.editCount ?? 0), 0);
+  const translations = rows.reduce((n, r) => n + r.extra.translations, 0);
+  const components = rows.reduce((n, r) => n + r.extra.components, 0);
   const fresh = rows.filter((r) => r.status === 'moi').length;
   const pending = confirmRow;
 
@@ -149,8 +162,15 @@ export function PendingWork() {
         <span className="text-small text-shell-muted">
           {/* Hai câu, không gộp thành một con số: "3 lần sửa" và "1 trang mới" là hai
               loại việc khác nhau, và "4" không nói được gì. */}
-          {edits > 0 && <>{edits} lần sửa chưa publish</>}
-          {edits > 0 && fresh > 0 && ' · '}
+          {[
+            edits > 0 && `${edits} lần sửa`,
+            translations > 0 && `${translations} bản dịch`,
+            components > 0 && `${components} component`,
+          ]
+            .filter(Boolean)
+            .join(' · ')}
+          {(edits > 0 || translations > 0 || components > 0) && ' chưa publish'}
+          {(edits > 0 || translations > 0 || components > 0) && fresh > 0 && ' · '}
           {fresh > 0 && <>{fresh} trang chưa từng lên site</>}
         </span>
         <span className="ml-auto text-small text-shell-muted">
@@ -180,7 +200,7 @@ export function PendingWork() {
                   <Badge tone="accent">trang mới</Badge>
                 ) : (
                   <Badge tone="warn" className="tabular-nums">
-                    {r.editCount} lần sửa
+                    {workPhrase(r) || 'có thay đổi'}
                   </Badge>
                 )}
 
@@ -242,7 +262,7 @@ export function PendingWork() {
           title={
             pending.status === 'moi'
               ? 'Đưa trang mới lên site?'
-              : `Đưa ${pending.editCount} lần sửa lên site?`
+              : `Đưa ${workPhrase(pending) || 'thay đổi'} lên site?`
           }
           description="Khách sẽ thấy bản mới ngay sau khi xong. Các trang khác giữ nguyên bản đang chạy."
           actions={

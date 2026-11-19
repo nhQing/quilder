@@ -54,6 +54,8 @@ export async function GET(request: Request) {
      * sửa" và "1 trang mới" là hai câu khác nhau và gộp lại thành "4" thì vô nghĩa.
      */
     edits: pages.reduce((n, p) => n + (p.editCount ?? 0), 0),
+    translations: pages.reduce((n, p) => n + p.extra.translations, 0),
+    components: pages.reduce((n, p) => n + p.extra.components, 0),
     newPages: pages.filter((p) => p.status === 'moi').length,
   });
 }

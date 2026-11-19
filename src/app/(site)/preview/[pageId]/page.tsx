@@ -2,7 +2,9 @@ import { notFound, redirect } from 'next/navigation';
 
 import { getSession } from '@/lib/auth/guard';
 import { EffectRuntime } from '@/lib/motion/EffectRuntime';
-import { getDraftPage } from '@/lib/builder/queries';
+import { activeReleaseTranslations, getDraftPage } from '@/lib/builder/queries';
+import { changedTranslationUnits } from '@/lib/publish/pending-extra';
+import { translationHighlightCss } from '@/lib/render/translation-highlight';
 import { compileDoc } from '@/lib/render/css';
 import { customTokensCss } from '@/lib/render/custom-tokens';
 import { draftFontFaceCss } from '@/lib/fonts/seal';
@@ -95,10 +97,10 @@ export default async function PreviewPage({
   searchParams,
 }: {
   params: Promise<{ pageId: string }>;
-  searchParams: Promise<{ locale?: string; w?: string; embed?: string; param?: string }>;
+  searchParams: Promise<{ locale?: string; w?: string; embed?: string; param?: string; hl?: string }>;
 }) {
   const { pageId } = await params;
-  const { locale, w, embed, param: paramValue } = await searchParams;
+  const { locale, w, embed, param: paramValue, hl } = await searchParams;
   const simWidth = simulatedWidth(w);
 
   // Kiểm phiên Ở ĐÂY chứ không chỉ dựa vào middleware.
@@ -127,7 +129,8 @@ export default async function PreviewPage({
       // Giá trị đoạn động phải đi theo vào iframe. Không truyền thì vỏ giả lập hiện
       // bản ghi mới nhất còn bản ngoài hiện bản người dùng chọn — hai màn khác nhau
       // cho cùng một địa chỉ.
-      (paramValue ? `&param=${encodeURIComponent(paramValue)}` : '');
+      (paramValue ? `&param=${encodeURIComponent(paramValue)}` : '') +
+      (hl === '0' ? '&hl=0' : '');
     return (
       <>
         <PreviewChrome pageId={pageId} locale={locale} locales={locales} width={simWidth} />
@@ -185,6 +188,24 @@ export default async function PreviewPage({
     : page.doc;
 
   const components = await loadComponents(doc);
+
+  /*
+   * Tô nền vàng chỗ bản dịch NHÁP khác bản đang chạy — chỉ ở màn xem trước (trang thật
+   * không import `translationHighlightCss`). `?hl=0` tắt, để đo màu/cỡ không bị nền vàng
+   * làm nhiễu.
+   */
+  const highlightCss =
+    locale && hl !== '0'
+      ? translationHighlightCss(
+          changedTranslationUnits(
+            (drafts[locale] ?? []).map((t) => ({ locale, nodeId: t.nodeId, field: t.field, value: t.value })),
+            await activeReleaseTranslations(),
+            pageId,
+            locale,
+            new Set(Object.keys(page.doc.nodes)),
+          ),
+        )
+      : '';
 
   /*
    * Xem trước phải GIẢI khối lặp, y như site thật.
@@ -273,6 +294,13 @@ export default async function PreviewPage({
         // eslint-disable-next-line react/no-danger
         dangerouslySetInnerHTML={{ __html: css }}
       />
+      {highlightCss && (
+        <style
+          data-mm-tr-highlight=""
+          // eslint-disable-next-line react/no-danger
+          dangerouslySetInnerHTML={{ __html: highlightCss }}
+        />
+      )}
       {/* Như PublishedPageView: thiếu khối này thì thân bài trong bản nháp là một khối
           chữ phẳng (reset.css gỡ bullet, khoảng cách đoạn), còn site thật thì có. */}
       {body && body.bodies.size > 0 && (
