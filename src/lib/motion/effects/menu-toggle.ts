@@ -165,8 +165,15 @@ export default defineEffect<Params>({
     }
     const sharedToggles = subToggles.filter((t) => !pairs.has(t));
 
+    /*
+     * Cờ trên node gắn effect CHỈ theo các nút chế độ chung. Nút có khối riêng ghi cờ
+     * lên chính nó và khối của nó (`setGroup`), không lên đây: renderer phát state style
+     * cả dạng tổ tiên (`[data-menu-sub-open="true"] <khối>`), mà node gắn effect là tổ
+     * tiên của MỌI khối — cờ ở đây làm mở "Sản phẩm" bung luôn "Tin tức" (maimoney.com,
+     * mobile, 19/11/2026).
+     */
     const syncSubState = () => {
-      const any = subToggles.some((t) => t.getAttribute('aria-expanded') === 'true');
+      const any = sharedToggles.some((t) => t.getAttribute('aria-expanded') === 'true');
       if (any) el.dataset.menuSubOpen = 'true';
       else delete el.dataset.menuSubOpen;
     };

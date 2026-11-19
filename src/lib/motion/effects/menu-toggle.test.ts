@@ -35,7 +35,7 @@ describe('menu-toggle nhóm con độc lập (menu-sub-panel)', () => {
 
   const mount = (withPanels = true, extra: Record<string, unknown> = {}) => {
     const el = build(withPanels);
-    const dispose = effect.init(el, effect.paramsSchema.parse(extra), {} as never) as () => void;
+    const dispose = effect.init(el, effect.paramsSchema.parse(extra)) as () => void;
     return { el, dispose };
   };
 
@@ -57,9 +57,29 @@ describe('menu-toggle nhóm con độc lập (menu-sub-panel)', () => {
     expect(expanded('tp')).toBe('false');
     expect(document.getElementById('sp')!.dataset.menuSubOpen).toBeUndefined();
     expect(expanded('tn')).toBe('true');
-    expect(el.dataset.menuSubOpen).toBe('true');
+    expect(document.getElementById('sn')!.dataset.menuSubOpen).toBe('true');
     click('tn');
+    expect(document.getElementById('sn')!.dataset.menuSubOpen).toBeUndefined();
     expect(el.dataset.menuSubOpen).toBeUndefined();
+    dispose();
+  });
+
+  /*
+   * Lỗi thật trên maimoney.com (mobile, 19/11/2026): mở "Sản phẩm" thì khối "Tin tức"
+   * cũng bung, và ngược lại. Renderer phát state style dưới hai dạng — cờ trên chính
+   * node HOẶC trên một tổ tiên (`[data-menu-sub-open="true"] <khối>`). Nếu node gắn
+   * effect (tổ tiên của mọi khối) cũng mang cờ, dạng tổ tiên khớp MỌI khối cùng lúc.
+   */
+  it('mở một nhóm không làm khối của nhóm kia khớp selector dạng tổ tiên', () => {
+    const { el, dispose } = mount();
+    click('tp');
+    expect(el.dataset.menuSubOpen).toBeUndefined();
+    expect(document.querySelector('[data-menu-sub-open="true"] #sn')).toBeNull();
+    expect(document.querySelector('[data-menu-sub-open="true"] #sp')).toBeNull();
+    expect(document.getElementById('sp')!.matches('[data-menu-sub-open="true"]')).toBe(true);
+    click('tn');
+    expect(document.querySelector('[data-menu-sub-open="true"] #sp')).toBeNull();
+    expect(document.getElementById('sp')!.matches('[data-menu-sub-open="true"]')).toBe(false);
     dispose();
   });
 
