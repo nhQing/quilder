@@ -52,6 +52,7 @@
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { UPLOAD_ACCEPT } from '@/lib/assets/kind';
 import { cn } from '@/lib/builder/cn';
 import { ui } from '@/lib/builder/ui';
 
@@ -66,6 +67,7 @@ import { AssetTrashPager } from './asset/AssetTrashPager';
 import { AssetDropArea, AssetUploadButton } from './asset/AssetUploadBox';
 import { FolderDeleteDialog, FolderNameDialog, type FolderEdit } from './asset/FolderDialogs';
 import {
+  displayName,
   human,
   scopeHref,
   trashHref,
@@ -172,6 +174,44 @@ export function AssetGrid({
   const [folderDelete, setFolderDelete] = useState<FolderItem | null>(null);
   /** Ô vừa bấm, để Shift+bấm chọn được cả dải. */
   const anchor = useRef<string | null>(null);
+
+  /*
+   * "Thay file…" trên thẻ ảnh: một ô chọn file ẩn dùng chung cho cả lưới. Server giữ nguyên
+   * assetId (`replace-asset.ts`), nên mọi trang/component/bài đang dùng ảnh nhận file mới mà
+   * không phải gắn lại từng chỗ.
+   */
+  const replaceInput = useRef<HTMLInputElement>(null);
+  const replaceTarget = useRef<string | null>(null);
+  function pickReplacement(id: string) {
+    replaceTarget.current = id;
+    replaceInput.current?.click();
+  }
+  async function replaceFile(file: File) {
+    const id = replaceTarget.current;
+    replaceTarget.current = null;
+    if (!id) return;
+    const old = assets.find((a) => a.id === id);
+    setBusy(true);
+    setNote(null);
+    try {
+      const form = new FormData();
+      form.append('file', file);
+      const res = await fetch(`/api/assets/${encodeURIComponent(id)}/replace`, { method: 'POST', body: form });
+      const json = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+      if (!res.ok || !json.ok) {
+        setNote({ tone: 'error', text: `Không thay được file: ${json.error ?? `lỗi ${res.status}`}` });
+        return;
+      }
+      setNote(
+        `Đã thay file${old ? ` "${displayName(old.key)}"` : ''} bằng "${file.name}". Ảnh của bài viết đổi ngay; trang và component nhận file mới ở lần Publish kế tiếp.`,
+      );
+      router.refresh();
+    } catch (e) {
+      setNote({ tone: 'error', text: `Không gọi được server: ${e instanceof Error ? e.message : String(e)}` });
+    } finally {
+      setBusy(false);
+    }
+  }
 
   /*
    * Điểm DUY NHẤT điều hướng của màn này — mọi thứ đi qua đây để `q`/`used` đang mở
@@ -559,6 +599,7 @@ export function AssetGrid({
             onTrashBlocked={canWrite && !inTrash ? (id) => void trash.showUsage(id) : undefined}
             onRestore={canWrite && inTrash ? (id) => void trash.restore([id]) : undefined}
             onPurge={canPurge && inTrash ? (id) => trash.openPurge([id]) : undefined}
+            onReplace={canWrite && !inTrash ? pickReplacement : undefined}
           />
         ))}
       </ul>
@@ -566,6 +607,21 @@ export function AssetGrid({
 
   return (
     <div className="flex flex-wrap items-stretch gap-5">
+      <input
+        ref={replaceInput}
+        type="file"
+        accept={UPLOAD_ACCEPT}
+        hidden
+        aria-hidden
+        tabIndex={-1}
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          // Xoá giá trị để chọn lại CÙNG file lần sau vẫn bắn `change`.
+          e.target.value = '';
+          if (file) void replaceFile(file);
+          else replaceTarget.current = null;
+        }}
+      />
       <aside aria-label="Thư mục" className="flex min-w-0 max-w-full flex-[1_1_16.5rem] flex-col">
         <AssetFolderTree
           folders={folders}

@@ -127,6 +127,7 @@ export function AssetCard({
   onTrashBlocked,
   onRestore,
   onPurge,
+  onReplace,
 }: {
   asset: AssetItem;
   folders: FolderItem[];
@@ -152,6 +153,11 @@ export function AssetCard({
   onRestore?: (id: string) => void;
   /** Thùng rác, chỉ admin: xoá hoàn toàn. Không truyền = không có mục. */
   onPurge?: (id: string) => void;
+  /**
+   * Thay file bằng tay, GIỮ NGUYÊN assetId — mọi chỗ đang dùng ảnh nhận file mới (19/11/2026:
+   * trước đó chỉ Claude thay được, qua `replace_asset`). Không truyền = không có mục.
+   */
+  onReplace?: (id: string) => void;
 }) {
   const info = assetKind(asset.mime, asset.key);
   const ext = extOf(asset.key);
@@ -182,6 +188,9 @@ export function AssetCard({
 
   const menu: MenuEntry[] = [];
   if (!trashed) {
+    if (onReplace) {
+      menu.push({ label: 'Thay file…', icon: 'upload', disabled: busy, onSelect: () => onReplace(asset.id) });
+    }
     menu.push({ label: 'Copy cho Claude', icon: 'copy', onSelect: copyRef });
   }
   if (trashed) {
