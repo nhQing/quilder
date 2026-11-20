@@ -12,6 +12,7 @@ import { Button } from './ui/Button';
 import { SearchField, SelectField, TextField } from './ui/Field';
 import type { IconName } from './ui/Icon';
 import { ConfirmDialog, Dialog, Toast, ToastRegion } from './ui/Overlay';
+import { deleteEligibility } from '@/lib/auth/user-delete';
 import { EmptyState, PageHeader } from './ui/Page';
 import { Tabs } from './ui/Tabs';
 
@@ -25,6 +26,8 @@ export interface UserRow {
   lockedAt: string | null;
   /** `Asset.id` của ảnh đại diện — đi vào byline trên site. */
   avatarAssetId: string | null;
+  /** Số bài viết đứng tên (tạo hoặc sửa gần nhất) — còn bài thì không xoá được. */
+  entryCount: number;
 }
 
 const ROLES: { id: string; label: string; hint: string; icon: IconName }[] = [
@@ -46,7 +49,11 @@ const TH =
   'border-b border-shell-line px-4 py-3.5 text-left text-micro font-semibold tracking-[0.08em] whitespace-nowrap text-shell-muted uppercase first:pl-5.5 last:pr-5.5';
 const TD = 'border-b border-shell-line px-4 py-3 align-middle first:pl-5.5 last:pr-5.5';
 
-type Modal = { kind: 'new' } | { kind: 'password'; user: UserRow } | { kind: 'lock'; user: UserRow };
+type Modal =
+  | { kind: 'new' }
+  | { kind: 'password'; user: UserRow }
+  | { kind: 'lock'; user: UserRow }
+  | { kind: 'delete'; user: UserRow };
 
 export function UserAdmin({ users, meId }: { users: UserRow[]; meId: string }) {
   const router = useRouter();
@@ -299,6 +306,35 @@ export function UserAdmin({ users, meId }: { users: UserRow[]; meId: string }) {
                           >
                             {locked ? 'Mở khoá' : 'Khoá'}
                           </Button>
+                          {locked &&
+                            (() => {
+                              /*
+                               * Xoá hẳn: chỉ tài khoản đã khoá đủ 30 ngày và không đứng tên bài
+                               * nào. Chưa đủ điều kiện thì nút vẫn hiện nhưng mờ, `title` nói lý
+                               * do — một nút biến mất không dạy được luật.
+                               */
+                              const verdict = deleteEligibility({
+                                lockedAt: user.lockedAt ? new Date(user.lockedAt) : null,
+                                entryCount: user.entryCount,
+                                isSelf: isMe,
+                              });
+                              return verdict.ok ? (
+                                <Button
+                                  variant="danger"
+                                  size="sm"
+                                  icon="trash"
+                                  disabled={busy !== null}
+                                  title="Xoá hẳn tài khoản đã khoá"
+                                  onClick={() => setModal({ kind: 'delete', user })}
+                                >
+                                  Xoá
+                                </Button>
+                              ) : (
+                                <Button variant="ghost" size="sm" icon="trash" aria-disabled title={verdict.reason}>
+                                  Xoá
+                                </Button>
+                              );
+                            })()}
                         </div>
                       </td>
                     </tr>
@@ -373,6 +409,37 @@ export function UserAdmin({ users, meId }: { users: UserRow[]; meId: string }) {
         }}
       >
         {modal?.kind === 'lock' && error && (
+          <p role="alert" className={ui.error}>
+            {error}
+          </p>
+        )}
+      </ConfirmDialog>
+
+      <ConfirmDialog
+        open={modal?.kind === 'delete'}
+        onClose={closeModal}
+        busy={busy !== null}
+        title="Xoá hẳn tài khoản này?"
+        description={
+          modal?.kind === 'delete' ? (
+            <>
+              <span className="block font-shell-mono break-all text-shell-ink">{modal.user.email}</span>
+              Tài khoản đã khoá từ {new Date(modal.user.lockedAt ?? '').toLocaleDateString('vi-VN')} và không đứng
+              tên bài viết nào.
+            </>
+          ) : undefined
+        }
+        consequence="Tài khoản và token MCP (đã thu hồi) của nó bị xoá vĩnh viễn, không có đường lùi. Nhật ký thao tác vẫn giữ email."
+        confirmLabel="Xoá vĩnh viễn"
+        typeToConfirm={modal?.kind === 'delete' ? modal.user.email : undefined}
+        onConfirm={() => {
+          if (modal?.kind !== 'delete') return;
+          void call(`/api/users/${modal.user.id}`, { method: 'DELETE' }, 'Đã xoá tài khoản').then((ok) => {
+            if (ok) setModal(null);
+          });
+        }}
+      >
+        {modal?.kind === 'delete' && error && (
           <p role="alert" className={ui.error}>
             {error}
           </p>

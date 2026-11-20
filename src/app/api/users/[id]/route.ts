@@ -11,15 +11,16 @@ import { NextResponse } from 'next/server';
  * Rào thứ ba quan trọng nhất: mất admin cuối cùng nghĩa là không ai tạo lại
  * được tài khoản, và đường duy nhất còn lại là chạy script trực tiếp trên server.
  *
- * KHÔNG còn `DELETE`. Xoá một tài khoản làm byline của bài họ viết mồ côi và thu
- * hồi mọi token MCP của họ không dấu vết — xem `User.lockedAt`. Đường thay thế là
- * `POST` với `{ locked: true }` ở cuối file.
+ * `DELETE` chỉ cho tài khoản ĐÃ KHOÁ đủ 30 ngày và không đứng tên bài nào (19/11/2026) —
+ * luật ở `lib/auth/user-delete.ts`. Xoá vô điều kiện làm byline mồ côi và thu hồi token MCP
+ * không dấu vết — xem `User.lockedAt`. Đường thường ngày vẫn là `POST` `{ locked: true }`.
  */
 
 import { prisma } from '@/lib/db';
 import { requireAuth } from '@/lib/auth/guard';
 import { hashPassword } from '@/lib/auth/password';
 import type { Role } from '@/lib/auth/session';
+import { deleteEligibility } from '@/lib/auth/user-delete';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -220,4 +221,69 @@ export async function POST(
   });
 
   return NextResponse.json({ ok: true, lockedAt, revokedTokens: revoked });
+}
+
+/**
+ * Xoá hẳn một tài khoản đã khoá đủ lâu. Kiểm lại luật ở đây (không tin nút đã bị ẩn ở giao
+ * diện), xoá trong transaction, và để lại dòng audit `user.delete` đọc được một mình: email,
+ * vai trò, lúc khoá và ai khoá — sau lần này không còn hàng `User` nào để tra.
+ *
+ * Token MCP của tài khoản xoá theo (`onDelete: Cascade`) nhưng chúng đã bị thu hồi từ lúc khoá;
+ * số token được ghi vào audit để việc chúng biến mất không im lặng.
+ */
+export async function DELETE(
+  _request: Request,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const auth = await requireAuth('admin');
+  if (auth instanceof NextResponse) return auth;
+
+  const { id } = await params;
+  const target = await prisma.user.findUnique({
+    where: { id },
+    select: {
+      id: true, email: true, role: true, lockedAt: true, lockedBy: true,
+      _count: { select: { entriesCreated: true, entriesUpdated: true, serviceTokens: true } },
+    },
+  });
+  if (!target) return NextResponse.json({ error: 'Không tìm thấy tài khoản' }, { status: 404 });
+
+  const verdict = deleteEligibility({
+    lockedAt: target.lockedAt,
+    entryCount: target._count.entriesCreated + target._count.entriesUpdated,
+    isSelf: id === auth.sub,
+  });
+  if (!verdict.ok) return NextResponse.json({ error: verdict.reason }, { status: 409 });
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      await tx.user.delete({ where: { id } });
+      await tx.auditLog.create({
+        data: {
+          userId: auth.sub,
+          action: 'user.delete',
+          targetType: 'User',
+          targetId: id,
+          meta: {
+            email: target.email,
+            role: target.role,
+            lockedAt: target.lockedAt?.toISOString() ?? null,
+            lockedBy: target.lockedBy,
+            deletedTokens: target._count.serviceTokens,
+          },
+        },
+      });
+    });
+  } catch (e) {
+    // Khoá ngoại Restrict của Entry: có bài vừa được gán cho tài khoản này sau lúc kiểm.
+    if ((e as { code?: string }).code === 'P2003') {
+      return NextResponse.json(
+        { error: 'Tài khoản vừa được gán làm tác giả một bài viết — không xoá được. Tải lại trang.' },
+        { status: 409 },
+      );
+    }
+    throw e;
+  }
+
+  return NextResponse.json({ ok: true });
 }

@@ -28,6 +28,8 @@ export default async function AdminPage() {
     select: {
       id: true, email: true, name: true, role: true, createdAt: true,
       lockedAt: true, avatarAssetId: true,
+      // Số bài đứng tên — tài khoản còn bài thì không xoá được (`lib/auth/user-delete.ts`).
+      _count: { select: { entriesCreated: true, entriesUpdated: true } },
     },
   });
 
@@ -35,10 +37,11 @@ export default async function AdminPage() {
     <PageShell>
       <UserAdmin
         meId={session.sub}
-        users={users.map((u) => ({
+        users={users.map(({ _count, ...u }) => ({
           ...u,
           createdAt: u.createdAt.toISOString(),
           lockedAt: u.lockedAt?.toISOString() ?? null,
+          entryCount: _count.entriesCreated + _count.entriesUpdated,
         }))}
       />
     </PageShell>
