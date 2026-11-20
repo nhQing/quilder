@@ -81,6 +81,17 @@ import { useMemo } from 'react';
 import 'ckeditor5/ckeditor5.css';
 
 import { articlePalette } from './article-palette';
+import { RICHDOC_PROSE } from './richdoc-prose';
+
+/**
+ * Class của `RICHDOC_PROSE`, gắn lên vùng soạn (`.ck-content`) lúc editor sẵn sàng.
+ *
+ * Preflight của Tailwind trong `builder.css` làm phẳng `h1…h6` và bỏ margin của `p`,
+ * còn `ckeditor5.css` không đặt cỡ tiêu đề hay khoảng cách đoạn — không có bước này
+ * thì "Tiêu đề 2" trong ô soạn trông y như đoạn văn. Gắn qua view writer (không qua
+ * DOM) vì CKEditor tự vẽ lại thuộc tính của root và sẽ xoá class gắn tay.
+ */
+const PROSE_CLASSES = RICHDOC_PROSE.split(/\s+/).filter(Boolean);
 
 /* ── Tải ảnh lên: đi qua kho dữ liệu, không nhúng base64 ─────────────── */
 
@@ -298,6 +309,11 @@ export default function ArticleEditor({ value, onChange, disabled }: ArticleEdit
       config={config}
       disabled={disabled}
       data={value}
+      onReady={(editor) => {
+        const view = editor.editing.view;
+        const root = view.document.getRoot();
+        if (root) view.change((writer) => writer.addClass(PROSE_CLASSES, root));
+      }}
       /*
        * `onChange` bắn ở MỖI ký tự, và `editor.getData()` chạy cả bộ chuyển đổi
        * model→view mỗi lần. Đo trên một bài ~2000 chữ: khoảng 1–2ms, nên không cần
