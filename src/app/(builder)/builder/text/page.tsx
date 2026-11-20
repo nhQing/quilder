@@ -1,4 +1,3 @@
-import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
 /**
@@ -23,11 +22,10 @@ import { getDraftPage, listPages } from '@/lib/builder/queries';
 import { extractUnits } from '@/lib/builder/text-units';
 import { loadComponents } from '@/lib/render/components';
 import { listAllLocales, listDraftTranslations } from '@/lib/i18n/queries';
-import { cn } from '@/lib/builder/cn';
-import { focusRing } from '@/lib/builder/ui';
 import { ButtonLink } from '@/components/builder/ui/Button';
 import { PageHeader, PageShell } from '@/components/builder/ui/Page';
 import { TextTable } from '@/components/builder/TextTable';
+import { TextPagePicker } from '@/components/builder/TextPagePicker';
 
 export const dynamic = 'force-dynamic';
 
@@ -102,36 +100,11 @@ export default async function TextPage({
       />
 
       {/*
-        Link chứ không phải `Tabs`: mỗi trang là một URL (`?page=`), mở được ở tab mới
-        và quay lại được bằng nút Back. Hình giống `Tabs`, nhưng xuống dòng thay vì cuộn
-        ngang — trang nằm khuất sau mép phải là trang không ai thấy để chọn. Không có số
-        đếm: đếm đơn vị của mọi trang là rút đơn vị của mọi trang ở mỗi lần mở màn này.
+        Ô chọn chứ không phải dãy nút (19/11/2026): mười mấy trang thành ba hàng nút đẩy bảng
+        xuống dưới màn đầu. Mỗi trang vẫn là một URL (`?page=`) — xem `TextPagePicker`.
       */}
       {pages.length > 1 && (
-        <nav
-          aria-label="Chọn trang"
-          className="flex max-w-full flex-wrap gap-1 self-start rounded-lg bg-shell-raised p-1"
-        >
-          {pages.map((p) => {
-            const on = p.id === current.id;
-            return (
-              <Link
-                key={p.id}
-                href={`/builder/text?page=${p.id}`}
-                aria-current={on ? 'page' : undefined}
-                className={cn(
-                  // Không `whitespace-nowrap`: tên trang dài hơn khổ điện thoại thì phải
-                  // xuống dòng, không thì nó đẩy cả trang tràn ngang.
-                  'inline-flex min-h-10 max-w-full items-center rounded px-3.5 py-1.5 text-ui font-medium text-shell-muted transition-colors hover:text-shell-ink',
-                  focusRing,
-                  on && 'bg-shell-panel font-semibold text-shell-ink shadow-shell-card',
-                )}
-              >
-                {p.title}
-              </Link>
-            );
-          })}
-        </nav>
+        <TextPagePicker pages={pages.map((p) => ({ id: p.id, title: p.title, slug: p.slug }))} current={current.id} />
       )}
 
       <TextTable
