@@ -15,6 +15,7 @@
  */
 
 import { z } from 'zod';
+import { ENTRY_SLUG_MAX } from '@/lib/builder/slug';
 
 import { zRichDoc, zRichText } from '@/lib/doc/schema';
 import type { RichDoc, RichText } from '@/lib/doc/types';
@@ -204,7 +205,9 @@ function valueSchema(
       // `FieldDef` cho `file` không có cờ `multiple` (khác `image`) — luôn một tệp.
       return zAssetPick;
     case 'slug':
-      return z.string().min(1).max(120);
+      // Cùng trần với đường sinh đường dẫn (`ENTRY_SLUG_MAX`, 255 như Strapi). Trần 120 cũ
+      // làm bài nhập từ Strapi có đường dẫn 129 ký tự không lưu được (20/11/2026).
+      return z.string().min(1).max(ENTRY_SLUG_MAX);
     case 'relation':
       return f.cardinality === 'many' ? z.array(z.string().min(1)).max(50) : z.string().min(1);
     case 'link':

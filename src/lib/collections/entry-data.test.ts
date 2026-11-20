@@ -212,6 +212,21 @@ describe('validateEntryData', () => {
   });
 });
 
+describe('field slug — trần bằng ENTRY_SLUG_MAX (255, như Strapi)', () => {
+  const WITH_SLUG: FieldDef[] = [...NEWS, { t: 'slug', key: 'slug', label: 'Đường dẫn', from: 'title' }];
+
+  it('nhận đường dẫn 129 ký tự của Strapi #83 (trần cũ 120 làm bài không lưu được)', () => {
+    const slug =
+      'mai-money-va-play-moolah-ky-ket-bien-ban-ghi-nho-hop-tac-chien-luoc-mo-rong-trai-nghiem-giao-duc-tai-chinh-toan-dien-tai-viet-nam';
+    expect(validateEntryData(WITH_SLUG, GROUPS, { ...FULL, slug }, CTX).ok).toBe(true);
+  });
+
+  it('nhận đúng 255, từ chối 256', () => {
+    expect(validateEntryData(WITH_SLUG, GROUPS, { ...FULL, slug: 'a'.repeat(255) }, CTX).ok).toBe(true);
+    expect(validateEntryData(WITH_SLUG, GROUPS, { ...FULL, slug: 'a'.repeat(256) }, CTX).ok).toBe(false);
+  });
+});
+
 /* ── Field richdoc và trần độ dài ─────────────────────────────────────── */
 
 const P = (v: string) => ({ b: 'p', children: [{ t: 'text', v }] });
