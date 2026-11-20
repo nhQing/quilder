@@ -40,7 +40,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
 import { cn } from '@/lib/builder/cn';
-import { toSlug } from '@/lib/builder/slug';
+import { ENTRY_SLUG_MAX, toSlug } from '@/lib/builder/slug';
 import { ui } from '@/lib/builder/ui';
 
 import type { FieldDef, GroupTable } from '@/lib/collections/field-def';
@@ -748,7 +748,7 @@ export function EntryForm(props: {
                   typeof data[f.from] === 'string' ? (data[f.from] as string) : '';
                 const typed = typeof data[f.key] === 'string' ? (data[f.key] as string) : '';
                 const current = props.entry?.slug ?? '';
-                const suggestion = toSlug(source);
+                const suggestion = toSlug(source, ENTRY_SLUG_MAX);
 
                 /*
                  * Ba ca, và ô hiện ba thứ khác nhau:

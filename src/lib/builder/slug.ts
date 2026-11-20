@@ -5,7 +5,14 @@
  * dùng nhập tay, chứ không phải một lỗi — `""` cũng là slug hợp lệ của trang chủ,
  * nên hai trường hợp đó phân biệt ở `validateNewPage` chứ không ở đây.
  *
- * Cắt ở 80 ký tự: dài hơn là một URL không ai gõ được.
+ * Trần mặc định 80 ký tự cho đường dẫn TRANG, khoá danh mục và khoá loại nội dung:
+ * những thứ người ta gõ tay. Đường dẫn BÀI VIẾT truyền `ENTRY_SLUG_MAX`: nó sinh từ
+ * tiêu đề, và site cũ (Strapi) không cắt — 17/177 bài Strapi dài hơn 80 ký tự, dài
+ * nhất 129. Cắt ở 80 từng làm URL bài nhập về khác URL cũ (link ngoài chết) và cắt
+ * ngang giữa từ ("…uob-asset-mana", 20/11/2026).
+ *
+ * Khi phải cắt thì cắt ở dấu gạch nối cuối cùng trong trần, không cắt giữa từ. Chỉ
+ * khi không có dấu gạch nối nào (một "từ" dài hơn trần) mới cắt cứng.
  *
  * ## Vì sao nó nằm ở file riêng
  *
@@ -15,16 +22,26 @@
  * cùng một hình dạng lỗi trong dự án này: một hàm thuần mắc kẹt sau một import
  * prisma. Luật rút ra: hàm thuần ở file thuần, ngay từ đầu.
  */
-export function toSlug(input: string): string {
-  return input
+export function toSlug(input: string, max = 80): string {
+  const full = input
     .normalize('NFD')
     .replace(/[̀-ͯ]/g, '')
     .replace(/đ/gi, 'd')
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 80);
+    .replace(/^-+|-+$/g, '');
+  if (full.length <= max) return full;
+  // `full[max] === '-'` nghĩa là chỗ cắt rơi đúng ranh giới từ: giữ nguyên cả `max` ký tự.
+  if (full[max] === '-') return full.slice(0, max);
+  const cut = full.lastIndexOf('-', max);
+  return (cut > 0 ? full.slice(0, cut) : full.slice(0, max)).replace(/-+$/, '');
 }
+
+/**
+ * Trần đường dẫn của BÀI VIẾT (Entry và bản dịch). Bằng cột `uid` varchar(255) của
+ * Strapi, để mọi URL bài cũ giữ nguyên được. Xem docblock `toSlug`.
+ */
+export const ENTRY_SLUG_MAX = 255;
 
 /* ── Đường dẫn nhiều đoạn, cú pháp Next.js ────────────────────────────── */
 

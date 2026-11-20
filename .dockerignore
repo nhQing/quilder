@@ -24,6 +24,9 @@ e2e
 # thì v1.4.8 trả 500 và trình duyệt tải về "client.json" (16/11/2026).
 mcp/*
 !mcp/server.mjs
+# Script SQL một lần cho dữ liệu tin tức (nhập từ Strapi, sửa đường dẫn…): BE chạy tay
+# trên DB, app không đọc. Không vào image — file nhập dài 1,5MB (20/11/2026).
+scripts/import-strapi-news
 branding
 *.md
 .release.json

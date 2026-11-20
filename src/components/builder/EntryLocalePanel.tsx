@@ -16,6 +16,7 @@
 
 import { cn } from '@/lib/builder/cn';
 import { autoSlugState } from '@/lib/builder/auto-slug';
+import { ENTRY_SLUG_MAX } from '@/lib/builder/slug';
 import { ui, type Tone } from '@/lib/builder/ui';
 import type { LocalePublishState } from '@/lib/collections/entry-locale';
 import { SideCard } from './EntryActions';
@@ -62,6 +63,7 @@ export function EntryLocalePanel(props: {
     // còn TRỐNG — chưa có đường dẫn riêng nào để phá.
     titleChanged: false,
     offerWhenEmpty: true,
+    max: ENTRY_SLUG_MAX,
   });
   const pct =
     props.coverage.total === 0

@@ -15,6 +15,7 @@ import 'server-only';
 
 import { prisma } from '@/lib/db';
 import { toSlug } from '@/lib/builder/create-page';
+import { ENTRY_SLUG_MAX } from '@/lib/builder/slug';
 import { allowedEmbedHostnames } from '@/lib/render/embed-origins';
 import { configuredSiteOrigin } from '@/lib/site/origin';
 import { revalidateCollection } from './cache';
@@ -47,10 +48,10 @@ export function deriveSlug(fields: FieldDef[], data: Record<string, unknown>): s
   if (!slugField || slugField.t !== 'slug') return '';
 
   const existing = data[slugField.key];
-  if (typeof existing === 'string' && existing.trim()) return toSlug(existing);
+  if (typeof existing === 'string' && existing.trim()) return toSlug(existing, ENTRY_SLUG_MAX);
 
   const source = data[slugField.from];
-  return typeof source === 'string' ? toSlug(source) : '';
+  return typeof source === 'string' ? toSlug(source, ENTRY_SLUG_MAX) : '';
 }
 
 /**
@@ -683,7 +684,7 @@ export async function setEntryLocaleState(args: {
     if (args.slug === null) {
       slug = null;
     } else {
-      const cleaned = toSlug(args.slug);
+      const cleaned = toSlug(args.slug, ENTRY_SLUG_MAX);
       if (!cleaned) {
         return { ok: false, status: 400, error: 'Slug rỗng sau khi chuẩn hoá' };
       }

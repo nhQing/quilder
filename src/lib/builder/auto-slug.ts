@@ -68,8 +68,10 @@ export function autoSlugState(args: {
    * thì trống lại là một giá trị có nghĩa — đó là trang chủ — nên mặc định tắt.
    */
   offerWhenEmpty?: boolean;
+  /** Trần độ dài, xem `toSlug`. Đường dẫn bài viết truyền `ENTRY_SLUG_MAX`. */
+  max?: number;
 }): AutoSlugState {
-  const suggestion = toSlug(args.title);
+  const suggestion = toSlug(args.title, args.max);
 
   if (!args.manual) {
     // Chế độ auto: ô slug LÀ gợi ý, nên không bao giờ có gì để "tạo lại".
@@ -82,7 +84,7 @@ export function autoSlugState(args: {
    * Người dùng có thể đang gõ dở "Tin Tức" vào ô slug; so thô sẽ thấy nó khác
    * `tin-tuc` và hiện nút cho một thứ sẽ ra đúng như vậy sau khi lưu.
    */
-  const differs = suggestion !== '' && suggestion !== toSlug(args.slug);
+  const differs = suggestion !== '' && suggestion !== toSlug(args.slug, args.max);
   const wanted = args.titleChanged || (args.offerWhenEmpty === true && args.slug.trim() === '');
 
   return { suggestion, value: args.slug, canRegenerate: differs && wanted };

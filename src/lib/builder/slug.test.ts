@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  ENTRY_SLUG_MAX,
   checkSlugPath,
   isTemplateSlug,
   matchSlugTemplate,
@@ -22,6 +23,46 @@ describe('toSlug', () => {
     expect(toSlug('blogs/post')).toBe('blogs-post');
     expect(toSlug('Tin Tức Thị Trường')).toBe('tin-tuc-thi-truong');
     expect(toSlug('  ')).toBe('');
+  });
+
+  it('mặc định vẫn trần 80 ký tự (trang, danh mục, loại nội dung)', () => {
+    expect(toSlug('a'.repeat(200))).toHaveLength(80);
+  });
+
+  it('cắt ở dấu gạch nối, không cắt giữa từ', () => {
+    const title = 'MaiMoney chính thức trở thành đại lý phân phối hai quỹ đầu tư của UOB Asset Management tại Việt Nam';
+    const cut = toSlug(title);
+    expect(cut).toBe('maimoney-chinh-thuc-tro-thanh-dai-ly-phan-phoi-hai-quy-dau-tu-cua-uob-asset');
+    expect(cut.endsWith('-')).toBe(false);
+  });
+
+  it('một từ dài hơn trần thì đành cắt cứng', () => {
+    expect(toSlug('x'.repeat(90), 80)).toBe('x'.repeat(80));
+  });
+});
+
+describe('toSlug — đường dẫn bài viết (ENTRY_SLUG_MAX)', () => {
+  it('trần 255 như cột uid varchar(255) của Strapi: tiêu đề dài giữ đủ', () => {
+    expect(ENTRY_SLUG_MAX).toBe(255);
+    const title = 'MaiMoney chính thức trở thành đại lý phân phối hai quỹ đầu tư của UOB Asset Management tại Việt Nam';
+    expect(toSlug(title, ENTRY_SLUG_MAX)).toBe(
+      'maimoney-chinh-thuc-tro-thanh-dai-ly-phan-phoi-hai-quy-dau-tu-cua-uob-asset-management-tai-viet-nam',
+    );
+  });
+
+  it('đường dẫn dài nhất của Strapi (129 ký tự) đi qua nguyên vẹn', () => {
+    const strapi =
+      'mai-money-va-play-moolah-ky-ket-bien-ban-ghi-nho-hop-tac-chien-luoc-mo-rong-trai-nghiem-giao-duc-tai-chinh-toan-dien-tai-viet-nam';
+    expect(strapi).toHaveLength(129);
+    expect(toSlug(strapi, ENTRY_SLUG_MAX)).toBe(strapi);
+  });
+
+  it('dài quá 255 thì cắt ở dấu gạch nối', () => {
+    const long = Array.from({ length: 60 }, (_, i) => `tu${i}`).join(' ');
+    const out = toSlug(long, ENTRY_SLUG_MAX);
+    expect(out.length).toBeLessThanOrEqual(255);
+    expect(out.endsWith('-')).toBe(false);
+    expect(long.replace(/ /g, '-').startsWith(out + '-')).toBe(true);
   });
 });
 
