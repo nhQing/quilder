@@ -23,3 +23,29 @@ describe('resolveHiddenValue', () => {
     expect(resolveHiddenValue(undefined, scope)).toBe('');
   });
 });
+
+/*
+ * 20/11/2026: form đăng ký trên `/en/events/the-art-of-wealth` gửi `page` =
+ * `/events/the-art-of-wealth`, mất tiền tố `/en`. Gói MaiMoney suy ngôn ngữ từ ô này,
+ * nên câu báo lỗi và email xác nhận ra tiếng Việt cho khách ở trang tiếng Anh.
+ */
+describe('{page.path} theo ngôn ngữ đang phục vụ', () => {
+  const en = { code: 'en', isDefault: false, codes: ['vi', 'en'], defaultCode: 'vi' };
+  const vi = { code: 'vi', isDefault: true, codes: ['vi', 'en'], defaultCode: 'vi' };
+
+  it('trang tiếng Anh mang tiền tố /en', () => {
+    expect(resolveHiddenValue('{page.path}', { ...scope, locale: en })).toBe('/en/events/the-money-date-ha-noi');
+  });
+
+  it('ngôn ngữ mặc định không có tiền tố', () => {
+    expect(resolveHiddenValue('{page.path}', { ...scope, locale: vi })).toBe('/events/the-money-date-ha-noi');
+  });
+
+  it('trang chủ tiếng Anh là /en, không phải /en/', () => {
+    expect(resolveHiddenValue('{page.path}', { page: { slug: '' }, locale: en })).toBe('/en');
+  });
+
+  it('chỉ {page.path} đổi theo ngôn ngữ, {entry.slug} giữ nguyên', () => {
+    expect(resolveHiddenValue('{entry.slug}', { ...scope, locale: en })).toBe('the-money-date-ha-noi');
+  });
+});
