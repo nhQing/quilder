@@ -24,8 +24,9 @@
 
 - `setStyle` với `typography: { clamp: N }` THAY CẢ nhóm typography (`clamp` nằm trong
   `UNION_KEYS` của `src/lib/doc/ops.ts`) — luôn gửi đủ cả nhóm khi có `clamp`.
-- Site đặt `text-wrap: balance` cho h1–h3, maimoney.com thì không → tiêu đề xuống dòng sớm.
-  Đặt `typography.wrap` = `"pretty"` (hoặc `"normal"`, phát `text-wrap: wrap`).
+- Từ 20/11/2026 `reset.css` KHÔNG còn `text-wrap: balance` cho h1–h6 (maimoney.com không dùng,
+  tiêu đề xuống dòng sớm hơn trang thật). Node cần chia dòng đều thì tự đặt `typography.wrap`
+  = `"balance"`; node cũ đã đặt `"pretty"`/`"normal"` để né reset vẫn đúng, không cần gỡ.
 - `customCss` của AI chỉ nhận allowlist (`src/lib/doc/ai-css-allowlist.ts`). Node có
   customCss do người viết chứa thuộc tính ngoài allowlist thì AI không ghi đè được: dùng style
   có kiểu, `transform`/`opacity`, hoặc selector từ node cha (`&&& > button:disabled {…}`).
