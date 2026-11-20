@@ -35,6 +35,17 @@ export function PageShell({
   );
 }
 
+/**
+ * Nút quay về màn cha, đứng trên tiêu đề. Rõ hơn breadcrumb một mục (chữ xám nhỏ, không mũi
+ * tên): người dùng Kho dữ liệu tưởng các màn con "không có nút back" (19/11/2026).
+ * `onClick` cho màn có thay đổi chưa lưu chặn lại để hỏi trước (xem `SchemaEditor`).
+ */
+export interface BackLink {
+  href: string;
+  label: React.ReactNode;
+  onClick?: (e: React.MouseEvent<HTMLAnchorElement>) => void;
+}
+
 export interface Crumb {
   label: React.ReactNode;
   href?: string;
@@ -78,6 +89,7 @@ export function PageHeader({
   count,
   description,
   crumbs,
+  back,
   actions,
   className,
 }: {
@@ -85,6 +97,7 @@ export function PageHeader({
   count?: React.ReactNode;
   description?: React.ReactNode;
   crumbs?: readonly Crumb[];
+  back?: BackLink;
   actions?: React.ReactNode;
   className?: string;
 }) {
@@ -93,6 +106,16 @@ export function PageHeader({
       {/* Basis 20rem chứ không lớn hơn: ở khổ ~1024 phần nội dung còn ~720px, basis lớn
           đẩy cụm nút xuống dòng dưới dù vẫn còn chỗ cạnh tiêu đề. */}
       <div className="flex min-w-0 flex-[1_1_20rem] flex-col gap-2">
+        {back && (
+          <Link
+            href={back.href}
+            onClick={back.onClick}
+            className="-ml-1.5 inline-flex w-fit items-center gap-1.5 rounded-md px-1.5 py-1 text-ui font-medium text-shell-muted hover:bg-shell-raised hover:text-shell-ink"
+          >
+            <Icon name="arrow-left" size={16} />
+            {back.label}
+          </Link>
+        )}
         {crumbs && crumbs.length > 0 && <Breadcrumb items={crumbs} />}
         <h1 className="text-page font-bold text-balance">
           {title}

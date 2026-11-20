@@ -121,7 +121,7 @@ export default async function EntryListPage({
   return (
     <PageShell width="wide">
       <PageHeader
-        crumbs={[{ label: 'Kho dữ liệu', href: '/builder/content' }]}
+        back={{ href: '/builder/content', label: 'Kho dữ liệu' }}
         title={shape.type.namePlural}
         count={counts.all}
         actions={

@@ -50,6 +50,7 @@ import { Checkbox, SelectField, TextField } from './ui/Field';
 import { Icon } from './ui/Icon';
 import { Note } from './ui/Note';
 import { ConfirmDialog } from './ui/Overlay';
+import { leaveNeedsConfirm, schemaKey } from '@/lib/builder/schema-dirty';
 import { EmptyState, PageHeader } from './ui/Page';
 import { inPool } from '@/lib/collections/taxonomy-fields';
 
@@ -467,6 +468,36 @@ export function SchemaEditor({
   const [deletingGroup, setDeletingGroup] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
+  /*
+   * Thay đổi chưa lưu: so với bản ĐÃ LƯU gần nhất (lúc mở màn, rồi sau mỗi lần Lưu thành công).
+   * Rời màn khi còn thay đổi thì hỏi trước — trước 19/11/2026 bấm quay lại là mất hết field
+   * vừa thêm, không một lời báo.
+   */
+  const [savedKey, setSavedKey] = useState(() =>
+    schemaKey({ fields: initialFields, titleField: target.kind === 'type' ? target.titleField : '' }),
+  );
+  const dirty = !parseWarning && schemaKey({ fields, titleField }) !== savedKey;
+  /** Đích đang chờ người dùng xác nhận bỏ thay đổi; `null` = hộp xác nhận đóng. */
+  const [leaveTo, setLeaveTo] = useState<string | null>(null);
+
+  // Tải lại / đóng tab / gõ địa chỉ khác: trình duyệt tự hỏi (không tuỳ biến được câu chữ).
+  useEffect(() => {
+    if (!dirty) return;
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+  }, [dirty]);
+
+  /** onClick cho mọi link rời màn: còn thay đổi chưa lưu thì chặn lại để hỏi. */
+  const guardLeave = (href: string) => (e: React.MouseEvent<HTMLAnchorElement>) => {
+    if (!leaveNeedsConfirm(dirty, e)) return;
+    e.preventDefault();
+    setLeaveTo(href);
+  };
+
   const groupOptionsForPicker =
     // Nhóm đang sửa không tự chọn chính nó ở bộ chọn — lồng một nhóm vào chính
     // nó là một vòng tầm thường mà không cần đợi server báo lỗi.
@@ -546,6 +577,9 @@ export function SchemaEditor({
     // handler async. Không bắt thì `setBusy(false)` không chạy — nút đứng
     // vĩnh viễn ở "Đang lưu…", disabled, không thông báo gì, và người dùng
     // chỉ còn cách tải lại trang — MẤT mọi thay đổi chưa lưu.
+    // Chụp đúng thứ được gửi đi: người dùng có thể gõ tiếp trong lúc chờ server, và phần gõ
+    // thêm đó vẫn là thay đổi CHƯA lưu.
+    const sentKey = schemaKey({ fields, titleField });
     try {
       const res =
         target.kind === 'type'
@@ -581,6 +615,7 @@ export function SchemaEditor({
           : { kind: 'ok', lines: ['Đã lưu cấu trúc.'] },
       );
       setFresh(new Set());
+      setSavedKey(sentKey);
       router.refresh();
     } catch (e) {
       setMsg({
@@ -643,7 +678,7 @@ export function SchemaEditor({
   return (
     <>
       <PageHeader
-        crumbs={[{ label: 'Kho dữ liệu', href: '/builder/content' }]}
+        back={{ href: '/builder/content', label: 'Kho dữ liệu', onClick: guardLeave('/builder/content') }}
         title={target.name}
         count={`${fields.length} field`}
         description={
@@ -662,7 +697,12 @@ export function SchemaEditor({
         actions={
           <>
             {target.kind === 'type' && (
-              <ButtonLink href={`/builder/content/${target.key}`} variant="secondary" icon="list">
+              <ButtonLink
+                href={`/builder/content/${target.key}`}
+                variant="secondary"
+                icon="list"
+                onClick={guardLeave(`/builder/content/${target.key}`)}
+              >
                 Xem bảng entry
               </ButtonLink>
             )}
@@ -695,6 +735,20 @@ export function SchemaEditor({
             </Button>
           </>
         }
+      />
+
+      <ConfirmDialog
+        open={leaveTo !== null}
+        onClose={() => setLeaveTo(null)}
+        onConfirm={() => {
+          const to = leaveTo;
+          setLeaveTo(null);
+          if (to) router.push(to);
+        }}
+        title="Bỏ thay đổi chưa lưu?"
+        consequence="Cấu trúc vừa sửa chưa được lưu. Rời màn này thì mọi thay đổi đó mất."
+        confirmLabel="Bỏ thay đổi và rời đi"
+        cancelLabel="Ở lại sửa tiếp"
       />
 
       {target.kind === 'group' && (

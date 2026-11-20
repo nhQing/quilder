@@ -45,7 +45,7 @@ export default async function ApiViewsPage() {
   return (
     <PageShell>
       <PageHeader
-        crumbs={[{ label: 'Kho dữ liệu', href: '/builder/content' }]}
+        back={{ href: '/builder/content', label: 'Kho dữ liệu' }}
         title="View của API"
         count={views.length}
         description="Đường gọi ngắn cho app: app gọi /api/public/v1/views/<khoá>, server tự áp bộ tham số đã lưu trong cùng một lượt. Chỉ bài đã đăng mới ra ngoài, như mọi đường gọi công khai."
