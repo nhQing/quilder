@@ -256,3 +256,28 @@ describe('Form — xem trước hộp thoại trong khung builder (canvasPreview
     expect(html({ ...slots, canvasPreview: true })).not.toContain('mm-form__preview');
   });
 });
+
+/*
+ * Chữ do CHÍNH form sinh ra (không phải tác giả gõ) phải theo ngôn ngữ trang. Trang /en từng
+ * hiện "Đang gửi…" trên nút khi gửi form đăng ký sự kiện (19/11/2026).
+ */
+describe('Form — chữ của form theo ngôn ngữ trang', () => {
+  it('formChrome: tiếng Anh khi locale khác vi, tiếng Việt khi vi hoặc không có', async () => {
+    const { formChrome } = await import('./Form');
+    expect(formChrome('en').sending).toBe('Sending…');
+    expect(formChrome('vi').sending).toBe('Đang gửi…');
+    expect(formChrome(undefined).sending).toBe('Đang gửi…');
+    for (const v of Object.values(formChrome('en'))) expect(v).not.toMatch(/[ăâđêôơưạảấầẩẫậắằẳẵặẹẻẽếềểễệỉịọỏốồổỗộớờởỡợụủứừửữựỳỵỷỹ]/i);
+  });
+
+  it('HTML trang /en không mang chữ tiếng Việt của form', () => {
+    const fields = params({
+      fields: [{ name: 'city', kind: 'select', label: 'City', options: [{ value: 'hn', label: 'Hanoi' }] }],
+    }).fields;
+    const out = html({ fields, locale: 'en', afterSubmit: 'dialog' } as Partial<Parameters<typeof Form>[0]>);
+    expect(out).toContain('— Select —');
+    expect(out).toContain('Leave this field empty');
+    expect(out).not.toContain('Chọn');
+    expect(out).not.toContain('Kết quả gửi form');
+  });
+});

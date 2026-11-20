@@ -169,11 +169,26 @@ function trackLead(endpointKey: string | undefined) {
 }
 
 /**
- * Nhãn của ô bẫy bot. Không ai thấy nó (ẩn + `aria-hidden`), nhưng nó nằm trong HTML —
- * trang `/en` từng mang câu tiếng Việt này giữa bản tiếng Anh (17/11/2026).
+ * Chữ do CHÍNH form sinh ra (tác giả không gõ), theo ngôn ngữ trang. Ngôn ngữ khác `vi`
+ * dùng tiếng Anh. Trang `/en` từng mang chữ tiếng Việt ở đây: nhãn ô bẫy bot (17/11/2026),
+ * "Đang gửi…" trên nút khi gửi form đăng ký sự kiện (19/11/2026).
  */
-function trapLabel(locale: string | undefined): string {
-  return locale && locale !== 'vi' ? 'Leave this field empty' : 'Đừng điền ô này';
+export function formChrome(locale: string | undefined) {
+  return locale && locale !== 'vi'
+    ? {
+        sending: 'Sending…',
+        trap: 'Leave this field empty',
+        choose: '— Select —',
+        close: 'Close',
+        result: 'Form result',
+      }
+    : {
+        sending: 'Đang gửi…',
+        trap: 'Đừng điền ô này',
+        choose: '— Chọn —',
+        close: 'Đóng',
+        result: 'Kết quả gửi form',
+      };
 }
 
 export function Form({
@@ -197,6 +212,7 @@ export function Form({
   locale,
 }: FormProps) {
   const uid = useId();
+  const t = formChrome(locale);
   const [status, setStatus] = useState<Status>('idle');
   /**
    * Lúc form được dựng, đặt trong ref chứ không trong state khởi tạo.
@@ -466,7 +482,7 @@ export function Form({
                   {/* Lựa chọn rỗng đứng đầu để `required` có nghĩa: không có nó thì
                       giá trị đầu tiên đã được chọn sẵn và không ai "bỏ trống" được. */}
                   <option value="" disabled={f.required}>
-                    {f.placeholder ?? '— Chọn —'}
+                    {f.placeholder ?? t.choose}
                   </option>
                   {(f.options ?? []).map((o) => (
                     <option key={o.value} value={o.value}>
@@ -500,7 +516,7 @@ export function Form({
             `tabIndex={-1}` và `aria-hidden` để người dùng bàn phím và screen
             reader không bao giờ gặp nó. */}
         <div className="mm-form__trap" aria-hidden="true">
-          <label htmlFor={`${uid}-${HONEYPOT}`}>{trapLabel(locale)}</label>
+          <label htmlFor={`${uid}-${HONEYPOT}`}>{t.trap}</label>
           <input
             id={`${uid}-${HONEYPOT}`}
             name={HONEYPOT}
@@ -526,7 +542,7 @@ export function Form({
           disabled={disabled}
           data-part="submit"
         >
-          {status === 'sending' ? 'Đang gửi…' : submitLabel}
+          {status === 'sending' ? t.sending : submitLabel}
         </button>
 
         {/*
@@ -636,7 +652,7 @@ export function Form({
           className="mm-form__dialog"
           data-part="dialog"
           onClose={closeDialog}
-          aria-label={a11yLabel ?? 'Kết quả gửi form'}
+          aria-label={a11yLabel ?? t.result}
           // Bấm nền (chính phần tử dialog, không phải nội dung) thì đóng.
           onClick={(e) => {
             if (e.target === e.currentTarget) closeDialog();
@@ -647,7 +663,7 @@ export function Form({
               <button
                 type="button"
                 className="mm-form__dialog-close"
-                aria-label="Đóng"
+                aria-label={t.close}
                 data-part="dialog-close"
                 onClick={closeDialog}
               >
