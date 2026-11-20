@@ -157,6 +157,15 @@ const CLASSES = new Set([
 export const ALLOWED_TAGS: ReadonlySet<string> = new Set<string>(TAGS);
 
 /**
+ * Thẻ không có trong `TAGS` nhưng KHÔNG bị gỡ: lúc lưu nó được đổi tên sang thẻ cùng
+ * nghĩa đã có trong danh sách trắng.
+ *
+ * `i` → `em`: plugin `Italic` của CKEditor phát `<i>` (và đọc lại `<em>` thành chữ
+ * nghiêng). Thiếu dòng này thì mọi chữ nghiêng mất ngay lần lưu đầu tiên.
+ */
+const RENAMED_TAGS: Readonly<Record<string, (typeof TAGS)[number]>> = { i: 'em' };
+
+/**
  * Thẻ trong một chuỗi HTML mà danh sách trắng KHÔNG nhận, mỗi tên một lần, đã sắp.
  *
  * Regex, không parser: đây là một cảnh báo cho người đang gõ, không phải một phép
@@ -165,7 +174,7 @@ export const ALLOWED_TAGS: ReadonlySet<string> = new Set<string>(TAGS);
  */
 export function unsupportedTags(html: string): string[] {
   const out = new Set<string>();
-  for (const t of tagNames(html)) if (!ALLOWED_TAGS.has(t)) out.add(t);
+  for (const t of tagNames(html)) if (!ALLOWED_TAGS.has(t) && !Object.hasOwn(RENAMED_TAGS, t)) out.add(t);
   return [...out].sort();
 }
 
@@ -212,6 +221,7 @@ export function sanitizeArticleHtml(input: string, opts: SanitizeOptions = {}): 
     // cái div), trừ những thẻ mà nội dung chính là code.
     nonTextTags: ['script', 'style', 'textarea', 'noscript', 'option'],
     transformTags: {
+      ...RENAMED_TAGS,
       a: (tagName, attribs) => {
         const out: Record<string, string> = { ...attribs };
         // `target="_blank"` không kèm `rel` là lỗ reverse tabnabbing: tab mới giữ
@@ -250,7 +260,7 @@ export function sanitizeArticleHtml(input: string, opts: SanitizeOptions = {}): 
    */
   const before = tagNames(input);
   const after = tagNames(html);
-  for (const t of before) if (!after.has(t)) dropped.add(t);
+  for (const t of before) if (!after.has(Object.hasOwn(RENAMED_TAGS, t) ? RENAMED_TAGS[t]! : t)) dropped.add(t);
 
   return { html, dropped: [...dropped].sort() };
 }

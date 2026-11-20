@@ -234,3 +234,20 @@ describe('unsupportedTags', () => {
     expect(unsupportedTags('<iframe src="https://evil/x"></iframe>')).toEqual([]);
   });
 });
+
+/*
+ * Plugin `Italic` của CKEditor phát `<i>`, không phải `<em>`. Trước 20/11/2026 danh
+ * sách trắng chỉ có `em`, nên mọi chữ nghiêng bị gỡ lúc lưu và ô soạn báo
+ * "Sẽ bị gỡ khi lưu: <i>".
+ */
+describe('chữ nghiêng <i> của CKEditor', () => {
+  it('giữ chữ nghiêng, lưu thành <em>', () => {
+    const r = sanitizeArticleHtml('<p>a <i>nghiêng</i> b</p>');
+    expect(r.html).toBe('<p>a <em>nghiêng</em> b</p>');
+    expect(r.dropped).toEqual([]);
+  });
+
+  it('ô soạn không cảnh báo <i>', () => {
+    expect(unsupportedTags('<p><i>x</i></p>')).toEqual([]);
+  });
+});
