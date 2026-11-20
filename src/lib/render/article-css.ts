@@ -65,7 +65,9 @@ export const ARTICLE_CSS = `
   border-inline-start: 2px solid var(--color-accent);
   padding-inline-start: var(--space-s);
   color: var(--color-muted);
-  font-size: var(--step-1);
+  /* 16px cố định, không theo thang --step-*: không bậc nào ra đúng 16px ở mọi khổ. */
+  font-size: 1rem;
+  font-style: italic;
 }
 [data-mm-article] figure { margin-block: var(--space-l); }
 [data-mm-article] figcaption {
