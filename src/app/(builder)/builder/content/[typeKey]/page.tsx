@@ -13,7 +13,9 @@ import { notFound, redirect } from 'next/navigation';
  */
 
 import { prisma } from '@/lib/db';
+import { getSession } from '@/lib/auth/guard';
 import { getTypeShape, listAdminEntries } from '@/lib/collections/admin-queries';
+import { entrySortFromPrefs } from '@/lib/collections/entry-sort';
 import {
   availableColumns,
   columnFieldKeys,
@@ -78,11 +80,19 @@ export default async function EntryListPage({
   });
   const visible = visibleColumnIds(columns, jar.get(columnsCookie(typeKey))?.value);
 
+  // Thứ tự: lựa chọn đã lưu của TÀI KHOẢN đang xem, mặc định ngày tạo (`entry-sort.ts`).
+  const session = await getSession();
+  const me = session
+    ? await prisma.user.findUnique({ where: { id: session.sub }, select: { prefs: true } })
+    : null;
+  const sort = entrySortFromPrefs(me?.prefs);
+
   const { rows, total, counts } = await listAdminEntries({
     typeKey,
     status,
     taxonomyId: sp.taxonomy,
     q: sp.q,
+    sort,
     page,
     pageSize,
     // Mọi cột field CHỌN ĐƯỢC, không chỉ cột đang hiện: bật một cột là việc ở client,
@@ -141,6 +151,7 @@ export default async function EntryListPage({
         page={page}
         pageSize={pageSize}
         filter={{ status: status ?? 'all', taxonomy: sp.taxonomy ?? '', q: sp.q ?? '' }}
+        sort={sort}
       />
 
       {/* DƯỚI bảng: bảng là việc hằng ngày, khu này là việc một lần mỗi dự án. */}

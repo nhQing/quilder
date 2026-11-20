@@ -28,6 +28,7 @@ export type EntryColumn =
   | { id: string; label: string; kind: 'field'; field: FieldDef }
   | { id: 'status'; label: string; kind: 'status' }
   | { id: string; label: string; kind: 'locale'; code: string }
+  | { id: 'created'; label: string; kind: 'created' }
   | { id: 'updated'; label: string; kind: 'updated' };
 
 /** Kiểu field hiện gọn được trong một ô. `text` nhiều dòng bị loại riêng. */
@@ -37,7 +38,7 @@ export const columnsCookie = (typeKey: string) => `qb-cols.${typeKey}`;
 
 /**
  * Mọi cột chọn được, theo thứ tự hiện trong bảng: phân loại, field, trạng thái,
- * ngôn ngữ, cập nhật. Tiêu đề không có trong danh sách — nó luôn hiện, vì nó là
+ * ngôn ngữ, ngày tạo, cập nhật. Tiêu đề không có trong danh sách — nó luôn hiện, vì nó là
  * đường vào bài.
  */
 export function availableColumns(
@@ -68,6 +69,9 @@ export function availableColumns(
     ...opts.locales.map(
       (code): EntryColumn => ({ id: `locale:${code}`, label: code.toUpperCase(), kind: 'locale', code }),
     ),
+    // Ngày tạo: cột của thứ tự mặc định (`entry-sort.ts`) — sắp theo một ngày mà không
+    // thấy ngày đó thì thứ tự trông như ngẫu nhiên.
+    { id: 'created', label: 'Ngày tạo', kind: 'created' },
     { id: 'updated', label: 'Cập nhật', kind: 'updated' },
   ];
 }

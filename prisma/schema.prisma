@@ -965,6 +965,16 @@ model User {
   /** Email của admin đã khoá. Chuỗi, cùng quy ước với `Entry.createdBy`. */
   lockedBy String?
 
+  /**
+   * Tuỳ chọn xem của riêng tài khoản này, ví dụ `{ "entrySort": "updated" }` — thứ tự
+   * bảng bài trong Kho dữ liệu (`lib/collections/entry-sort.ts`).
+   *
+   * JSON chứ không một cột mỗi tuỳ chọn: thêm tuỳ chọn không cần migration, và đây
+   * không phải dữ liệu ai truy vấn theo. Đọc luôn qua hàm đọc có mặc định — khoá lạ
+   * hay giá trị hỏng phải rơi về mặc định, không làm hỏng trang.
+   */
+  prefs Json @default("{}")
+
   createdAt DateTime @default(now())
 
   serviceTokens ServiceToken[]

@@ -19,6 +19,7 @@ import { seoKeyOf } from './seo';
 import { ACTIVITY_LIMIT, activityLabel, type ActivityPerson, type EntryActivity, type WriterOption } from './entry-activity';
 import { loadGroupTable } from './group-table';
 import { sortedTaxonomies } from './queries';
+import { entrySortOrderBy, type EntrySort } from './entry-sort';
 
 export interface AdminEntryRow {
   id: string;
@@ -26,6 +27,7 @@ export interface AdminEntryRow {
   title: string;
   status: string;
   publishedAt: Date | null;
+  createdAt: Date;
   updatedAt: Date;
   updatedBy: string;
   /** `fieldKey` null = field taxonomy đầu tiên (xem `taxonomy-fields.ts`). */
@@ -44,6 +46,12 @@ export interface EntryFilter {
   ids?: string[];
   /** Field kéo kèm mỗi hàng cho cột field (xem `entry-columns.ts`). Vắng = không kéo. */
   fieldKeys?: string[];
+  /**
+   * Thứ tự (xem `entry-sort.ts`). Vắng = mới cập nhật trước — thứ tự cũ, giữ cho bộ
+   * chọn "Tin liên quan" và tool AI, vốn cần "bài vừa sửa" lên đầu. Bảng Kho dữ liệu
+   * luôn truyền lựa chọn của tài khoản.
+   */
+  sort?: EntrySort;
   page: number;
   pageSize: number;
 }
@@ -124,12 +132,12 @@ export async function listAdminEntries(f: EntryFilter) {
   const [rows, total, all, published, draft, scheduled, archivedCount, locales] = await Promise.all([
     prisma.entry.findMany({
       where,
-      orderBy: { updatedAt: 'desc' },
+      orderBy: entrySortOrderBy(f.sort ?? 'updated'),
       skip: (f.page - 1) * f.pageSize,
       take: f.pageSize,
       select: {
         id: true, slug: true, data: true, i18n: true, status: true,
-        publishedAt: true, updatedAt: true, updatedBy: true,
+        publishedAt: true, createdAt: true, updatedAt: true, updatedBy: true,
         taxonomies: { select: { taxonomy: { select: { id: true, name: true, fieldKey: true } } } },
       },
     }),
@@ -154,6 +162,7 @@ export async function listAdminEntries(f: EntryFilter) {
         title: typeof raw === 'string' && raw.trim() ? raw : '[chưa đặt tiêu đề]',
         status: r.status,
         publishedAt: r.publishedAt,
+        createdAt: r.createdAt,
         updatedAt: r.updatedAt,
         updatedBy: r.updatedBy,
         taxonomies: r.taxonomies.map((t) => t.taxonomy),

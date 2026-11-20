@@ -22,6 +22,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 
 import type { AdminEntryRow } from '@/lib/collections/admin-queries';
 import { bulkTargets } from '@/lib/collections/bulk-status';
+import { ENTRY_SORT_LABEL, ENTRY_SORTS, isEntrySort, type EntrySort } from '@/lib/collections/entry-sort';
 import {
   columnsCookie,
   defaultColumnIds,
@@ -75,6 +76,7 @@ const HEAD_CLASS: Record<EntryColumn['kind'], string> = {
   field: 'w-36',
   status: 'w-32',
   locale: 'w-14 text-center',
+  created: 'w-36 text-right',
   updated: 'w-40 text-right',
 };
 
@@ -125,6 +127,10 @@ function Cell({
         </td>
       );
     }
+    case 'created':
+      return (
+        <td className={cn(ui.td, 'text-right text-shell-muted tabular-nums')}>{DATE.format(row.createdAt)}</td>
+      );
     case 'updated':
       return (
         <td className={cn(ui.td, 'text-right text-shell-muted tabular-nums')}>
@@ -150,6 +156,8 @@ export function EntryTable(props: {
   page: number;
   pageSize: number;
   filter: { status: string; taxonomy: string; q: string };
+  /** Thứ tự đang dùng — lựa chọn đã lưu của tài khoản (xem `entry-sort.ts`). */
+  sort: EntrySort;
 }) {
   const router = useRouter();
   const sp = useSearchParams();
@@ -157,6 +165,7 @@ export function EntryTable(props: {
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [q, setQ] = useState(props.filter.q);
   const [busy, setBusy] = useState(false);
+  const [sortError, setSortError] = useState<string | null>(null);
   /** Bài đang chờ xác nhận xoá hẳn. */
   const [purging, setPurging] = useState<{ id: string; title: string } | null>(null);
 
@@ -188,6 +197,36 @@ export function EntryTable(props: {
     // bảng trống mà không có lý do nhìn thấy được.
     if (!('page' in patch)) next.delete('page');
     start(() => router.push(`/builder/content/${props.typeKey}?${next.toString()}`));
+  }
+
+  /**
+   * Đổi thứ tự: LƯU vào tài khoản rồi mới tải lại, không đi qua URL như bộ lọc.
+   *
+   * Thứ tự là thói quen của người xem, không phải một bộ lọc để chia sẻ bằng link —
+   * nên nó theo tài khoản sang máy khác, và một link ai đó gửi không âm thầm đổi cách
+   * xem đã lưu của người nhận. Về trang 1 cùng lý do với `go`.
+   */
+  async function changeSort(next: string) {
+    if (!isEntrySort(next) || next === props.sort) return;
+    setBusy(true);
+    setSortError(null);
+    const res = await fetch('/api/auth/me/prefs', {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ entrySort: next }),
+    }).catch(() => null);
+    setBusy(false);
+    if (!res?.ok) {
+      setSortError('Không lưu được cách sắp xếp');
+      return;
+    }
+    const params = new URLSearchParams(sp.toString());
+    params.delete('page');
+    const qs = params.toString();
+    start(() => {
+      router.push(`/builder/content/${props.typeKey}${qs ? `?${qs}` : ''}`);
+      router.refresh();
+    });
   }
 
   function toggle(id: string) {
@@ -312,6 +351,27 @@ export function EntryTable(props: {
                 </option>
               ))}
             </SelectField>
+          )}
+
+          <SelectField
+            label="Sắp xếp"
+            hideLabel
+            value={props.sort}
+            disabled={busy || pending}
+            onChange={(e) => void changeSort(e.target.value)}
+            className="w-auto"
+            title="Lưu theo tài khoản của bạn"
+          >
+            {ENTRY_SORTS.map((s) => (
+              <option key={s} value={s}>
+                {ENTRY_SORT_LABEL[s]}
+              </option>
+            ))}
+          </SelectField>
+          {sortError && (
+            <span role="alert" className="text-small text-shell-danger">
+              {sortError}
+            </span>
           )}
 
           <Popover

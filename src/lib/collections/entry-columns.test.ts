@@ -26,7 +26,7 @@ const fields: FieldDef[] = [
 const cols = availableColumns(fields, { titleField: 'title', slugField: 'slug', locales: ['en'] });
 
 describe('availableColumns', () => {
-  it('mỗi field taxonomy một cột, rồi field đơn giản, trạng thái, ngôn ngữ, cập nhật', () => {
+  it('mỗi field taxonomy một cột, rồi field đơn giản, trạng thái, ngôn ngữ, ngày tạo, cập nhật', () => {
     expect(cols.map((c) => c.id)).toEqual([
       'tax:cats',
       'tax:tags',
@@ -36,6 +36,7 @@ describe('availableColumns', () => {
       'field:level',
       'status',
       'locale:en',
+      'created',
       'updated',
     ]);
     expect(cols.find((c) => c.id === 'tax:tags')).toMatchObject({ label: 'Tag', role: 'tag' });
@@ -54,7 +55,7 @@ describe('availableColumns', () => {
 describe('visibleColumnIds', () => {
   it('chưa chọn → mặc định: mọi cột trừ cột field', () => {
     expect(visibleColumnIds(cols, undefined)).toEqual(defaultColumnIds(cols));
-    expect(defaultColumnIds(cols)).toEqual(['tax:cats', 'tax:tags', 'status', 'locale:en', 'updated']);
+    expect(defaultColumnIds(cols)).toEqual(['tax:cats', 'tax:tags', 'status', 'locale:en', 'created', 'updated']);
   });
 
   it('giữ thứ tự của bảng, bỏ id lạ', () => {
