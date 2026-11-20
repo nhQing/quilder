@@ -13,10 +13,15 @@ import 'server-only';
  * dung lượng theo số lần gõ. Cần lùi một bài viết là một yêu cầu mới.
  */
 
+import { revalidateTag } from 'next/cache';
+
 import { prisma } from '@/lib/db';
 import { toSlug } from '@/lib/builder/create-page';
+import { planRedirects, type RedirectPlan } from '@/lib/builder/redirect-plan';
 import { ENTRY_SLUG_MAX } from '@/lib/builder/slug';
+import { detailBaseForType } from '@/lib/render/collection-page';
 import { allowedEmbedHostnames } from '@/lib/render/embed-origins';
+import { REDIRECTS_TAG } from '@/lib/render/redirects';
 import { configuredSiteOrigin } from '@/lib/site/origin';
 import { revalidateCollection } from './cache';
 import { validateEntryData, validateEntryDataPartial, type EntryDataCtx } from './entry-data';
@@ -52,6 +57,39 @@ export function deriveSlug(fields: FieldDef[], data: Record<string, unknown>): s
 
   const source = data[slugField.from];
   return typeof source === 'string' ? toSlug(source, ENTRY_SLUG_MAX) : '';
+}
+
+/**
+ * Slug MỚI khi người dùng vừa sửa ô "Đường dẫn" của một bài có sẵn; `null` = không đổi.
+ *
+ * Trước 20/11/2026 `updateEntry` ghi ô này vào `data` nhưng không bao giờ đụng cột
+ * `slug` — thứ URL thật dùng. Sửa đường dẫn của một sự kiện đã đăng, lưu thành công,
+ * mà builder lẫn site vẫn ở địa chỉ cũ.
+ *
+ * Ô TRỐNG thì `null`, không suy lại từ tiêu đề như `deriveSlug`: lúc tạo bài thì suy
+ * từ tiêu đề là đúng, còn với bài đã có địa chỉ thì sửa một chữ trong tiêu đề mà URL
+ * đổi theo là làm chết mọi link đã gửi đi — chỉ đổi khi người dùng gõ vào ô này.
+ */
+export function slugEdit(
+  fields: FieldDef[],
+  data: Record<string, unknown>,
+  currentSlug: string,
+): string | null {
+  const slugField = fields.find((f) => f.t === 'slug');
+  if (!slugField) return null;
+  const raw = data[slugField.key];
+  if (typeof raw !== 'string' || !raw.trim()) return null;
+  const next = toSlug(raw, ENTRY_SLUG_MAX);
+  return next && next !== currentSlug ? next : null;
+}
+
+/**
+ * Đường dẫn của một bài trên site, dạng khoá của bảng `Redirect` (không có `/` đầu).
+ *
+ * `base` là gốc của trang mẫu chi tiết (`detailBaseForType`), ví dụ `/events`.
+ */
+export function entryRedirectPath(base: string, slug: string): string {
+  return [base.replace(/^\/+|\/+$/g, ''), slug].filter(Boolean).join('/');
 }
 
 /**
@@ -122,6 +160,14 @@ export type EntryWriteResult =
 /** Giữ tên cũ làm vỏ mỏng: `createEntry` chỉ quan tâm đụng slug. */
 export function isSlugCollision(e: unknown): boolean {
   return isUniqueCollision(e, 'slug');
+}
+
+function slugTakenError(slug: string): EntryWriteResult {
+  return {
+    ok: false,
+    status: 409,
+    error: `Đường dẫn "${slug}" đã có bài khác dùng. Chọn đường dẫn khác.`,
+  };
 }
 
 /**
@@ -392,7 +438,7 @@ export async function updateEntry(args: {
   const current = await prisma.entry.findUnique({
     where: { id: args.entryId },
     select: {
-      id: true, typeKey: true, slug: true, status: true,
+      id: true, typeId: true, typeKey: true, slug: true, status: true,
       // Để `revalidateCollection` chạm tới MỌI URL đang phục vụ bài này — xem
       // docblock tham số `slug` của nó.
       locales: { select: { slug: true } },
@@ -436,6 +482,52 @@ export async function updateEntry(args: {
     const checked = validateEntryData(shape.fields, shape.groups, args.data, shape.ctx);
     if (!checked.ok) return { ok: false, status: 400, error: checked.error };
     data = checked.data;
+  }
+
+  /*
+   * Ô "Đường dẫn" đổi → cột `slug` đổi theo. Xem `slugEdit`.
+   *
+   * Trùng bài khác thì TỪ CHỐI, không tự thêm hậu tố `-2` như `createEntry`: đây là
+   * địa chỉ người dùng tự gõ, lặng lẽ đổi nó thành địa chỉ khác là để ô và URL lệch
+   * nhau lần nữa — đúng lỗi đang sửa.
+   */
+  const nextSlug = data ? slugEdit(shape.fields, data, current.slug) : null;
+  let redirectPlan: { siteId: string; plan: RedirectPlan } | null = null;
+  if (data && nextSlug) {
+    const slugKey = shape.fields.find((f) => f.t === 'slug')!.key;
+    data = { ...data, [slugKey]: nextSlug };
+
+    const clash = await prisma.entry.findFirst({
+      where: { typeId: current.typeId, slug: nextSlug, NOT: { id: current.id } },
+      select: { id: true },
+    });
+    if (clash) return slugTakenError(nextSlug);
+
+    /*
+     * Bài ĐANG LÊN SITE thì địa chỉ cũ đã nằm ngoài internet (link gửi qua Zalo,
+     * email xác nhận đăng ký, Google): chuyển 301 sang địa chỉ mới. Bài nháp thì
+     * không — địa chỉ cũ chưa ai thấy, và một hàng redirect ở đó là rác chặn slug
+     * ấy về sau. Cùng luật với đổi slug trang (`planRedirects`).
+     */
+    if (current.status === 'published') {
+      const base = await detailBaseForType(current.typeKey);
+      const site = base === null ? null : await prisma.site.findFirst({ select: { id: true } });
+      if (base !== null && site) {
+        const existing = await prisma.redirect.findMany({
+          where: { siteId: site.id },
+          select: { id: true, from: true, to: true },
+        });
+        redirectPlan = {
+          siteId: site.id,
+          plan: planRedirects({
+            oldSlug: entryRedirectPath(base, current.slug),
+            newSlug: entryRedirectPath(base, nextSlug),
+            wasPublished: true,
+            existing,
+          }),
+        };
+      }
+    }
   }
 
   /*
@@ -531,10 +623,18 @@ export async function updateEntry(args: {
         data: {
           ...(data ? { data: data as object } : {}),
           ...(mergedI18n ? { i18n: mergedI18n as object } : {}),
+          ...(nextSlug ? { slug: nextSlug } : {}),
           updatedBy: args.actorEmail,
         },
         select: { id: true, slug: true, status: true },
       });
+
+      if (redirectPlan) {
+        const { siteId, plan } = redirectPlan;
+        if (plan.remove.length) await tx.redirect.deleteMany({ where: { id: { in: plan.remove } } });
+        for (const r of plan.retarget) await tx.redirect.update({ where: { id: r.id }, data: { to: r.to } });
+        for (const r of plan.create) await tx.redirect.create({ data: { siteId, from: r.from, to: r.to } });
+      }
 
       if (args.taxonomyIds) {
         await tx.entryTaxonomy.deleteMany({ where: { entryId: args.entryId } });
@@ -552,7 +652,12 @@ export async function updateEntry(args: {
           action: 'entry.update',
           targetType: 'Entry',
           targetId: args.entryId,
-          meta: { typeKey: current.typeKey, fields: data ? Object.keys(data) : [], locales: Object.keys(args.i18n ?? {}) },
+          meta: {
+            typeKey: current.typeKey,
+            fields: data ? Object.keys(data) : [],
+            locales: Object.keys(args.i18n ?? {}),
+            ...(nextSlug ? { slug: { before: current.slug, after: nextSlug } } : {}),
+          },
         },
       });
 
@@ -570,10 +675,18 @@ export async function updateEntry(args: {
         error: 'Bài vừa được đăng trong lúc đang sửa. Không ghi gì cả — đọc lại rồi thử lại.',
       };
     }
+    // Bài khác vừa lấy đúng slug này giữa lượt kiểm và lượt ghi.
+    if (nextSlug && isSlugCollision(e)) return slugTakenError(nextSlug);
     throw e;
   }
 
-  revalidateCollection(current.typeKey, [current.slug, ...current.locales.map((l) => l.slug)]);
+  revalidateCollection(current.typeKey, [current.slug, nextSlug, ...current.locales.map((l) => l.slug)]);
+  if (redirectPlan) {
+    const { plan } = redirectPlan;
+    // Bảng redirect nằm sau `unstable_cache`: không xoá tag thì địa chỉ cũ 404 tới
+    // khi cache hết hạn, thay vì chuyển hướng ngay.
+    if (plan.create.length || plan.retarget.length || plan.remove.length) revalidateTag(REDIRECTS_TAG);
+  }
   return { ok: true, entry };
 }
 

@@ -4,8 +4,10 @@ import type { FieldDef } from './field-def';
 import {
   checkRequiredTaxonomy,
   deriveSlug,
+  entryRedirectPath,
   isSlugCollision,
   needsDraftGate,
+  slugEdit,
   uniqueSlug,
 } from './entry-write';
 
@@ -156,5 +158,64 @@ describe('needsDraftGate', () => {
     // `args.data !== undefined`, không phải `args.data`. Một `null` lọt qua cửa là
     // một lượt xoá nội dung bài đã đăng đi qua cổng không ai canh.
     expect(needsDraftGate({ requireDraft: true, data: null })).toBe(true);
+  });
+});
+
+/*
+ * 20/11/2026: sửa ô "Đường dẫn" của một sự kiện đã đăng, lưu xong vẫn ở URL cũ.
+ * `updateEntry` ghi `data.slug` nhưng không bao giờ đụng cột `slug` — thứ URL dùng.
+ */
+describe('slugEdit', () => {
+  const fields: FieldDef[] = [
+    { t: 'text', key: 'title', label: 'Tiêu đề', required: true },
+    { t: 'slug', key: 'slug', label: 'Đường dẫn', from: 'title' },
+  ];
+
+  it('trả slug mới khi ô Đường dẫn khác cột slug', () => {
+    expect(slugEdit(fields, { title: 'x', slug: 'vntr-investor-roundtable-hanoi' }, 'nhap-mon-quy-mo'))
+      .toBe('vntr-investor-roundtable-hanoi');
+  });
+
+  it('chuẩn hoá thứ người dùng gõ như lúc tạo bài', () => {
+    expect(slugEdit(fields, { title: 'x', slug: 'VNTR Roundtable Hà Nội' }, 'cu')).toBe('vntr-roundtable-ha-noi');
+  });
+
+  it('null khi không đổi, kể cả khi chỉ khác cách gõ', () => {
+    expect(slugEdit(fields, { title: 'x', slug: 'nhap-mon-quy-mo' }, 'nhap-mon-quy-mo')).toBeNull();
+    expect(slugEdit(fields, { title: 'x', slug: 'Nhap Mon Quy Mo' }, 'nhap-mon-quy-mo')).toBeNull();
+  });
+
+  it('null khi ô trống: KHÔNG tự suy lại từ tiêu đề, sửa tiêu đề không được đổi URL', () => {
+    expect(slugEdit(fields, { title: 'Tiêu đề mới hoàn toàn' }, 'cu')).toBeNull();
+    expect(slugEdit(fields, { title: 'Tiêu đề mới', slug: '  ' }, 'cu')).toBeNull();
+  });
+
+  it('dán một URL ngoài vào ô Đường dẫn chỉ ra một slug thường, không có scheme hay /', () => {
+    for (const raw of [
+      'https://vnexpress.net/maimoney-ra-mat-quy-moi-4812345.html',
+      '//evil.com/x',
+      'javascript:alert(1)',
+      '../../admin',
+    ]) {
+      const out = slugEdit(fields, { title: 'x', slug: raw }, 'cu');
+      expect(out, raw).toMatch(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
+    }
+    expect(slugEdit(fields, { title: 'x', slug: 'https://vnexpress.net/maimoney-ra-mat-quy-moi-4812345.html' }, 'cu'))
+      .toMatchInlineSnapshot(`"https-vnexpress-net-maimoney-ra-mat-quy-moi-4812345-html"`);
+  });
+
+  it('null khi loại không có field slug', () => {
+    expect(slugEdit([{ t: 'text', key: 'title', label: 'T' }], { title: 'x', slug: 'y' }, 'cu')).toBeNull();
+  });
+});
+
+describe('entryRedirectPath', () => {
+  it('ghép gốc mẫu với slug, dạng khoá của bảng Redirect (không có / đầu)', () => {
+    expect(entryRedirectPath('/events', 'nhap-mon-quy-mo')).toBe('events/nhap-mon-quy-mo');
+    expect(entryRedirectPath('/blogs/post', 'a')).toBe('blogs/post/a');
+  });
+
+  it('mẫu nằm ở gốc site', () => {
+    expect(entryRedirectPath('/', 'a')).toBe('a');
   });
 });
