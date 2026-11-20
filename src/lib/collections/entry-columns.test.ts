@@ -2,10 +2,13 @@ import { describe, expect, it } from 'vitest';
 
 import type { FieldDef } from './field-def';
 import {
+  assetIdOf,
   availableColumns,
   columnFieldKeys,
   defaultColumnIds,
   formatCell,
+  imageFieldKeys,
+  pickEntryImage,
   serializeColumnIds,
   visibleColumnIds,
 } from './entry-columns';
@@ -83,5 +86,54 @@ describe('formatCell', () => {
     expect(formatCell(f('pinned'), false)).toBe('Không');
     expect(formatCell(f('price'), 1500000)).toMatch(/^1\.500\.000 ₫$/);
     expect(formatCell(f('level'), 'a')).toBe('Cơ bản');
+  });
+});
+
+describe('cột ảnh', () => {
+  const fields = [
+    { t: 'text', key: 'title', label: 'Tiêu đề' },
+    { t: 'image', key: 'cover', label: 'Ảnh bìa' },
+    { t: 'image', key: 'background', label: 'Ảnh nền' },
+    { t: 'image', key: 'thumbnail', label: 'Ảnh thu nhỏ' },
+  ] as FieldDef[];
+  const assets = {
+    a1: { url: 'https://cdn/x/cover.jpg', mime: 'image/jpeg' },
+    a2: { url: 'https://cdn/x/thumb.webp', mime: 'image/webp' },
+    v1: { url: 'https://cdn/x/clip.mp4', mime: 'video/mp4' },
+  };
+
+  it('field ảnh, thumbnail lên trước, còn lại theo thứ tự khai', () => {
+    expect(imageFieldKeys(fields)).toEqual(['thumbnail', 'cover', 'background']);
+  });
+
+  it('loại không có field ảnh thì không có cột', () => {
+    expect(imageFieldKeys([{ t: 'text', key: 'title', label: 'T' }] as FieldDef[])).toEqual([]);
+  });
+
+  it('assetIdOf đọc { assetId } và bỏ qua giá trị khác', () => {
+    expect(assetIdOf({ assetId: 'a1', alt: 'x' })).toBe('a1');
+    expect(assetIdOf('a1')).toBeNull();
+    expect(assetIdOf(null)).toBeNull();
+    expect(assetIdOf({ assetId: '' })).toBeNull();
+  });
+
+  it('lấy ảnh đầu tiên có file, ưu tiên thumbnail', () => {
+    const row = { cover: { assetId: 'a1', alt: 'Bìa' }, thumbnail: { assetId: 'a2', alt: 'Nhỏ' } };
+    expect(pickEntryImage(row, imageFieldKeys(fields), assets)).toEqual({
+      url: 'https://cdn/x/thumb.webp', mime: 'image/webp', alt: 'Nhỏ',
+    });
+  });
+
+  it('thumbnail trống thì rơi về ảnh bìa', () => {
+    expect(pickEntryImage({ cover: { assetId: 'a1' } }, imageFieldKeys(fields), assets)?.url).toBe('https://cdn/x/cover.jpg');
+  });
+
+  it('bỏ qua video và asset đã xoá, sang field kế tiếp', () => {
+    const row = { thumbnail: { assetId: 'gone' }, cover: { assetId: 'v1' }, background: { assetId: 'a1' } };
+    expect(pickEntryImage(row, imageFieldKeys(fields), assets)?.url).toBe('https://cdn/x/cover.jpg');
+  });
+
+  it('không có ảnh nào thì null', () => {
+    expect(pickEntryImage({}, imageFieldKeys(fields), assets)).toBeNull();
   });
 });

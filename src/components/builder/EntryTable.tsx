@@ -29,10 +29,12 @@ import {
   formatCell,
   serializeColumnIds,
   type EntryColumn,
+  type EntryImage,
 } from '@/lib/collections/entry-columns';
 import { cn } from '@/lib/builder/cn';
 import { focusRing, ui, type Tone } from '@/lib/builder/ui';
 
+import { ImageThumb } from './asset/AssetThumb';
 import { Badge } from './ui/Badge';
 import { Button } from './ui/Button';
 import { Checkbox, SearchField, SelectField } from './ui/Field';
@@ -141,6 +143,35 @@ function Cell({
   }
 }
 
+/**
+ * Ô ảnh 48px của một hàng. Cắt `cover` vì ô là hình vuông cố định — ảnh bìa ngang mà
+ * `contain` thì thành một dải mỏng không nhận ra được gì. Thu nhỏ qua optimizer
+ * (`thumb`), không tải file gốc cho một ô 48px.
+ */
+function RowImage({ image }: { image: EntryImage | undefined }) {
+  if (!image) {
+    return (
+      <span
+        aria-label="Chưa có ảnh"
+        className="grid size-12 place-items-center rounded-md border border-dashed border-shell-line text-mini text-shell-muted"
+      >
+        —
+      </span>
+    );
+  }
+  return (
+    <ImageThumb
+      url={image.url}
+      mime={image.mime}
+      alt={image.alt}
+      fit="cover"
+      thumb={48}
+      lazy
+      className="size-12 rounded-md border border-shell-line bg-shell-raised"
+    />
+  );
+}
+
 export function EntryTable(props: {
   typeKey: string;
   typeName: string;
@@ -151,6 +182,11 @@ export function EntryTable(props: {
   /** Mọi cột chọn được và cột đang hiện — xem `entry-columns.ts`. */
   columns: EntryColumn[];
   visibleColumns: string[];
+  /**
+   * Ảnh của từng hàng theo id bài. `undefined` = loại không có field ảnh, nên không có
+   * cột "Ảnh"; có object mà thiếu khoá = bài đó chưa có ảnh.
+   */
+  images?: Record<string, EntryImage>;
   /** Field taxonomy đầu tiên: mục có `fieldKey` null thuộc về nó. */
   firstTaxonomyField: string | null;
   page: number;
@@ -467,6 +503,11 @@ export function EntryTable(props: {
                     }
                   />
                 </th>
+                {props.images && (
+                  <th scope="col" className={cn(ui.th, 'w-16')}>
+                    Ảnh
+                  </th>
+                )}
                 <th scope="col" className={ui.th}>Tiêu đề</th>
                 {cols.map((c) => (
                   <th key={c.id} scope="col" className={cn(ui.th, HEAD_CLASS[c.kind])}>
@@ -488,6 +529,11 @@ export function EntryTable(props: {
                     <td className={ui.td}>
                       <Checkbox label={`Chọn ${r.title}`} hideLabel checked={on} onChange={() => toggle(r.id)} />
                     </td>
+                    {props.images && (
+                      <td className={ui.td}>
+                        <RowImage image={props.images[r.id]} />
+                      </td>
+                    )}
                     <td className={ui.td}>
                       <div className="flex min-w-0 flex-col gap-0.5">
                         <Link

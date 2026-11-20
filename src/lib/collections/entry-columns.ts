@@ -149,3 +149,57 @@ export function formatCell(field: FieldDef, value: unknown): string {
       return typeof value === 'string' ? value : JSON.stringify(value);
   }
 }
+
+/* ── Cột ảnh ──────────────────────────────────────────────────────────── */
+
+/**
+ * Field ảnh dùng cho cột "Ảnh" của bảng, theo thứ tự ưu tiên. Rỗng = loại này không có
+ * cột ảnh.
+ *
+ * Cột này KHÔNG nằm trong `availableColumns`: nó luôn hiện (như cột Tiêu đề) khi loại có
+ * field ảnh. Đưa vào bộ chọn cột thì người đã từng lưu lựa chọn sẽ không bao giờ thấy nó
+ * — cookie cũ không mang id của một cột ra đời sau.
+ *
+ * Field tên kiểu `thumbnail` lên trước: đó là ảnh làm sẵn cho ô nhỏ (Tin tức khai nó
+ * 200–500px), còn ảnh bìa có thể là file gốc vài nghìn px. Còn lại theo thứ tự khai.
+ */
+export function imageFieldKeys(fields: readonly FieldDef[]): string[] {
+  const images = fields.filter((f) => f.t === 'image').map((f) => f.key);
+  const thumbs = images.filter((k) => /thumb/i.test(k));
+  return [...thumbs, ...images.filter((k) => !thumbs.includes(k))];
+}
+
+/** `assetId` của một giá trị field ảnh (`{ assetId, alt }`), hoặc `null`. */
+export function assetIdOf(value: unknown): string | null {
+  if (!value || typeof value !== 'object') return null;
+  const id = (value as { assetId?: unknown }).assetId;
+  return typeof id === 'string' && id ? id : null;
+}
+
+export interface EntryImage {
+  url: string;
+  mime: string;
+  alt: string;
+}
+
+/**
+ * Ảnh hiện ở cột "Ảnh" của một hàng: field đầu tiên (theo `keys`) trỏ tới một file ẢNH
+ * còn trong kho.
+ *
+ * Bỏ qua video (ảnh bìa Tin tức nhận cả video — `<img>` không vẽ được nó) và asset đã
+ * xoá, rồi thử field kế tiếp thay vì để ô trống.
+ */
+export function pickEntryImage(
+  fields: Record<string, unknown>,
+  keys: readonly string[],
+  assets: Readonly<Record<string, { url: string; mime: string }>>,
+): EntryImage | null {
+  for (const key of keys) {
+    const id = assetIdOf(fields[key]);
+    const asset = id ? assets[id] : undefined;
+    if (!asset || !asset.mime.startsWith('image/')) continue;
+    const alt = (fields[key] as { alt?: unknown }).alt;
+    return { url: asset.url, mime: asset.mime, alt: typeof alt === 'string' ? alt : '' };
+  }
+  return null;
+}

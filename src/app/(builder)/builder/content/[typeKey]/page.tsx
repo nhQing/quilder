@@ -17,10 +17,14 @@ import { getSession } from '@/lib/auth/guard';
 import { getTypeShape, listAdminEntries } from '@/lib/collections/admin-queries';
 import { entrySortFromPrefs } from '@/lib/collections/entry-sort';
 import {
+  assetIdOf,
   availableColumns,
   columnFieldKeys,
   columnsCookie,
+  imageFieldKeys,
+  pickEntryImage,
   visibleColumnIds,
+  type EntryImage,
 } from '@/lib/collections/entry-columns';
 import { taxonomyFieldsOf } from '@/lib/collections/taxonomy-fields';
 import { publicApiUrls, siteOrigin } from '@/lib/collections/api-urls';
@@ -79,6 +83,8 @@ export default async function EntryListPage({
     locales: locales.filter((l) => !l.isDefault).map((l) => l.code),
   });
   const visible = visibleColumnIds(columns, jar.get(columnsCookie(typeKey))?.value);
+  // Cột "Ảnh": luôn hiện khi loại có field ảnh — xem `imageFieldKeys`.
+  const imageKeys = imageFieldKeys(shape.fields);
 
   // Thứ tự: lựa chọn đã lưu của TÀI KHOẢN đang xem, mặc định ngày tạo (`entry-sort.ts`).
   const session = await getSession();
@@ -97,8 +103,26 @@ export default async function EntryListPage({
     pageSize,
     // Mọi cột field CHỌN ĐƯỢC, không chỉ cột đang hiện: bật một cột là việc ở client,
     // không phải một vòng tải lại trang.
-    fieldKeys: columnFieldKeys(columns),
+    fieldKeys: [...columnFieldKeys(columns), ...imageKeys],
   });
+
+  /*
+   * Ảnh của từng hàng: MỘT truy vấn kho cho cả trang bảng (tối đa 100 hàng × vài field
+   * ảnh), không một truy vấn mỗi hàng.
+   */
+  let images: Record<string, EntryImage> | undefined;
+  if (imageKeys.length) {
+    const ids = [...new Set(rows.flatMap((r) => imageKeys.map((k) => assetIdOf(r.fields[k])).filter((id): id is string => !!id)))];
+    const found = ids.length
+      ? await prisma.asset.findMany({ where: { id: { in: ids } }, select: { id: true, url: true, mime: true } })
+      : [];
+    const byId = Object.fromEntries(found.map((a) => [a.id, a]));
+    images = {};
+    for (const r of rows) {
+      const img = pickEntryImage(r.fields, imageKeys, byId);
+      if (img) images[r.id] = img;
+    }
+  }
 
   // Dữ liệu cho khu API. Ngôn ngữ đã nạp ở trên cho cột của bảng.
   const site = await prisma.site.findFirst({ select: { primaryDomain: true } });
@@ -147,6 +171,7 @@ export default async function EntryListPage({
         taxonomies={shape.taxonomies}
         columns={columns}
         visibleColumns={visible}
+        images={images}
         firstTaxonomyField={taxonomyFieldsOf(shape.fields)[0]?.key ?? null}
         page={page}
         pageSize={pageSize}
