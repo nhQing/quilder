@@ -148,6 +148,18 @@ export function can(role: Role, action: keyof typeof REQUIRED_ROLE): boolean {
   return (REQUIRED_ROLE[action] as readonly string[]).includes(role);
 }
 
+/**
+ * Xoá HẲN trang và bài viết (không lùi được) — chỉ Quản trị, và không qua token service
+ * (23/11/2026). Trước đó vai Sửa xoá hẳn được cả trang/bài của người khác vì route chỉ đòi
+ * `write`. Lưu trữ / khôi phục vẫn là `write`: đó là đường lùi được.
+ */
+export function canPurgeContent(s: { role: Role; kind?: 'user' | 'service' }): boolean {
+  return s.kind !== 'service' && can(s.role, 'admin');
+}
+
+export const PURGE_DENIED =
+  'Chỉ Quản trị mới xoá hẳn được trang và bài viết. Vai Sửa vẫn lưu trữ được — Quản trị xoá hẳn sau.';
+
 const ROLE_RANK: Record<Role, number> = { viewer: 0, editor: 1, admin: 2 };
 
 /**

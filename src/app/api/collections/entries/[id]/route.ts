@@ -9,6 +9,7 @@ import { NextResponse } from 'next/server';
  */
 
 import { requireAuth } from '@/lib/auth/guard';
+import { canPurgeContent, PURGE_DENIED } from '@/lib/auth/session';
 import {
   archiveEntry, purgeEntry, setEntryLocaleState, setEntryStatus, unarchiveEntry, updateEntry,
 } from '@/lib/collections/entry-write';
@@ -125,6 +126,7 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
   const sp = new URL(request.url).searchParams;
 
   if (sp.get('purge') === '1') {
+    if (!canPurgeContent(auth)) return NextResponse.json({ error: PURGE_DENIED }, { status: 403 });
     const result = await purgeEntry({ entryId: id, actorSub: auth.sub });
     if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status });
     return NextResponse.json({ ok: true, purged: true });

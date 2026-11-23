@@ -194,6 +194,8 @@ export function EntryTable(props: {
   filter: { status: string; taxonomy: string; q: string };
   /** Thứ tự đang dùng — lựa chọn đã lưu của tài khoản (xem `entry-sort.ts`). */
   sort: EntrySort;
+  /** Được xoá hẳn bài đã lưu trữ không — chỉ Quản trị (`canPurgeContent`, 23/11/2026). */
+  canPurge: boolean;
 }) {
   const router = useRouter();
   const sp = useSearchParams();
@@ -562,14 +564,23 @@ export function EntryTable(props: {
                           >
                             Khôi phục
                           </Button>
-                          <Button
-                            size="sm"
-                            variant="danger"
-                            disabled={busy}
-                            onClick={() => setPurging({ id: r.id, title: r.title })}
-                          >
-                            Xoá hẳn
-                          </Button>
+                          {props.canPurge ? (
+                            <Button
+                              size="sm"
+                              variant="danger"
+                              disabled={busy}
+                              onClick={() => setPurging({ id: r.id, title: r.title })}
+                            >
+                              Xoá hẳn
+                            </Button>
+                          ) : (
+                            <span
+                              className="self-center text-mini text-shell-muted"
+                              title="Xoá hẳn không lùi được nên chỉ dành cho Quản trị."
+                            >
+                              Chỉ Quản trị xoá hẳn được
+                            </span>
+                          )}
                         </span>
                       </td>
                     )}

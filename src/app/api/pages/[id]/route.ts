@@ -8,6 +8,7 @@ import { NextResponse } from 'next/server';
  */
 
 import { requireAuth } from '@/lib/auth/guard';
+import { canPurgeContent, PURGE_DENIED } from '@/lib/auth/session';
 import { archivePage, purgePage, unarchivePage } from '@/lib/builder/delete-page';
 import type { PageCollection } from '@/lib/builder/page-collection';
 import { renamePage } from '@/lib/builder/rename-page';
@@ -157,6 +158,9 @@ export async function DELETE(
   const { id } = await params;
   const sp = new URL(request.url).searchParams;
 
+  if (sp.get('purge') === '1' && !canPurgeContent(auth)) {
+    return NextResponse.json({ error: PURGE_DENIED }, { status: 403 });
+  }
   const result =
     sp.get('purge') === '1'
       ? await purgePage({ pageId: id, actorSub: auth.sub })

@@ -129,10 +129,13 @@ export function PageGrid({
   pages: allPages,
   archived: allArchived,
   types,
+  canPurge,
 }: {
   pages: PageCardData[];
   archived: ArchivedCardData[];
   types: { key: string; name: string }[];
+  /** Được xoá hẳn trang đã lưu trữ không — chỉ Quản trị (`canPurgeContent`). */
+  canPurge: boolean;
 }) {
   const [filter, setFilter] = useState<Filter>('all');
   const [toasts, setToasts] = useState<ToastItem[]>([]);
@@ -200,6 +203,7 @@ export function PageGrid({
                 key={p.id}
                 page={p}
                 index={i}
+                canPurge={canPurge}
                 onRestored={() => {
                   move(p.id, 'live');
                   notify(`Đã khôi phục /${p.slug}`, 'Trang đã về lại danh sách và bảng định tuyến.');
@@ -518,11 +522,13 @@ function CardPending({ hero }: { hero?: boolean }) {
 function ArchivedCard({
   page,
   index,
+  canPurge,
   onRestored,
   onPurged,
 }: {
   page: ArchivedCardData;
   index: number;
+  canPurge: boolean;
   onRestored: () => void;
   onPurged: () => void;
 }) {
@@ -551,6 +557,7 @@ function ArchivedCard({
           releaseCount={page.releaseCount}
           onRestored={onRestored}
           onPurged={onPurged}
+          canPurge={canPurge}
         />
       </div>
     </article>

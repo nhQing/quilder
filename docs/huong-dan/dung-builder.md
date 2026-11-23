@@ -21,7 +21,7 @@ Màn chính `/builder` liệt kê mọi trang:
 - Lọc: Tất cả / Đang chạy / Có thay đổi / Chưa publish / Lưu trữ.
 - Menu "…" của mỗi thẻ: Mở editor, Xem nháp, **Đổi tên** (tiêu đề, đường dẫn, vai của trang),
   Lịch sử (lùi về một phiên bản cũ), **Xuất trang (.zip)**, Hoàn tác lần nhập, **Lưu trữ**.
-- Trang trong Lưu trữ có **Khôi phục** và **Xoá hẳn** (gõ lại đường dẫn để xác nhận). Trang 404 là
+- Trang trong Lưu trữ có **Khôi phục** và **Xoá hẳn** (gõ lại đường dẫn để xác nhận; chỉ Quản trị). Trang 404 là
   trang hệ thống, không lưu trữ được.
 
 ## 2. Editor trang

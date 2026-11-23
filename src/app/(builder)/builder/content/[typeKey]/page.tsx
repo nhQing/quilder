@@ -14,6 +14,7 @@ import { notFound, redirect } from 'next/navigation';
 
 import { prisma } from '@/lib/db';
 import { getSession } from '@/lib/auth/guard';
+import { canPurgeContent } from '@/lib/auth/session';
 import { getTypeShape, listAdminEntries } from '@/lib/collections/admin-queries';
 import { entrySortFromPrefs } from '@/lib/collections/entry-sort';
 import {
@@ -177,6 +178,7 @@ export default async function EntryListPage({
         pageSize={pageSize}
         filter={{ status: status ?? 'all', taxonomy: sp.taxonomy ?? '', q: sp.q ?? '' }}
         sort={sort}
+        canPurge={!!session && canPurgeContent(session)}
       />
 
       {/* DƯỚI bảng: bảng là việc hằng ngày, khu này là việc một lần mỗi dự án. */}

@@ -14,6 +14,7 @@ import { ButtonLink } from '@/components/builder/ui/Button';
 import { Icon } from '@/components/builder/ui/Icon';
 import { EmptyState, PageHeader, PageShell, Section } from '@/components/builder/ui/Page';
 import { getSession } from '@/lib/auth/guard';
+import { canPurgeContent } from '@/lib/auth/session';
 import { cn } from '@/lib/builder/cn';
 import { ROLE_LABEL, parsePageCollection, type PageParamRole } from '@/lib/builder/page-collection';
 import { listArchivedPages, listPages, listPresetCards, listReleases } from '@/lib/builder/queries';
@@ -187,7 +188,12 @@ export default async function BuilderHome() {
       */}
       <PendingWork />
 
-      <PageGrid pages={cards} archived={archivedCards} types={typeChoices} />
+      <PageGrid
+        pages={cards}
+        archived={archivedCards}
+        types={typeChoices}
+        canPurge={!!session && canPurgeContent(session)}
+      />
 
       <div className="grid gap-x-6 gap-y-8 pt-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
         <Section

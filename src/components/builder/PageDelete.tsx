@@ -138,6 +138,7 @@ export function PageDelete({
   releaseCount,
   onRestored,
   onPurged,
+  canPurge,
 }: {
   pageId: string;
   slug: string;
@@ -148,6 +149,8 @@ export function PageDelete({
   onRestored?: () => void;
   /** Gọi sau khi xoá hẳn xong — lưới gỡ thẻ ngay, không chờ `router.refresh()`. */
   onPurged?: () => void;
+  /** Chỉ Quản trị xoá hẳn được (23/11/2026) — `canPurgeContent`. Không có thì chỉ còn Khôi phục. */
+  canPurge: boolean;
 }) {
   const { busy, error, setError, call } = usePageDeleteCall(pageId);
   const [open, setOpen] = useState(false);
@@ -187,6 +190,7 @@ export function PageDelete({
           Khôi phục
         </Button>
         {/* Không icon: hai nút có icon không vừa một hàng trong thẻ 250px. */}
+        {canPurge ? (
         <Button
           variant="danger"
           size="md"
@@ -199,6 +203,11 @@ export function PageDelete({
         >
           Xoá hẳn
         </Button>
+        ) : (
+          <span className="self-center text-mini text-shell-muted" title="Xoá hẳn không lùi được nên chỉ dành cho Quản trị.">
+            Chỉ Quản trị xoá hẳn được
+          </span>
+        )}
       </div>
 
       {/* Lỗi khôi phục hiện ngay dưới nút: dialog không mở thì không ai đọc được nó ở đó. */}

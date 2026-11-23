@@ -20,8 +20,8 @@ Ba vai trò, quản ở *Tài khoản* (chỉ admin):
 | Vai trò | Làm được |
 |---|---|
 | Xem (`viewer`) | chỉ xem bản nháp; không có đường vào Kết nối Claude |
-| Sửa (`editor`) | sửa và publish trang, nội dung, component, ảnh; tự kết nối Claude cho mình |
-| Quản trị (`admin`) | sửa, publish, quản lý tài khoản (thêm, đổi vai trò, đổi mật khẩu, khoá), Cài đặt site, nhập trang, xoá hẳn ảnh; xem và thu hồi token Claude của mọi người |
+| Sửa (`editor`) | sửa và publish trang, nội dung, component, ảnh — của mọi người, không chỉ của mình; lưu trữ / khôi phục trang và bài viết (không xoá hẳn); tự kết nối Claude cho mình |
+| Quản trị (`admin`) | sửa, publish, quản lý tài khoản (thêm, đổi vai trò, đổi mật khẩu, khoá; xoá tài khoản đã khoá đủ 30 ngày và không đứng tên bài nào), Cài đặt site, nhập trang, **xoá hẳn trang, bài viết và ảnh**; xem và thu hồi token Claude của mọi người |
 
 Không có đăng nhập Google — chỉ email và mật khẩu.
 
