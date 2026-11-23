@@ -278,30 +278,36 @@ test.describe('hướng dẫn cấu hình', () => {
     await expect(page.locator('pre').first()).toBeVisible({ timeout: 15_000 });
   };
 
-  test('nói CẢ HAI đường dẫn Windows, và đổi được sang macOS', async ({ page }) => {
+  test('nói ĐỦ đường dẫn Windows (Claude-Data trước), và đổi được sang macOS', async ({ page }) => {
     await mintInUi(page);
 
     await page.locator('[data-os-tab="windows"]').click();
 
     /*
-     * Trỏ tới ĐƯỜNG DẪN CONFIG, không phải một chuỗi con dùng chung.
+     * Trỏ tới ĐƯỜNG DẪN CONFIG, chốt bằng tên file: chỉ config mới có
+     * `claude_desktop_config.json` (log nằm ở thư mục khác, khớp chuỗi con là strict mode đỏ).
      *
-     * `LocalCache\Roaming\Claude` khớp cả đường dẫn config lẫn đường dẫn log (bước 3
-     * cũng nằm trong thư mục đó), nên regex rộng làm strict mode đỏ với hai phần tử.
-     * Chốt bằng tên file: chỉ config mới có `claude_desktop_config.json`.
+     * Từ Claude Desktop 6.28899 (22/11/2026) app đọc ở `Claude-Data`; hai đường dẫn cũ vẫn
+     * được nêu cho máy chưa cập nhật, nhưng `Claude-Data` phải đứng TRƯỚC.
      */
-    await expect(
-      page.getByText(/LocalCache\\Roaming\\Claude\\claude_desktop_config\.json/),
-    ).toBeVisible();
-    await expect(page.getByText(/%APPDATA%\\Claude/).first()).toBeVisible();
-    // Và phải nói rõ bản Store KHÔNG đọc %APPDATA% — biết đường dẫn mà không biết điều
-    // này thì vẫn sửa sai file.
+    const current = page.getByText(/Claude-Data\\claude_pzs8sxrjxfjjc\\claude_desktop_config\.json/);
+    const store = page.getByText(/LocalCache\\Roaming\\Claude\\claude_desktop_config\.json/);
+    await expect(current).toBeVisible();
+    await expect(store).toBeVisible();
+    await expect(page.getByText(/%APPDATA%\\Claude\\claude_desktop_config\.json/)).toBeVisible();
+    const [a, b] = [await current.boundingBox(), await store.boundingBox()];
+    expect(a!.y).toBeLessThan(b!.y);
+    // Và phải nói rõ có Claude-Data thì app KHÔNG đọc chỗ cũ — biết đường dẫn mà không
+    // biết điều này thì vẫn sửa sai file.
     await expect(page.getByText(/không.*đọc/i).first()).toBeVisible();
+    await expect(page.getByText(/Claude\\Logs\\mcp-server-/)).toBeVisible();
 
     await page.locator('[data-os-tab="mac"]').click();
     await expect(page.getByText(/Library\/Application Support\/Claude/)).toBeVisible();
+    await expect(page.getByText(/Library\/Logs\/Claude\/mcp-server-/)).toBeVisible();
     // Đường dẫn Windows phải BIẾN MẤT: hiện cả hai thì nó không còn là hướng dẫn.
     await expect(page.getByText(/LocalCache\\Roaming\\Claude/)).toHaveCount(0);
+    await expect(page.getByText(/Claude-Data/)).toHaveCount(0);
   });
 
   test('tên kết nối sửa được, được làm sạch, và khoá + thư mục đổi theo', async ({ page }) => {

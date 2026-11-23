@@ -480,25 +480,37 @@ function StatusBadge({ status }: { status: TokenRow['status'] }) {
  * lúc đó không tồn tại, nên tạo file ở đó thành công, im lặng, và vô ích.
  *
  * Kiểu sai này không báo lỗi ở đâu: Desktop chỉ đơn giản không có `mcpServers` để đọc.
+ *
+ * ## Lần dời thứ hai (22/11/2026, Claude Desktop 6.28899.x)
+ *
+ * Bản 6.28899 CHUYỂN dữ liệu app ra `%LOCALAPPDATA%\Claude-Data\claude_pzs8sxrjxfjjc\`
+ * (đo trên máy dev 23/11/2026, bản 6.28899.6 cài từ Store). Thư mục cũ — cả
+ * `LocalCache\Roaming\Claude` lẫn `%APPDATA%\Claude` — chỉ còn một file đánh dấu
+ * `.user-data-left.claude_pzs8sxrjxfjjc`; sửa config ở đó lại là kiểu sai im lặng như trên.
+ * Log cũng dời ra `%LOCALAPPDATA%\Claude\Logs\`.
  */
 const CONFIG_LOCATIONS: Record<Platform, { how: string; path: string; note: string }[]> = {
   windows: [
     /*
-     * Chia theo việc app có chạy dạng gói MSIX không — KHÔNG theo "tải từ Store hay từ
-     * file .exe": đó là thứ người dùng không nhớ, còn thư mục gói thì kiểm được ngay.
-     * Đuôi `pzs8sxrjxfjjc` là mã nhà phát hành (Anthropic), giống nhau trên mọi máy — đo
-     * trên máy dev 20/10/2026: gói `Claude_pzs8sxrjxfjjc`, dữ liệu app nằm trong
-     * `LocalCache\Roaming\Claude`, còn `%APPDATA%\Claude` không hề tồn tại.
+     * Chia theo thư mục CÓ THẬT trên máy — không theo "tải từ Store hay từ file .exe" hay
+     * số phiên bản: đó là thứ người dùng không nhớ, còn thư mục thì kiểm được ngay. Thứ
+     * tự là thứ tự ưu tiên: có `Claude-Data` thì đó là chỗ app đọc, bất kể hai cái sau còn
+     * hay không. Đuôi `pzs8sxrjxfjjc` là mã nhà phát hành (Anthropic), giống nhau mọi máy.
      */
     {
-      how: 'Có thư mục %LOCALAPPDATA%\\Packages\\Claude_pzs8sxrjxfjjc (bản MSIX)',
-      path: '%LOCALAPPDATA%\\Packages\\Claude_pzs8sxrjxfjjc\\LocalCache\\Roaming\\Claude\\claude_desktop_config.json',
-      note: 'Bản cài từ Microsoft Store là bản này. Windows chuyển hướng %APPDATA% của app vào đây; đuôi pzs8sxrjxfjjc giống nhau trên mọi máy.',
+      how: 'Có thư mục %LOCALAPPDATA%\\Claude-Data (Claude Desktop bản mới, từ 11/2026)',
+      path: '%LOCALAPPDATA%\\Claude-Data\\claude_pzs8sxrjxfjjc\\claude_desktop_config.json',
+      note: 'Bản hiện tại đọc ở đây, kể cả bản cài từ Microsoft Store. Tên thư mục con có thể khác — mở Claude-Data xem.',
     },
     {
-      how: 'Không có thư mục đó (bản cài không đóng gói)',
+      how: 'Không có Claude-Data, có %LOCALAPPDATA%\\Packages\\Claude_pzs8sxrjxfjjc (bản Store cũ)',
+      path: '%LOCALAPPDATA%\\Packages\\Claude_pzs8sxrjxfjjc\\LocalCache\\Roaming\\Claude\\claude_desktop_config.json',
+      note: 'Bản MSIX trước 11/2026: Windows chuyển hướng %APPDATA% của app vào đây.',
+    },
+    {
+      how: 'Không có cả hai thư mục trên (bản cài không đóng gói, cũ)',
       path: '%APPDATA%\\Claude\\claude_desktop_config.json',
-      note: 'Đường dẫn mà tài liệu hay ghi — chỉ đúng khi Claude KHÔNG chạy dạng gói MSIX.',
+      note: 'Đường dẫn mà tài liệu cũ hay ghi — chỉ đúng với bản cài .exe đời cũ.',
     },
   ],
   mac: [
@@ -510,11 +522,14 @@ const CONFIG_LOCATIONS: Record<Platform, { how: string; path: string; note: stri
   ],
 };
 
-/** Log đọc khi Desktop không thấy công cụ. */
-const LOG_PATH: Record<Platform, string> = {
-  windows: '%LOCALAPPDATA%\\Packages\\Claude_pzs8sxrjxfjjc\\LocalCache\\Roaming\\Claude\\logs\\mcp.log',
-  mac: '~/Library/Logs/Claude/mcp*.log',
-};
+/**
+ * Log đọc khi Desktop không thấy công cụ: mỗi server một file `mcp-server-<tên>.log`, tên
+ * là khoá trong `mcpServers`. Windows: thư mục của bản hiện tại (xem lần dời thứ hai ở trên).
+ */
+const logPath = (os: Platform, serverName: string) =>
+  os === 'windows'
+    ? `%LOCALAPPDATA%\\Claude\\Logs\\mcp-server-${serverName}.log`
+    : `~/Library/Logs/Claude/mcp-server-${serverName}.log`;
 
 const CODE = 'font-shell-mono text-[0.92em] text-shell-ink';
 
@@ -666,7 +681,8 @@ function MintedPanel({
             Cách <strong className="font-semibold text-shell-ink">chắc chắn đúng</strong>: trong
             Claude Desktop mở{' '}
             <strong className="font-semibold text-shell-ink">Settings → Developer → Edit Config</strong>{' '}
-            — nó mở đúng file, bất kể bạn cài kiểu nào. Nếu mở bằng tay thì file nằm ở:
+            (bố cục mới: <em>Developer</em> nằm trong nhóm <em>This computer</em>) — nó mở đúng file, bất
+            kể bạn cài kiểu nào. Không có nút đó thì mở bằng tay, theo thư mục có trên máy:
           </p>
 
           <ul className={cn(ui.inset, 'flex flex-col gap-3 p-4')}>
@@ -681,10 +697,11 @@ function MintedPanel({
 
           {os === 'windows' && (
             <Consequence tone="warn">
-              Bản MSIX (có thư mục <code className={CODE}>Claude_pzs8sxrjxfjjc</code>){' '}
-              <strong className="font-semibold">không</strong> đọc{' '}
-              <code className={CODE}>%APPDATA%\Claude</code>. Tạo file ở đó vẫn thành công nhưng
-              Desktop không bao giờ thấy nó — không có lỗi nào hiện ra.
+              Có thư mục <code className={CODE}>Claude-Data</code> thì Claude{' '}
+              <strong className="font-semibold">không</strong> đọc hai đường dẫn còn lại nữa. Sửa file
+              ở thư mục cũ vẫn lưu được nhưng Desktop không bao giờ thấy nó — không có lỗi nào hiện
+              ra. Đã nối theo hướng dẫn cũ thì chuyển khối cấu hình sang file trong{' '}
+              <code className={CODE}>Claude-Data</code>.
             </Consequence>
           )}
 
@@ -719,12 +736,24 @@ function MintedPanel({
 
         <Step n={3} title="Khởi động lại Claude Desktop" last>
           <p className="text-small leading-relaxed text-shell-muted">
-            Bắt buộc — config chỉ được đọc lúc khởi động. Xong sẽ thấy biểu tượng công cụ trong ô
-            chat. Thử: <em>&ldquo;Liệt kê các trang của site&rdquo;</em>
+            Bắt buộc — config chỉ được đọc lúc khởi động, và đóng cửa sổ chưa phải thoát:{' '}
+            {os === 'windows' ? (
+              <>
+                chuột phải biểu tượng Claude ở khay hệ thống →{' '}
+                <strong className="font-semibold text-shell-ink">Quit</strong>
+              </>
+            ) : (
+              <>
+                <strong className="font-semibold text-shell-ink">⌘Q</strong> (Claude → Quit Claude)
+              </>
+            )}
+            , rồi mở lại. Kiểm: bấm <strong className="font-semibold text-shell-ink">+</strong> trong ô
+            chat → <strong className="font-semibold text-shell-ink">Connectors</strong>, thấy{' '}
+            <code className={CODE}>{serverName}</code>. Thử: <em>&ldquo;Liệt kê các trang của site&rdquo;</em>
           </p>
           <p className="text-small leading-relaxed text-shell-muted">
             Không thấy công cụ? Đọc log:{' '}
-            <span className="font-shell-mono break-all text-shell-ink select-all">{LOG_PATH[os]}</span>
+            <span className="font-shell-mono break-all text-shell-ink select-all">{logPath(os, serverName)}</span>
           </p>
         </Step>
       </ol>
