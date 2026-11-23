@@ -212,6 +212,39 @@ describe('validateEntryData', () => {
   });
 });
 
+describe('field link tuỳ chọn để trống', () => {
+  const WITH_LINK: FieldDef[] = [...NEWS, { t: 'link', key: 'external_link', label: 'Liên kết bài gốc' }];
+  // Đúng giá trị form gửi cho ô link chưa điền (`emptyValue` ở form-state.ts).
+  const BLANK = { href: '', label: '' };
+
+  it('ô trống từ form KHÔNG chặn việc lưu bài (20/11/2026: "external_link.href: Không được để trống")', () => {
+    const r = validateEntryData(WITH_LINK, GROUPS, { ...FULL, external_link: BLANK }, CTX);
+    expect(r.ok).toBe(true);
+    // `undefined` như mọi ô tuỳ chọn để trống: JSON bỏ khoá này khi ghi xuống JSONB.
+    expect(r.ok && JSON.parse(JSON.stringify(r.data))).not.toHaveProperty('external_link');
+  });
+
+  it('lớp phủ bản dịch cũng vậy', () => {
+    const r = zEntryDataPartial(WITH_LINK, GROUPS, CTX).safeParse({ title: 'EN', external_link: BLANK });
+    expect(r.success).toBe(true);
+  });
+
+  it('có nhãn mà thiếu đường dẫn vẫn là lỗi', () => {
+    const r = validateEntryData(WITH_LINK, GROUPS, { ...FULL, external_link: { href: '', label: 'Báo gốc' } }, CTX);
+    expect(r.ok).toBe(false);
+  });
+
+  it('ô bắt buộc để trống vẫn là lỗi', () => {
+    const REQ: FieldDef[] = [...NEWS, { t: 'link', key: 'external_link', label: 'Liên kết', required: true }];
+    expect(validateEntryData(REQ, GROUPS, { ...FULL, external_link: BLANK }, CTX).ok).toBe(false);
+  });
+
+  it('liên kết có đường dẫn thì giữ nguyên', () => {
+    const r = validateEntryData(WITH_LINK, GROUPS, { ...FULL, external_link: { href: 'https://vneconomy.vn/x' } }, CTX);
+    expect(r.ok && r.data.external_link).toEqual({ href: 'https://vneconomy.vn/x' });
+  });
+});
+
 describe('field slug — trần bằng ENTRY_SLUG_MAX (255, như Strapi)', () => {
   const WITH_SLUG: FieldDef[] = [...NEWS, { t: 'slug', key: 'slug', label: 'Đường dẫn', from: 'title' }];
 

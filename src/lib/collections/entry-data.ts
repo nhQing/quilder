@@ -64,6 +64,23 @@ const zAssetPick = z.object({ assetId: z.string().min(1), alt: z.string().max(30
 const zLinkValue = z.object({ href: z.string().min(1).max(2000), label: z.string().max(200).optional() }).strip();
 
 /**
+ * Liên kết chưa điền gì — `{ href: "", label: "" }` — là Ô TRỐNG, không phải một liên kết sai.
+ *
+ * Form dựng giá trị rỗng cho field link là object chứ không phải `null` (`emptyValue` ở
+ * `form-state.ts`), và phủ dữ liệu đã lưu lên đó. Bài không có liên kết vì thế luôn gửi lên
+ * `href: ""`, và `href.min(1)` chặn việc lưu: 20/11/2026 MỌI bài không có "Liên kết bài gốc"
+ * (field thêm lúc nhập Strapi) đều báo "external_link.href: Không được để trống", cả bản gốc
+ * lẫn bản dịch. Đổi thành `null` ở đây thì ô tuỳ chọn được coi là vắng (xem `objectSchema`),
+ * còn ô bắt buộc vẫn báo thiếu. Có nhãn mà thiếu đường dẫn thì vẫn là lỗi.
+ */
+const blankLinkToNull = (v: unknown): unknown => {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return v;
+  const { href, label } = v as { href?: unknown; label?: unknown };
+  const empty = (x: unknown) => x === undefined || x === null || (typeof x === 'string' && x.trim() === '');
+  return empty(href) && empty(label) ? null : v;
+};
+
+/**
  * Một field → zod cho GIÁ TRỊ của nó, chưa tính `required`.
  *
  * `taxonomy` bị LOẠI khỏi kiểu tham số, không phải bị bỏ nhánh trong `switch`: giá trị
@@ -305,7 +322,12 @@ function objectSchema(
      *
      * Ô bắt buộc KHÔNG đổi: `null` ở đó vẫn là thiếu giá trị.
      */
-    shape[f.key] = req ? v : v.nullish().transform((x: unknown) => (x === null ? undefined : x));
+    // Liên kết rỗng thành `null` TRƯỚC lớp `nullish()`: đổi ở bên trong thì `null` sinh ra
+    // sau chỗ được phép nhận `null`, và ô tuỳ chọn vẫn bị chặn (xem `blankLinkToNull`).
+    shape[f.key] = req
+      ? v
+      : z.preprocess(f.t === 'link' ? blankLinkToNull : (x: unknown) => x, v.nullish())
+          .transform((x: unknown) => (x === null ? undefined : x));
   }
   return z.object(shape).strip();
 }
