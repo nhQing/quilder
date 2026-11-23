@@ -403,7 +403,8 @@ export function Popover({
     'aria-haspopup': 'dialog';
     'aria-controls': string;
   }) => React.ReactNode;
-  children: React.ReactNode;
+  /** Hàm thì nhận `close` — cho bảng có nút xong việc (thêm bộ lọc) cần tự đóng. */
+  children: React.ReactNode | ((close: () => void) => React.ReactNode);
 }) {
   const [open, setOpen] = useState(false);
   const id = useId();
@@ -454,7 +455,7 @@ export function Popover({
             panelClassName,
           )}
         >
-          {children}
+          {typeof children === 'function' ? children(() => setOpen(false)) : children}
         </div>
       )}
     </div>

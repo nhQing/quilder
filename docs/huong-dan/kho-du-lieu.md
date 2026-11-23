@@ -34,7 +34,19 @@ bài ở thẻ Danh mục bên phải màn sửa bài.
 ## 2. Bài viết
 
 Bảng bài: lọc Tất cả / Đã đăng / Nháp / Hẹn giờ / Đã xoá, ô tìm theo tiêu đề và đường dẫn, **Thêm
-mục**.
+mục**. Loại có field ảnh thì mỗi hàng có ảnh tròn nhỏ ở đầu.
+
+**Bộ lọc** (cạnh ô tìm): chọn field → điều kiện → giá trị, rồi **Thêm bộ lọc**. Mỗi bộ lọc thành một
+chip dưới thanh lọc; bấm × để bỏ, **Bỏ hết bộ lọc** để về bảng đầy đủ. Nhiều bộ lọc thì bài phải
+khớp TẤT CẢ (tối đa 10). Bộ lọc nằm trên đường dẫn của trang, nên gửi link là người nhận thấy đúng
+bảng đó.
+
+- Field hệ thống: Tác giả, Người sửa gần nhất (là / không là); Ngày tạo, Ngày cập nhật, Ngày đăng
+  (từ ngày / đến ngày, tính trọn ngày theo giờ Việt Nam).
+- Field của loại, suy từ Cấu trúc field: chữ (chứa / không chứa / là / không là / trống / đã có),
+  nội dung dài (chứa / không chứa / trống / đã có), số (là / lớn hơn / nhỏ hơn), ngày, có/không,
+  lựa chọn, danh mục/tag (có / không có một mục; trống / đã có). Ảnh, tệp, liên kết, quan hệ, nhóm
+  chỉ hỏi được **trống / đã có** — ví dụ lọc "Ảnh bìa trống" để tìm bài còn thiếu ảnh.
 
 Màn sửa bài:
 

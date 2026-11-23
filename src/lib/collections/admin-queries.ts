@@ -10,7 +10,7 @@ import 'server-only';
  *     thấy bản cũ, và người dùng bấm Lưu lần nữa.
  */
 
-import type { Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 
 import { prisma } from '@/lib/db';
 import { validateCollectionSchema, type FieldDef } from './field-def';
@@ -20,6 +20,7 @@ import { ACTIVITY_LIMIT, activityLabel, type ActivityPerson, type EntryActivity,
 import { loadGroupTable } from './group-table';
 import { sortedTaxonomies } from './queries';
 import { entrySortOrderBy, type EntrySort } from './entry-sort';
+import type { FilterWhere } from './entry-filter-where';
 
 export interface AdminEntryRow {
   id: string;
@@ -52,6 +53,8 @@ export interface EntryFilter {
    * luôn truyền lựa chọn của tài khoản.
    */
   sort?: EntrySort;
+  /** Bộ lọc nâng cao, đã dịch ra truy vấn (`entry-filter-where.ts`). */
+  filters?: FilterWhere;
   page: number;
   pageSize: number;
 }
@@ -115,6 +118,19 @@ export async function listAdminEntries(f: EntryFilter) {
     const found = hits.map((h) => h.id);
     idIn = idIn ? idIn.filter((x) => found.includes(x)) : found;
   }
+  /*
+   * Bộ lọc nâng cao trên field trong `data`: MỘT truy vấn thô ra danh sách id, rồi giao với
+   * kết quả tìm — cùng cách ô tìm làm ở trên. Điều kiện trên cột thật đi thẳng vào `base`,
+   * nên bốn bộ đếm trạng thái cũng đếm theo bộ lọc, như với ô tìm và danh mục.
+   */
+  if (f.filters?.sql.length) {
+    const hits = await prisma.$queryRaw<{ id: string }[]>`
+      SELECT id FROM "Entry"
+      WHERE "typeKey" = ${f.typeKey} AND ${Prisma.join(f.filters.sql, ' AND ')}`;
+    const found = new Set(hits.map((h) => h.id));
+    idIn = idIn ? idIn.filter((x) => found.has(x)) : [...found];
+  }
+  if (f.filters?.and.length) base.AND = f.filters.and;
   if (idIn) base.id = { in: idIn };
 
   /*

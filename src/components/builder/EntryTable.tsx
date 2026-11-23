@@ -31,10 +31,12 @@ import {
   type EntryColumn,
   type EntryImage,
 } from '@/lib/collections/entry-columns';
+import { serializeFilter, type FilterCond, type FilterField } from '@/lib/collections/entry-filters';
 import { cn } from '@/lib/builder/cn';
 import { focusRing, ui, type Tone } from '@/lib/builder/ui';
 
 import { ImageThumb } from './asset/AssetThumb';
+import { FilterButton, FilterChips } from './EntryFilters';
 import { Badge } from './ui/Badge';
 import { Button } from './ui/Button';
 import { Checkbox, SearchField, SelectField } from './ui/Field';
@@ -144,16 +146,16 @@ function Cell({
 }
 
 /**
- * Ô ảnh 48px của một hàng. Cắt `cover` vì ô là hình vuông cố định — ảnh bìa ngang mà
- * `contain` thì thành một dải mỏng không nhận ra được gì. Thu nhỏ qua optimizer
- * (`thumb`), không tải file gốc cho một ô 48px.
+ * Ảnh tròn 32px của một hàng, như bảng của Strapi (23/11/2026 — trước đó vuông 48px làm
+ * hàng cao gấp rưỡi). Cắt `cover` vì khung cố định — ảnh bìa ngang mà `contain` thì thành
+ * một dải mỏng không nhận ra được gì. Thu nhỏ qua optimizer (`thumb`), không tải file gốc.
  */
 function RowImage({ image }: { image: EntryImage | undefined }) {
   if (!image) {
     return (
       <span
         aria-label="Chưa có ảnh"
-        className="grid size-12 place-items-center rounded-md border border-dashed border-shell-line text-mini text-shell-muted"
+        className="grid size-8 place-items-center rounded-full border border-dashed border-shell-line text-mini text-shell-muted"
       >
         —
       </span>
@@ -165,9 +167,9 @@ function RowImage({ image }: { image: EntryImage | undefined }) {
       mime={image.mime}
       alt={image.alt}
       fit="cover"
-      thumb={48}
+      thumb={32}
       lazy
-      className="size-12 rounded-md border border-shell-line bg-shell-raised"
+      className="size-8 rounded-full border border-shell-line bg-shell-raised"
     />
   );
 }
@@ -196,6 +198,9 @@ export function EntryTable(props: {
   sort: EntrySort;
   /** Được xoá hẳn bài đã lưu trữ không — chỉ Quản trị (`canPurgeContent`, 23/11/2026). */
   canPurge: boolean;
+  /** Thứ lọc được và điều kiện đang áp — xem `entry-filters.ts`. */
+  filterFields: FilterField[];
+  filters: FilterCond[];
 }) {
   const router = useRouter();
   const sp = useSearchParams();
@@ -235,6 +240,16 @@ export function EntryTable(props: {
     // bảng trống mà không có lý do nhìn thấy được.
     if (!('page' in patch)) next.delete('page');
     start(() => router.push(`/builder/content/${props.typeKey}?${next.toString()}`));
+  }
+
+  /** Thay toàn bộ điều kiện lọc nâng cao — mỗi điều kiện một tham số `f`. Về trang 1. */
+  function setFilters(next: FilterCond[]) {
+    const params = new URLSearchParams(sp.toString());
+    params.delete('f');
+    for (const c of next) params.append('f', serializeFilter(c));
+    params.delete('page');
+    const qs = params.toString();
+    start(() => router.push(`/builder/content/${props.typeKey}${qs ? `?${qs}` : ''}`));
   }
 
   /**
@@ -345,6 +360,7 @@ export function EntryTable(props: {
         />
 
         <div className="ml-auto flex flex-wrap items-center gap-2.5">
+          <FilterButton fields={props.filterFields} active={props.filters} onChange={setFilters} />
           <form
             role="search"
             onSubmit={(e) => {
@@ -447,6 +463,8 @@ export function EntryTable(props: {
         </div>
       </div>
 
+      <FilterChips fields={props.filterFields} active={props.filters} onChange={setFilters} />
+
       {/* ── Thao tác hàng loạt: chỉ hiện khi có dòng được chọn ─────── */}
       {picked.size > 0 && !archivedView && (
         <div className="flex flex-wrap items-center gap-2.5 rounded-lg bg-shell-accent-soft py-2.5 pr-3 pl-4.5">
@@ -506,7 +524,7 @@ export function EntryTable(props: {
                   />
                 </th>
                 {props.images && (
-                  <th scope="col" className={cn(ui.th, 'w-16')}>
+                  <th scope="col" className={cn(ui.th, 'w-14')}>
                     Ảnh
                   </th>
                 )}

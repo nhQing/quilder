@@ -15,7 +15,9 @@ import { notFound, redirect } from 'next/navigation';
 import { prisma } from '@/lib/db';
 import { getSession } from '@/lib/auth/guard';
 import { canPurgeContent } from '@/lib/auth/session';
-import { getTypeShape, listAdminEntries } from '@/lib/collections/admin-queries';
+import { getTypeShape, listAdminEntries, listWriterOptions } from '@/lib/collections/admin-queries';
+import { filterableFields, parseFilters } from '@/lib/collections/entry-filters';
+import { entryFilterWhere } from '@/lib/collections/entry-filter-where';
 import { entrySortFromPrefs } from '@/lib/collections/entry-sort';
 import {
   assetIdOf,
@@ -50,6 +52,8 @@ export default async function EntryListPage({
     q?: string;
     page?: string;
     size?: string;
+    /** Bộ lọc nâng cao, mỗi điều kiện một tham số — xem `entry-filters.ts`. */
+    f?: string | string[];
   }>;
 }) {
   const { typeKey } = await params;
@@ -94,12 +98,19 @@ export default async function EntryListPage({
     : null;
   const sort = entrySortFromPrefs(me?.prefs);
 
+  // Bộ lọc nâng cao: suy từ cấu trúc field; điều kiện hỏng trong URL bị bỏ, không ném.
+  const writers = await listWriterOptions();
+  const filterFields = filterableFields(shape.fields, { taxonomies: shape.taxonomies, writers });
+  const filters = parseFilters(sp.f, filterFields);
+  const firstTaxonomyField = taxonomyFieldsOf(shape.fields)[0]?.key ?? null;
+
   const { rows, total, counts } = await listAdminEntries({
     typeKey,
     status,
     taxonomyId: sp.taxonomy,
     q: sp.q,
     sort,
+    filters: entryFilterWhere(filters, filterFields, firstTaxonomyField),
     page,
     pageSize,
     // Mọi cột field CHỌN ĐƯỢC, không chỉ cột đang hiện: bật một cột là việc ở client,
@@ -173,12 +184,14 @@ export default async function EntryListPage({
         columns={columns}
         visibleColumns={visible}
         images={images}
-        firstTaxonomyField={taxonomyFieldsOf(shape.fields)[0]?.key ?? null}
+        firstTaxonomyField={firstTaxonomyField}
         page={page}
         pageSize={pageSize}
         filter={{ status: status ?? 'all', taxonomy: sp.taxonomy ?? '', q: sp.q ?? '' }}
         sort={sort}
         canPurge={!!session && canPurgeContent(session)}
+        filterFields={filterFields}
+        filters={filters}
       />
 
       {/* DƯỚI bảng: bảng là việc hằng ngày, khu này là việc một lần mỗi dự án. */}

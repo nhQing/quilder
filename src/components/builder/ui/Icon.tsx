@@ -123,6 +123,8 @@ const PATHS = {
   ),
   check: <path d="M5 12.5l4.5 4.5L19 7" />,
   x: <path d="M6 6l12 12M18 6L6 18" />,
+  /** Bộ lọc: ba vạch ngắn dần (nút "Bộ lọc" của bảng bài). */
+  filter: <path d="M4 7h16M7 12h10M10 17h4" />,
   'chevron-down': <path d="M6 9l6 6 6-6" />,
   'chevron-up': <path d="M6 15l6-6 6 6" />,
   'chevron-right': <path d="M9 6l6 6-6 6" />,
